@@ -1,26 +1,155 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ====================================================
+   RESCOM ALERT — Government & Military Light Design System
+   10th Regional Community Defense Group, RESCOM PA
+   ==================================================== */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-subtle: #cbd5e1;
+
+  /* RESCOM Military Branding */
+  --color-military-green: #14532d;
+  --color-military-green-light: #166534;
+  --color-military-green-accent: #15803d;
+  
+  --color-military-gold: #b45309;
+  --color-military-gold-light: #d97706;
+  --color-military-gold-bg: #fef3c7;
+
+  /* Status Colors */
+  --color-status-success: #16a34a;
+  --color-status-warning: #d97706;
+  --color-status-danger: #dc2626;
+  --color-status-info: #2563eb;
+
+  /* Text Colors */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+
+  --font-sans: var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Light Military Technical Grid */
+.tactical-grid-light {
+  background-image: 
+    linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.tactical-dots-light {
+  background-image: radial-gradient(rgba(20, 83, 45, 0.12) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+/* Crisp Clean Glassmorphism */
+.tactical-card-light {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.02);
+}
+
+.corner-bracket-light {
+  position: relative;
+}
+.corner-bracket-light::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid #b45309;
+  border-left: 2px solid #b45309;
+}
+.corner-bracket-light::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  border-bottom: 2px solid #b45309;
+  border-right: 2px solid #b45309;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Clerk Component Light Customization */
+.cl-card, .cl-signIn-root {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.cl-headerTitle {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+.cl-headerSubtitle {
+  color: #64748b !important;
+}
+
+.cl-socialButtonsBlockButton {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #1e293b !important;
+  transition: all 0.2s ease-in-out !important;
+}
+.cl-socialButtonsBlockButton:hover {
+  background: #f8fafc !important;
+  border-color: #166534 !important;
+  box-shadow: 0 2px 8px rgba(22, 101, 52, 0.1) !important;
+}
+
+.cl-formButtonPrimary {
+  background-color: #14532d !important;
+  color: #ffffff !important;
+}
+.cl-formButtonPrimary:hover {
+  background-color: #166534 !important;
+}
+
+.cl-footer {
+  background: transparent !important;
+  border-top: 1px solid #f1f5f9 !important;
+}
+
+.cl-footerActionText, .cl-footerActionLink {
+  color: #64748b !important;
+}
+.cl-footerActionLink:hover {
+  color: #14532d !important;
 }

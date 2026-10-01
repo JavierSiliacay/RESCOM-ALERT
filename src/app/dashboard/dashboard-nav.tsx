@@ -20,6 +20,7 @@ import {
   Settings,
   AlertTriangle,
   Loader2,
+  UserCheck,
 } from "lucide-react";
 
 const navItems = [
@@ -29,6 +30,7 @@ const navItems = [
   { label: "Send Message", href: "/dashboard/send", icon: Send },
   { label: "Sent Messages", href: "/dashboard/history", icon: History },
   { label: "Activity History", href: "/dashboard/audit", icon: FileCheck },
+  { label: "Authorized Personnel", href: "/dashboard/access", icon: UserCheck },
   { label: "Gateway Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

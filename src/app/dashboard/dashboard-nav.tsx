@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -51,6 +51,35 @@ export function DashboardNav({
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const pathname = usePathname();
+
+  // 15-Minute Inactivity Auto-Logout Security Guard
+  useEffect(() => {
+    const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        signOut({ callbackUrl: "/sign-in" });
+      }, INACTIVITY_LIMIT_MS);
+    };
+
+    // User activity trigger events
+    const activityEvents = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "click"];
+    activityEvents.forEach((event) => {
+      window.addEventListener(event, resetTimer, { passive: true });
+    });
+
+    // Start initial timer
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      activityEvents.forEach((event) => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, []);
 
   const handleConfirmSignOut = async () => {
     setIsSigningOut(true);

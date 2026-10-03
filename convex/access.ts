@@ -221,30 +221,12 @@ export const heartbeat = mutation({
     const existing = allUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
 
     if (existing) {
+      // Only update if not suspended/rejected
       await ctx.db.patch(existing._id, {
         lastSeenAt: now,
         lastLogin: "Active Now",
       });
       return existing._id;
-    }
-
-    // Auto-create for designated commanders if first time signing in
-    const isCommanderEmail =
-      cleanEmail === "siliacay.javier@gmail.com" ||
-      cleanEmail === "javiersiliacaysiliacay1234@gmail.com";
-
-    if (isCommanderEmail) {
-      return await ctx.db.insert("authorizedUsers", {
-        name: args.name || "Javier Siliacay",
-        email: cleanEmail,
-        rank: args.rank || "Group Commander",
-        role: "COMMANDER",
-        unit: args.unit || "10RCDG HQ",
-        status: "ACTIVE",
-        approvedDate: new Date().toISOString().split("T")[0],
-        lastLogin: "Active Now",
-        lastSeenAt: now,
-      });
     }
 
     return null;

@@ -19,40 +19,10 @@ export interface AuthorizedUser {
   lastLoginAt?: string;
 }
 
-// Master Commander emails whitelist
-const COMMANDER_EMAILS = [
-  "siliacay.javier@gmail.com",
-  "javiersiliacaysiliacay1234@gmail.com",
-  (process.env.COMMANDER_EMAIL || "").toLowerCase().trim(),
-].filter(Boolean);
-
-// Fallback Whitelist of Authorized 10RCDG Personnel
-export const initialAuthorizedRoster: Record<
-  string,
-  { role: UserRole; status: UserStatus; rank: string; name: string; unit?: string }
-> = {
-  "siliacay.javier@gmail.com": {
-    role: "COMMANDER",
-    status: "ACTIVE",
-    rank: "Group Commander",
-    name: "Javier Siliacay",
-    unit: "10RCDG HQ",
-  },
-  "javiersiliacaysiliacay1234@gmail.com": {
-    role: "COMMANDER",
-    status: "ACTIVE",
-    rank: "Group Commander",
-    name: "Javier Siliacay",
-    unit: "10RCDG HQ",
-  },
-  "salagustereynald48@gmail.com": {
-    role: "ADMIN",
-    status: "ACTIVE",
-    rank: "Deputy Commander (LTC)",
-    name: "Reynaldo Salaguste",
-    unit: "10RCDG HQ",
-  },
-};
+// Immutable Primary Commander Email (Root Super-Admin)
+const ROOT_COMMANDER_EMAIL = (
+  process.env.COMMANDER_EMAIL || "siliacay.javier@gmail.com"
+).toLowerCase().trim();
 
 const getConvexClient = () => {
   const url = process.env.NEXT_PUBLIC_CONVEX_URL;
@@ -76,21 +46,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!user.email) return false;
       const userEmail = user.email.toLowerCase().trim();
 
-      // 1. Check if user is a designated Group Commander
-      if (COMMANDER_EMAILS.includes(userEmail)) {
+      // 1. Root Super Commander has unconditional master access
+      if (userEmail === ROOT_COMMANDER_EMAIL) {
         return true;
       }
 
-      // 2. Check local preset whitelist
-      const rosterEntry = initialAuthorizedRoster[userEmail];
-      if (rosterEntry) {
-        if (rosterEntry.status === "SUSPENDED" || rosterEntry.status === "REJECTED") {
-          return "/sign-in?error=AccountSuspended";
-        }
-        return true;
-      }
-
-      // 3. Check dynamic Convex database (authorizedUsers & personnel tables)
+      // 2. Strict Database Verification via Convex
       try {
         const convex = getConvexClient();
         if (convex) {
@@ -100,14 +61,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             if (status === "SUSPENDED" || status === "REJECTED") {
               return "/sign-in?error=AccountSuspended";
             }
-            return true;
+            if (status === "ACTIVE" || status === "APPROVED") {
+              return true;
+            }
           }
         }
       } catch (err) {
         console.error("Convex auth verification error:", err);
       }
 
-      // Strict Whitelist Rejection: Deny login for unauthorized accounts
+      // If user is revoked or not in authorized roster, deny access
       return "/sign-in?error=AccessDenied";
     },
 
@@ -115,20 +78,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user && session.user.email) {
         const userEmail = session.user.email.toLowerCase().trim();
 
-        if (COMMANDER_EMAILS.includes(userEmail)) {
+        if (userEmail === ROOT_COMMANDER_EMAIL) {
           (session.user as any).role = "COMMANDER";
           (session.user as any).status = "ACTIVE";
           (session.user as any).rank = "Group Commander";
           (session.user as any).unit = "10RCDG HQ";
         } else {
-          // Check static roster first
-          const localEntry = initialAuthorizedRoster[userEmail];
-          let role: UserRole = localEntry?.role || "OPERATOR";
-          let status: UserStatus = localEntry?.status || "ACTIVE";
-          let rank: string = localEntry?.rank || "Staff Officer";
-          let unit: string = localEntry?.unit || "10RCDG HQ";
+          let role: UserRole = "VIEWER";
+          let status: UserStatus = "ACTIVE";
+          let rank: string = "Staff Officer";
+          let unit: string = "10RCDG HQ";
 
-          // Try checking dynamic Convex record
           try {
             const convex = getConvexClient();
             if (convex) {

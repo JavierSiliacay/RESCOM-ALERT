@@ -71,6 +71,10 @@ export default function AuthorizedPersonnelPage() {
   const [editingOfficer, setEditingOfficer] = useState<(typeof officers)[number] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Revoke Confirmation Modal State
+  const [revokeTarget, setRevokeTarget] = useState<(typeof officers)[number] | null>(null);
+  const [isRevoking, setIsRevoking] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -141,8 +145,8 @@ export default function AuthorizedPersonnelPage() {
   };
 
   const handleToggleStatus = async (officer: (typeof officers)[number]) => {
-    const commanderEmails = ["siliacay.javier@gmail.com", "javiersiliacaysiliacay1234@gmail.com"];
-    if (commanderEmails.includes(officer.email.toLowerCase())) {
+    const commanderEmail = "siliacay.javier@gmail.com";
+    if (officer.email.toLowerCase() === commanderEmail.toLowerCase()) {
       alert("Group Commander account cannot be suspended.");
       return;
     }
@@ -158,18 +162,25 @@ export default function AuthorizedPersonnelPage() {
     }
   };
 
-  const handleRevoke = async (id: Id<"authorizedUsers">, email: string) => {
-    const commanderEmails = ["siliacay.javier@gmail.com", "javiersiliacaysiliacay1234@gmail.com"];
-    if (commanderEmails.includes(email.toLowerCase())) {
+  const handleOpenRevokeModal = (officer: (typeof officers)[number]) => {
+    const commanderEmail = "siliacay.javier@gmail.com";
+    if (officer.email.toLowerCase() === commanderEmail.toLowerCase()) {
       alert("Primary Group Commander access cannot be revoked.");
       return;
     }
-    if (confirm(`Are you sure you want to revoke login access for ${email}?`)) {
-      try {
-        await removeOfficer({ id });
-      } catch (err: any) {
-        alert(err?.message || "Failed to revoke access");
-      }
+    setRevokeTarget(officer);
+  };
+
+  const handleConfirmRevoke = async () => {
+    if (!revokeTarget) return;
+    try {
+      setIsRevoking(true);
+      await removeOfficer({ id: revokeTarget._id });
+      setRevokeTarget(null);
+    } catch (err: any) {
+      alert(err?.message || "Failed to revoke access");
+    } finally {
+      setIsRevoking(false);
     }
   };
 
@@ -429,7 +440,7 @@ export default function AuthorizedPersonnelPage() {
                         </button>
 
                         <button
-                          onClick={() => handleRevoke(officer._id, officer.email)}
+                          onClick={() => handleOpenRevokeModal(officer)}
                           title="Revoke Clearance"
                           className="p-1.5 rounded-lg text-slate-400 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
                         >
@@ -580,6 +591,68 @@ export default function AuthorizedPersonnelPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Revoke Access Confirmation Modal */}
+      {revokeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-6 text-center space-y-4">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 border border-red-200 text-red-600 flex items-center justify-center shadow-xs">
+                <Trash2 className="w-6 h-6" />
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Revoke Access Clearance?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  This action will immediately terminate login privileges for this account.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500 uppercase text-[10px]">Officer:</span>
+                  <span className="font-bold text-slate-900 font-mono">
+                    {revokeTarget.rank} {revokeTarget.name}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500 uppercase text-[10px]">Google Email:</span>
+                  <span className="font-mono text-slate-700 font-medium">{revokeTarget.email}</span>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-left text-[11px] text-amber-900 flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  Once revoked, this user will receive an <strong>Access Denied</strong> error upon attempting to sign in.
+                </span>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setRevokeTarget(null)}
+                  disabled={isRevoking}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRevoke}
+                  disabled={isRevoking}
+                  className="w-full py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isRevoking ? "Revoking..." : "Revoke Access"}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

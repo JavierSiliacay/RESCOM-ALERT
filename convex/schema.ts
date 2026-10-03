@@ -115,4 +115,45 @@ export default defineSchema({
     simSubscriptionId: v.number(),
     updatedAt: v.string(),
   }),
+
+  // Tactical Enlistment Campaigns (Passcode & Time-Limited Self-Registration Links)
+  enlistmentCampaigns: defineTable({
+    campaignCode: v.string(), // Unique link slug / ID
+    title: v.string(), // Custom title e.g. "1001st CDC Mobilization Roster"
+    instructions: v.optional(v.string()), // Custom soldier guidance
+    passcode: v.string(), // e.g. "10RCDG-RESCOM"
+    targetUnit: v.string(), // e.g. "1001st CDC" or "All Units"
+    groupId: v.optional(v.string()), // target contact group ID
+    groupName: v.string(), // target contact group name
+    expiresAt: v.number(), // Unix timestamp in ms
+    duration: v.string(), // e.g. "24 Hours", "3 Days"
+    status: v.union(v.literal("ACTIVE"), v.literal("CLOSED")),
+    createdBy: v.string(),
+    createdAt: v.string(),
+  })
+    .index("by_campaignCode", ["campaignCode"])
+    .index("by_status", ["status"]),
+
+  // Enlistment Submissions (Pending Command Approval or Approved)
+  enlistmentSubmissions: defineTable({
+    campaignId: v.id("enlistmentCampaigns"),
+    campaignCode: v.string(),
+    firstName: v.string(),
+    lastName: v.string(),
+    rank: v.string(),
+    mobileNumber: v.string(),
+    unit: v.string(),
+    groupId: v.optional(v.string()),
+    groupName: v.string(),
+    email: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),
+    status: v.union(v.literal("PENDING"), v.literal("APPROVED"), v.literal("REJECTED")),
+    submittedAt: v.string(),
+    reviewedAt: v.optional(v.string()),
+    reviewedBy: v.optional(v.string()),
+  })
+    .index("by_campaignId", ["campaignId"])
+    .index("by_campaignCode", ["campaignCode"])
+    .index("by_mobileNumber", ["mobileNumber"])
+    .index("by_status", ["status"]),
 });

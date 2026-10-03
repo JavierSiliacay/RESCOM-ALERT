@@ -18,7 +18,7 @@ import {
   Activity,
   ShieldAlert,
   ShieldCheck,
-  Terminal,
+  Code2,
 } from "lucide-react";
 import { UserRole, UserStatus } from "@/auth";
 import {
@@ -386,7 +386,7 @@ export default function AuthorizedPersonnelPage() {
                       <td className="py-3.5 px-4">
                         {officer.role === "DEVELOPER" ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-purple-100 text-purple-950 border border-purple-300 font-mono shadow-2xs">
-                            <Terminal className="w-3 h-3 text-purple-700 shrink-0" />
+                            <Code2 className="w-3.5 h-3.5 text-purple-700 shrink-0" />
                             SYSTEM DEVELOPER
                           </span>
                         ) : officer.role === "COMMANDER" ? (

@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Loader2,
   UserCheck,
+  Code2,
 } from "lucide-react";
 
 const navItems = [
@@ -264,8 +265,8 @@ export function DashboardNav({
             </span>
           </div>
           {userRole === "DEVELOPER" ? (
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 bg-purple-100 px-2 py-0.5 rounded border border-purple-300 shadow-2xs font-mono flex items-center gap-1">
-              <span>⚡</span>
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 bg-purple-100 px-2 py-0.5 rounded border border-purple-300 shadow-2xs font-mono flex items-center gap-1.5">
+              <Code2 className="w-3.5 h-3.5 text-purple-700 shrink-0" />
               <span>DEVELOPER</span>
             </span>
           ) : (

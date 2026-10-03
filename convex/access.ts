@@ -5,7 +5,18 @@ import { v } from "convex/values";
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("authorizedUsers").collect();
+    const users = await ctx.db.query("authorizedUsers").collect();
+    return users.map((u) => {
+      if (u.email.toLowerCase().trim() === "siliacay.javier@gmail.com") {
+        return {
+          ...u,
+          role: "DEVELOPER" as const,
+          rank: u.rank === "COL" || !u.rank ? "System Developer" : u.rank,
+          unit: u.unit === "10RCDG HQ" ? "10RCDG HQ / Technical Dev" : u.unit,
+        };
+      }
+      return u;
+    });
   },
 });
 
@@ -225,11 +236,16 @@ export const heartbeat = mutation({
     const existing = allUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
 
     if (existing) {
-      // Only update if not suspended/rejected
-      await ctx.db.patch(existing._id, {
+      const patchData: any = {
         lastSeenAt: now,
         lastLogin: "Active Now",
-      });
+      };
+      if (cleanEmail === "siliacay.javier@gmail.com") {
+        patchData.role = "DEVELOPER";
+        patchData.rank = "System Developer";
+        patchData.unit = "10RCDG HQ / Technical Dev";
+      }
+      await ctx.db.patch(existing._id, patchData);
       return existing._id;
     }
 

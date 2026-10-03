@@ -121,9 +121,7 @@ export default function PublicEnlistmentPage() {
     const raw = e.target.value;
     const sanitized = sanitizePhMobileInput(raw);
     setFormData((prev) => ({ ...prev, mobileNumber: sanitized }));
-    if (sanitized.length >= 4 && !isValidPhMobileNumber(sanitized)) {
-      setPhoneError("Enter a valid 11-digit Philippine mobile number (09XXXXXXXXX).");
-    } else {
+    if (phoneError) {
       setPhoneError(null);
     }
   };
@@ -133,7 +131,7 @@ export default function PublicEnlistmentPage() {
     setSubmissionError(null);
 
     if (!isValidPhMobileNumber(formData.mobileNumber)) {
-      setPhoneError("Please enter a valid 11-digit mobile number (e.g. 09171234567).");
+      setPhoneError("Please enter a valid 11-digit mobile number (e.g. 0917 123 4567).");
       return;
     }
 
@@ -493,10 +491,10 @@ export default function PublicEnlistmentPage() {
                   <input
                     type="tel"
                     required
-                    placeholder="09171234567"
+                    placeholder="0917 123 4567"
                     value={formData.mobileNumber}
                     onChange={handleMobileChange}
-                    maxLength={11}
+                    maxLength={16}
                     className={`w-full pl-3.5 pr-10 py-2.5 bg-slate-50 border rounded-xl text-slate-900 font-mono text-xs font-bold focus:outline-none focus:bg-white focus:ring-2 shadow-2xs ${
                       phoneError
                         ? "border-red-500 focus:ring-red-500"
@@ -509,7 +507,7 @@ export default function PublicEnlistmentPage() {
                   <p className="text-xs text-red-600 mt-1 font-medium">{phoneError}</p>
                 ) : (
                   <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                    Formatted: {formatPhMobileDisplay(formData.mobileNumber)}
+                    e.g. 0917 123 4567 or +63 917 123 4567
                   </p>
                 )}
               </div>
@@ -594,7 +592,7 @@ export default function PublicEnlistmentPage() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting || !!phoneError}
+                  disabled={isSubmitting}
                   className="w-full py-3 bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-400 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider active:scale-[0.99]"
                 >
                   <Shield className="w-4 h-4" />

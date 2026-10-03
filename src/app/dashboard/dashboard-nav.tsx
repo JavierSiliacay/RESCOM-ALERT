@@ -132,6 +132,7 @@ export function DashboardNav({
                 src="/rescom-pa-seal.png"
                 alt="RESCOM PA"
                 fill
+                sizes="32px"
                 className="object-cover scale-105"
               />
             </div>
@@ -140,6 +141,7 @@ export function DashboardNav({
                 src="/rescom-emblem.jpg"
                 alt="10RCDG"
                 fill
+                sizes="32px"
                 className="object-cover scale-105"
               />
             </div>
@@ -194,6 +196,7 @@ export function DashboardNav({
                   src="/rescom-pa-seal.png"
                   alt="RESCOM PA"
                   fill
+                  sizes="36px"
                   className="object-cover scale-105"
                 />
               </div>
@@ -202,6 +205,7 @@ export function DashboardNav({
                   src="/rescom-emblem.jpg"
                   alt="10RCDG"
                   fill
+                  sizes="36px"
                   className="object-cover scale-105"
                 />
               </div>
@@ -227,6 +231,7 @@ export function DashboardNav({
                   src="/rescom-pa-seal.png"
                   alt="RESCOM PA"
                   fill
+                  sizes="32px"
                   className="object-cover scale-105"
                 />
               </div>
@@ -235,6 +240,7 @@ export function DashboardNav({
                   src="/rescom-emblem.jpg"
                   alt="10RCDG"
                   fill
+                  sizes="32px"
                   className="object-cover scale-105"
                 />
               </div>

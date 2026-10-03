@@ -27,9 +27,7 @@ const navItems = [
   { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { label: "Members & Contacts", href: "/dashboard/personnel", icon: Users },
   { label: "Contact Groups", href: "/dashboard/groups", icon: FolderKanban },
-  { label: "Send Message", href: "/dashboard/send", icon: Send },
-  { label: "Sent Messages", href: "/dashboard/history", icon: History },
-  { label: "Activity History", href: "/dashboard/audit", icon: FileCheck },
+  { label: "Messaging", href: "/dashboard/messaging", icon: Send },
   { label: "Authorized Personnel", href: "/dashboard/access", icon: UserCheck },
   { label: "Gateway Settings", href: "/dashboard/settings", icon: Settings },
 ];
@@ -233,7 +231,13 @@ export function DashboardNav({
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive =
+              pathname === item.href ||
+              (item.href === "/dashboard/messaging" &&
+                (pathname?.startsWith("/dashboard/messaging") ||
+                  pathname === "/dashboard/send" ||
+                  pathname === "/dashboard/history" ||
+                  pathname === "/dashboard/audit"));
             return (
               <Link
                 key={item.href}

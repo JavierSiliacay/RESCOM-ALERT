@@ -14,7 +14,9 @@ import {
   X,
   Layers,
 } from "lucide-react";
-import { INITIAL_GROUPS, ContactGroup } from "@/lib/mock-data";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { Id } from "../../../../convex/_generated/dataModel";
 
 const COLOR_PRESETS = [
   { label: "Military Green", value: "#15803d" },
@@ -26,9 +28,14 @@ const COLOR_PRESETS = [
 ];
 
 export default function GroupsPage() {
-  const [groups, setGroups] = useState<ContactGroup[]>(INITIAL_GROUPS);
+  const groupsData = useQuery(api.groups.list);
+  const createGroup = useMutation(api.groups.create);
+  const updateGroup = useMutation(api.groups.update);
+  const removeGroup = useMutation(api.groups.remove);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroupId, setEditingGroupId] = useState<Id<"contactGroups"> | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -36,6 +43,8 @@ export default function GroupsPage() {
     color: "#15803d",
     unit: "10RCDG HQ",
   });
+
+  const groups = groupsData || [];
 
   const handleOpenAdd = () => {
     setEditingGroupId(null);
@@ -48,8 +57,8 @@ export default function GroupsPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (group: ContactGroup) => {
-    setEditingGroupId(group.id);
+  const handleOpenEdit = (group: (typeof groups)[number]) => {
+    setEditingGroupId(group._id);
     setFormData({
       name: group.name,
       description: group.description,
@@ -59,39 +68,41 @@ export default function GroupsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingGroupId) {
-      setGroups((prev) =>
-        prev.map((g) =>
-          g.id === editingGroupId
-            ? {
-                ...g,
-                name: formData.name,
-                description: formData.description,
-                color: formData.color,
-                unit: formData.unit,
-              }
-            : g
-        )
-      );
-    } else {
-      const newGroup: ContactGroup = {
-        id: `grp-${Date.now()}`,
-        name: formData.name,
-        description: formData.description,
-        color: formData.color,
-        unit: formData.unit,
-        memberCount: 0,
-      };
-      setGroups([...groups, newGroup]);
+    try {
+      setIsSaving(true);
+      if (editingGroupId) {
+        await updateGroup({
+          id: editingGroupId,
+          name: formData.name,
+          description: formData.description,
+          color: formData.color,
+          unit: formData.unit,
+        });
+      } else {
+        await createGroup({
+          name: formData.name,
+          description: formData.description,
+          color: formData.color,
+          unit: formData.unit,
+        });
+      }
+      setIsModalOpen(false);
+    } catch (err: any) {
+      alert(err?.message || "Failed to save group");
+    } finally {
+      setIsSaving(false);
     }
-    setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: Id<"contactGroups">) => {
     if (confirm("Are you sure you want to delete this contact group?")) {
-      setGroups((prev) => prev.filter((g) => g.id !== id));
+      try {
+        await removeGroup({ id });
+      } catch (err: any) {
+        alert(err?.message || "Failed to delete group");
+      }
     }
   };
 
@@ -160,7 +171,7 @@ export default function GroupsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
         {groups.map((group) => (
           <div
-            key={group.id}
+            key={group._id}
             className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
           >
             {/* Top Color Accent Line */}
@@ -196,7 +207,7 @@ export default function GroupsPage() {
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
                   <button
-                    onClick={() => handleDelete(group.id)}
+                    onClick={() => handleDelete(group._id)}
                     title="Delete Group"
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                   >
@@ -219,7 +230,7 @@ export default function GroupsPage() {
               </div>
 
               <Link
-                href={`/dashboard/send?group=${encodeURIComponent(group.name)}`}
+                href={`/dashboard/messaging?tab=send&group=${encodeURIComponent(group.name)}`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors"
               >
                 <Send className="w-3.5 h-3.5" />

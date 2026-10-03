@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { recipients, message, title } = body;
+    const { recipients, message, title, simSubscriptionId } = body;
 
     if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
       return NextResponse.json(
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     const result = await dispatchSms({
       recipients,
       message: fullMessage,
+      simSubscriptionId,
     });
 
     return NextResponse.json(result);

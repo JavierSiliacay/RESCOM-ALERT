@@ -14,78 +14,17 @@ import {
   X,
   Mail,
   Crown,
-  Key,
-  Lock,
-  UserX,
-  AlertTriangle,
   Radio,
 } from "lucide-react";
 import { UserRole, UserStatus } from "@/auth";
-
-export interface AuthorizedOfficer {
-  id: string;
-  name: string;
-  email: string;
-  rank: string;
-  role: UserRole;
-  unit: string;
-  status: UserStatus;
-  approvedDate: string;
-  lastLogin: string;
-}
-
-const INITIAL_AUTHORIZED_OFFICERS: AuthorizedOfficer[] = [
-  {
-    id: "auth-1",
-    name: "Javier Siliacay",
-    email: "siliacay.javier@gmail.com",
-    rank: "Group Commander",
-    role: "COMMANDER",
-    unit: "10RCDG HQ",
-    status: "ACTIVE",
-    approvedDate: "2026-09-01",
-    lastLogin: "Just now",
-  },
-  {
-    id: "auth-2",
-    name: "Reynaldo Salaguste",
-    email: "salagustereynald48@gmail.com",
-    rank: "Deputy Commander (LTC)",
-    role: "ADMIN",
-    unit: "10RCDG HQ",
-    status: "ACTIVE",
-    approvedDate: "2026-09-05",
-    lastLogin: "2 hours ago",
-  },
-  {
-    id: "auth-3",
-    name: "Alfred Agbong",
-    email: "alfredagbong2@gmail.com",
-    rank: "Operations Officer (MAJ)",
-    role: "OPERATOR",
-    unit: "Task Force Davao",
-    status: "ACTIVE",
-    approvedDate: "2026-09-10",
-    lastLogin: "Yesterday",
-  },
-  {
-    id: "auth-4",
-    name: "Novie Mae Labita",
-    email: "noviemae.labita@gmail.com",
-    rank: "Medical Officer (CPT)",
-    role: "OPERATOR",
-    unit: "Medical & Rescue Contingent",
-    status: "ACTIVE",
-    approvedDate: "2026-09-12",
-    lastLogin: "3 days ago",
-  },
-];
-
-const MILITARY_RANKS = [
-  "BGEN", "COL", "LTC", "MAJ", "CPT", "1LT", "2LT",
-  "CMS", "SMS", "MSG", "TSG", "SSG", "SGT", "CPL", "PFC", "PVT",
-  "Group Commander", "Deputy Commander", "Lead Engineer / SysAdmin", "Civ. Officer"
-];
+import {
+  RANK_GROUPS,
+  getRankFullName,
+} from "@/lib/military-ranks";
+import { RankSearchSelect } from "@/components/rank-search-select";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { Id } from "../../../../convex/_generated/dataModel";
 
 const ROLES_LIST: { label: string; value: UserRole; description: string }[] = [
   {
@@ -111,14 +50,22 @@ const ROLES_LIST: { label: string; value: UserRole; description: string }[] = [
 ];
 
 export default function AuthorizedPersonnelPage() {
-  const [officers, setOfficers] = useState<AuthorizedOfficer[]>(INITIAL_AUTHORIZED_OFFICERS);
+  const officersData = useQuery(api.access.list);
+  const createOfficer = useMutation(api.access.create);
+  const updateOfficerRole = useMutation(api.access.updateRole);
+  const removeOfficer = useMutation(api.access.remove);
+
+  const officers = officersData || [];
+
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingOfficer, setEditingOfficer] = useState<(typeof officers)[number] | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -128,7 +75,7 @@ export default function AuthorizedPersonnelPage() {
   });
 
   const handleOpenAdd = () => {
-    setEditingId(null);
+    setEditingOfficer(null);
     setFormData({
       name: "",
       email: "",
@@ -139,79 +86,75 @@ export default function AuthorizedPersonnelPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (officer: AuthorizedOfficer) => {
-    setEditingId(officer.id);
+  const handleOpenEdit = (officer: (typeof officers)[number]) => {
+    setEditingOfficer(officer);
     setFormData({
       name: officer.name,
       email: officer.email,
       rank: officer.rank,
-      role: officer.role,
+      role: officer.role as UserRole,
       unit: officer.unit,
     });
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.email.trim()) return;
 
-    if (editingId) {
-      setOfficers((prev) =>
-        prev.map((o) =>
-          o.id === editingId
-            ? {
-                ...o,
-                name: formData.name,
-                email: formData.email.toLowerCase().trim(),
-                rank: formData.rank,
-                role: formData.role,
-                unit: formData.unit,
-              }
-            : o
-        )
-      );
-    } else {
-      const newOfficer: AuthorizedOfficer = {
-        id: `auth-${Date.now()}`,
-        name: formData.name || formData.email.split("@")[0],
-        email: formData.email.toLowerCase().trim(),
-        rank: formData.rank,
-        role: formData.role,
-        unit: formData.unit,
-        status: "ACTIVE",
-        approvedDate: new Date().toISOString().split("T")[0],
-        lastLogin: "Never",
-      };
-      setOfficers((prev) => [newOfficer, ...prev]);
+    try {
+      setIsSaving(true);
+      if (editingOfficer) {
+        await updateOfficerRole({
+          id: editingOfficer._id,
+          role: formData.role,
+          status: editingOfficer.status as any,
+        });
+      } else {
+        await createOfficer({
+          name: formData.name || formData.email.split("@")[0],
+          email: formData.email.toLowerCase().trim(),
+          rank: formData.rank,
+          role: formData.role,
+          unit: formData.unit,
+        });
+      }
+      setIsModalOpen(false);
+    } catch (err: any) {
+      alert(err?.message || "Failed to save officer clearance");
+    } finally {
+      setIsSaving(false);
     }
-    setIsModalOpen(false);
   };
 
-  const handleToggleStatus = (id: string) => {
-    setOfficers((prev) =>
-      prev.map((o) => {
-        if (o.id === id) {
-          if (o.email === "siliacay.javier@gmail.com") {
-            alert("Group Commander account cannot be suspended.");
-            return o;
-          }
-          return {
-            ...o,
-            status: o.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE",
-          };
-        }
-        return o;
-      })
-    );
+  const handleToggleStatus = async (officer: (typeof officers)[number]) => {
+    if (officer.email === "siliacay.javier@gmail.com") {
+      alert("Group Commander account cannot be suspended.");
+      return;
+    }
+    const newStatus = officer.status === "ACTIVE" || officer.status === "APPROVED" ? "SUSPENDED" : "ACTIVE";
+    try {
+      await updateOfficerRole({
+        id: officer._id,
+        role: officer.role as any,
+        status: newStatus as any,
+      });
+    } catch (err: any) {
+      alert(err?.message || "Failed to toggle status");
+    }
   };
 
-  const handleRevoke = (id: string, email: string) => {
+  const handleRevoke = async (id: Id<"authorizedUsers">, email: string) => {
     if (email === "siliacay.javier@gmail.com") {
       alert("Primary Group Commander access cannot be revoked.");
       return;
     }
     if (confirm(`Are you sure you want to revoke login access for ${email}?`)) {
-      setOfficers((prev) => prev.filter((o) => o.id !== id));
+      try {
+        await removeOfficer({ id });
+      } catch (err: any) {
+        alert(err?.message || "Failed to revoke access");
+      }
     }
   };
 
@@ -228,7 +171,7 @@ export default function AuthorizedPersonnelPage() {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  const activeCount = officers.filter((o) => o.status === "ACTIVE").length;
+  const activeCount = officers.filter((o) => o.status === "ACTIVE" || o.status === "APPROVED").length;
   const commanderCount = officers.filter((o) => o.role === "COMMANDER" || o.role === "ADMIN").length;
 
   return (
@@ -357,7 +300,7 @@ export default function AuthorizedPersonnelPage() {
                 </tr>
               ) : (
                 filteredOfficers.map((officer) => (
-                  <tr key={officer.id} className="hover:bg-slate-50/70 transition-colors">
+                  <tr key={officer._id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3.5 px-4 sm:px-6">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-bold flex items-center justify-center shrink-0">
@@ -403,15 +346,15 @@ export default function AuthorizedPersonnelPage() {
 
                     <td className="py-3.5 px-4">
                       <button
-                        onClick={() => handleToggleStatus(officer.id)}
+                        onClick={() => handleToggleStatus(officer)}
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
-                          officer.status === "ACTIVE"
+                          officer.status === "ACTIVE" || officer.status === "APPROVED"
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
                             : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
                         }`}
                         title="Click to toggle status"
                       >
-                        {officer.status === "ACTIVE" ? (
+                        {officer.status === "ACTIVE" || officer.status === "APPROVED" ? (
                           <>
                             <CheckCircle2 className="w-3 h-3" />
                             <span>Active</span>
@@ -439,7 +382,7 @@ export default function AuthorizedPersonnelPage() {
                       </button>
 
                       <button
-                        onClick={() => handleRevoke(officer.id, officer.email)}
+                        onClick={() => handleRevoke(officer._id, officer.email)}
                         title="Revoke Clearance"
                         className="p-1.5 rounded-lg text-slate-400 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
                       >
@@ -465,7 +408,7 @@ export default function AuthorizedPersonnelPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
-                    {editingId ? "Edit Officer Access Clearance" : "Authorize New 10RCDG Personnel"}
+                    {editingOfficer ? "Edit Officer Access Clearance" : "Authorize New 10RCDG Personnel"}
                   </h3>
                   <p className="text-xs text-slate-500">
                     Grant Google OAuth login permissions and set command roles
@@ -520,17 +463,10 @@ export default function AuthorizedPersonnelPage() {
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Military Rank
                   </label>
-                  <select
+                  <RankSearchSelect
                     value={formData.rank}
-                    onChange={(e) => setFormData({ ...formData, rank: e.target.value })}
-                    className="w-full px-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer font-medium"
-                  >
-                    {MILITARY_RANKS.map((rank) => (
-                      <option key={rank} value={rank}>
-                        {rank}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(rankCode) => setFormData({ ...formData, rank: rankCode })}
+                  />
                 </div>
 
                 <div>
@@ -589,9 +525,10 @@ export default function AuthorizedPersonnelPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 bg-emerald-800 hover:bg-emerald-900 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
-                  {editingId ? "Save Changes" : "Confirm Authorization"}
+                  {isSaving ? "Saving..." : editingOfficer ? "Save Changes" : "Confirm Authorization"}
                 </button>
               </div>
             </form>

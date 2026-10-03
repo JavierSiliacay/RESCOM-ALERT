@@ -15,33 +15,49 @@ import {
   X,
   UserCheck,
 } from "lucide-react";
-import { INITIAL_PERSONNEL, INITIAL_GROUPS, Personnel } from "@/lib/mock-data";
-
-const MILITARY_RANKS = [
-  "BGEN", "COL", "LTC", "MAJ", "CPT", "1LT", "2LT",
-  "CMS", "SMS", "MSG", "TSG", "SSG", "SGT", "CPL", "PFC", "PVT", "Reservist"
-];
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { Id } from "../../../../convex/_generated/dataModel";
+import { sanitizePhMobileInput, isValidPhMobileNumber, formatPhMobileDisplay } from "@/lib/sms";
+import {
+  RANK_GROUPS,
+  getRankFullName,
+  getRankBadgeStyle,
+} from "@/lib/military-ranks";
+import { RankSearchSelect } from "@/components/rank-search-select";
 
 export default function PersonnelPage() {
-  const [personnelList, setPersonnelList] = useState<Personnel[]>(INITIAL_PERSONNEL);
+  const personnel = useQuery(api.personnel.list);
+  const groups = useQuery(api.groups.list);
+
+  const createPersonnel = useMutation(api.personnel.create);
+  const updatePersonnel = useMutation(api.personnel.update);
+  const togglePersonnelStatus = useMutation(api.personnel.toggleStatus);
+  const removePersonnel = useMutation(api.personnel.remove);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<Id<"personnel"> | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     rank: "PVT",
-    mobileNumber: "",
-    groupId: INITIAL_GROUPS[0].id,
+    mobileNumber: "09",
+    groupId: "",
     unit: "10RCDG HQ",
     email: "",
   });
+
+  const personnelList = personnel || [];
+  const groupsList = groups || [];
 
   // Filtered List
   const filteredPersonnel = personnelList.filter((person) => {
@@ -51,7 +67,7 @@ export default function PersonnelPage() {
       person.rank.toLowerCase().includes(searchQuery.toLowerCase()) ||
       person.unit.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup;
+    const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
     const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
 
     return matchesSearch && matchesGroup && matchesStatus;
@@ -59,88 +75,96 @@ export default function PersonnelPage() {
 
   const handleOpenAddModal = () => {
     setEditingId(null);
+    setPhoneError(null);
     setFormData({
       firstName: "",
       lastName: "",
       rank: "PVT",
-      mobileNumber: "+639",
-      groupId: INITIAL_GROUPS[0].id,
+      mobileNumber: "09",
+      groupId: groupsList[0]?._id || "",
       unit: "10RCDG HQ",
       email: "",
     });
     setIsAddModalOpen(true);
   };
 
-  const handleOpenEditModal = (person: Personnel) => {
-    setEditingId(person.id);
+  const handleOpenEditModal = (person: (typeof personnelList)[number]) => {
+    setEditingId(person._id);
+    setPhoneError(null);
     setFormData({
       firstName: person.firstName,
       lastName: person.lastName,
       rank: person.rank,
       mobileNumber: person.mobileNumber,
-      groupId: person.groupId,
+      groupId: person.groupId || "",
       unit: person.unit,
       email: person.email || "",
     });
     setIsAddModalOpen(true);
   };
 
-  const handleSavePersonnel = (e: React.FormEvent) => {
+  const handleSavePersonnel = async (e: React.FormEvent) => {
     e.preventDefault();
-    const group = INITIAL_GROUPS.find((g) => g.id === formData.groupId);
+
+    if (!isValidPhMobileNumber(formData.mobileNumber)) {
+      setPhoneError("Please enter a valid Philippine mobile number (e.g., 09171234567 or +639171234567).");
+      return;
+    }
+    setPhoneError(null);
+
+    const group = groupsList.find((g) => g._id === formData.groupId || g.name === formData.groupId);
     const groupName = group ? group.name : "General Roster";
 
-    if (editingId) {
-      // Edit existing
-      setPersonnelList((prev) =>
-        prev.map((p) =>
-          p.id === editingId
-            ? {
-                ...p,
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                rank: formData.rank,
-                mobileNumber: formData.mobileNumber,
-                groupId: formData.groupId,
-                groupName,
-                unit: formData.unit,
-                email: formData.email,
-              }
-            : p
-        )
-      );
-    } else {
-      // Add new
-      const newPerson: Personnel = {
-        id: `per-${Date.now()}`,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        rank: formData.rank,
-        mobileNumber: formData.mobileNumber,
-        groupId: formData.groupId,
-        groupName,
-        unit: formData.unit,
-        status: "ACTIVE",
-        email: formData.email,
-        createdAt: new Date().toISOString().split("T")[0],
-      };
-      setPersonnelList([newPerson, ...personnelList]);
+    try {
+      setIsSaving(true);
+      if (editingId) {
+        await updatePersonnel({
+          id: editingId,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          rank: formData.rank,
+          mobileNumber: formData.mobileNumber,
+          groupId: formData.groupId,
+          groupName,
+          unit: formData.unit,
+          email: formData.email,
+        });
+      } else {
+        await createPersonnel({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          rank: formData.rank,
+          mobileNumber: formData.mobileNumber,
+          groupId: formData.groupId,
+          groupName,
+          unit: formData.unit,
+          email: formData.email,
+        });
+      }
+      setIsAddModalOpen(false);
+    } catch (err: any) {
+      alert(err?.message || "Failed to save personnel record");
+    } finally {
+      setIsSaving(false);
     }
-    setIsAddModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: Id<"personnel">) => {
     if (confirm("Are you sure you want to remove this personnel from the active roster?")) {
-      setPersonnelList((prev) => prev.filter((p) => p.id !== id));
+      try {
+        await removePersonnel({ id });
+      } catch (err: any) {
+        alert(err?.message || "Failed to remove personnel");
+      }
     }
   };
 
-  const handleToggleStatus = (id: string) => {
-    setPersonnelList((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, status: p.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" } : p
-      )
-    );
+  const handleToggleStatus = async (id: Id<"personnel">) => {
+    try {
+      await togglePersonnelStatus({ id });
+    } catch (err: any) {
+      alert(err?.message || "Failed to toggle status");
+    }
   };
 
   const activeCount = personnelList.filter((p) => p.status === "ACTIVE").length;
@@ -198,7 +222,7 @@ export default function PersonnelPage() {
         <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Contact Groups</p>
-            <p className="text-2xl font-extrabold text-amber-700 mt-1">{INITIAL_GROUPS.length}</p>
+            <p className="text-2xl font-extrabold text-amber-700 mt-1">{groupsList.length}</p>
           </div>
           <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
             <Shield className="w-5 h-5" />
@@ -233,8 +257,8 @@ export default function PersonnelPage() {
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600"
           >
             <option value="ALL">All Groups</option>
-            {INITIAL_GROUPS.map((g) => (
-              <option key={g.id} value={g.id}>
+            {groupsList.map((g) => (
+              <option key={g._id} value={g._id}>
                 {g.name}
               </option>
             ))}
@@ -274,20 +298,30 @@ export default function PersonnelPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
                 {filteredPersonnel.map((person) => (
-                  <tr key={person.id} className="hover:bg-slate-50/60 transition-colors">
+                  <tr key={person._id} className="hover:bg-slate-50/60 transition-colors">
                     {/* Name & Rank */}
                     <td className="py-3.5 px-4 sm:px-6">
                       <div className="flex items-center gap-3">
-                        <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-extrabold text-[11px] border border-amber-300">
-                          {person.rank}
-                        </span>
+                        {(() => {
+                          const badge = getRankBadgeStyle(person.rank);
+                          return (
+                            <div className="flex flex-col items-start shrink-0">
+                              <span
+                                title={getRankFullName(person.rank)}
+                                className={`px-2 py-0.5 rounded-md font-extrabold text-[11px] border ${badge.bg} ${badge.text} ${badge.border} shadow-2xs font-mono`}
+                              >
+                                {person.rank}
+                              </span>
+                            </div>
+                          );
+                        })()}
                         <div>
                           <p className="font-bold text-slate-900">
                             {person.firstName} {person.lastName}
                           </p>
-                          {person.email && (
-                            <p className="text-[11px] text-slate-400">{person.email}</p>
-                          )}
+                          <p className="text-[11px] text-slate-400">
+                            {getRankFullName(person.rank)} {person.email ? `• ${person.email}` : ""}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -295,8 +329,8 @@ export default function PersonnelPage() {
                     {/* Mobile Number */}
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-1.5 font-mono text-xs font-semibold text-slate-700">
-                        <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{person.mobileNumber}</span>
+                        <Phone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>{formatPhMobileDisplay(person.mobileNumber)}</span>
                       </div>
                     </td>
 
@@ -309,7 +343,7 @@ export default function PersonnelPage() {
                     {/* Status */}
                     <td className="py-3.5 px-4">
                       <button
-                        onClick={() => handleToggleStatus(person.id)}
+                        onClick={() => handleToggleStatus(person._id)}
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold cursor-pointer transition-all ${
                           person.status === "ACTIVE"
                             ? "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
@@ -341,7 +375,7 @@ export default function PersonnelPage() {
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(person.id)}
+                          onClick={() => handleDelete(person._id)}
                           title="Delete"
                           className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                         >
@@ -415,30 +449,51 @@ export default function PersonnelPage() {
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Military Rank *
                   </label>
-                  <select
+                  <RankSearchSelect
                     value={formData.rank}
-                    onChange={(e) => setFormData({ ...formData, rank: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-emerald-600"
-                  >
-                    {MILITARY_RANKS.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(rankCode) => setFormData({ ...formData, rank: rankCode })}
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Mobile Number (SMS) *
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={formData.mobileNumber}
-                    onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })}
-                    placeholder="+639171234567"
-                    className="w-full px-3 py-2 font-mono bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-emerald-600 focus:bg-white"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      PH Mobile Number (SMS) *
+                    </label>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {formData.mobileNumber.length} / {formData.mobileNumber.startsWith("+") ? "13" : "11"} digits
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="tel"
+                      required
+                      maxLength={13}
+                      value={formData.mobileNumber}
+                      onChange={(e) => {
+                        const val = sanitizePhMobileInput(e.target.value);
+                        setFormData({ ...formData, mobileNumber: val });
+                        if (phoneError) setPhoneError(null);
+                      }}
+                      placeholder="09171234567"
+                      className={`w-full px-3 py-2 font-mono bg-slate-50 border rounded-xl text-sm focus:outline-none focus:bg-white transition-all ${
+                        phoneError
+                          ? "border-red-500 focus:border-red-500 text-red-900"
+                          : isValidPhMobileNumber(formData.mobileNumber)
+                          ? "border-emerald-500 focus:border-emerald-600 text-slate-900"
+                          : "border-slate-200 focus:border-emerald-600 text-slate-900"
+                      }`}
+                    />
+                    {isValidPhMobileNumber(formData.mobileNumber) && (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    )}
+                  </div>
+                  {phoneError ? (
+                    <p className="text-[11px] text-red-600 mt-1 font-medium">{phoneError}</p>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Philippine mobile format (e.g., <span className="font-mono text-slate-600">09171234567</span> or <span className="font-mono text-slate-600">+639171234567</span>)
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -452,8 +507,8 @@ export default function PersonnelPage() {
                     onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-emerald-600"
                   >
-                    {INITIAL_GROUPS.map((g) => (
-                      <option key={g.id} value={g.id}>
+                    {groupsList.map((g) => (
+                      <option key={g._id} value={g._id}>
                         {g.name}
                       </option>
                     ))}
@@ -497,9 +552,10 @@ export default function PersonnelPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold tracking-wider uppercase transition-all shadow-md active:scale-95 cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-400 text-white rounded-xl text-xs font-bold tracking-wider uppercase transition-all shadow-md active:scale-95 cursor-pointer"
                 >
-                  {editingId ? "Save Changes" : "Register Member"}
+                  {isSaving ? "Saving..." : editingId ? "Save Changes" : "Register Member"}
                 </button>
               </div>
             </form>

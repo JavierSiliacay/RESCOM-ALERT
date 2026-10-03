@@ -30,6 +30,8 @@ export default function PublicEnlistmentPage() {
   const campaign = useQuery(api.enlistment.getCampaignPublic, {
     campaignCode,
   });
+  const groups = useQuery(api.groups.list);
+  const groupsList = groups || [];
 
   const submitEnlistment = useMutation(api.enlistment.submitEnlistment);
 
@@ -47,6 +49,8 @@ export default function PublicEnlistmentPage() {
     firstName: "",
     lastName: "",
     mobileNumber: "09",
+    groupId: "",
+    groupName: "All 10RCDG Personnel",
     unit: "",
     serialNumber: "",
     email: "",
@@ -54,11 +58,13 @@ export default function PublicEnlistmentPage() {
 
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
-  // Pre-fill unit when campaign loads
+  // Pre-fill group & unit when campaign loads
   useEffect(() => {
-    if (campaign && !formData.unit) {
+    if (campaign) {
       setFormData((prev) => ({
         ...prev,
+        groupId: campaign.groupId || "",
+        groupName: campaign.groupName || "All 10RCDG Personnel",
         unit: campaign.targetUnit === "All Units" ? "10RCDG HQ" : campaign.targetUnit,
       }));
     }
@@ -146,8 +152,8 @@ export default function PublicEnlistmentPage() {
         rank: formData.rank,
         mobileNumber: formData.mobileNumber,
         unit: formData.unit.trim() || (campaign?.targetUnit || "10RCDG HQ"),
-        groupId: campaign?.groupId,
-        groupName: campaign?.groupName || "All 10RCDG Personnel",
+        groupId: formData.groupId || undefined,
+        groupName: formData.groupName || "All 10RCDG Personnel",
         email: formData.email.trim() || undefined,
         serialNumber: formData.serialNumber.trim() || undefined,
       });
@@ -508,21 +514,49 @@ export default function PublicEnlistmentPage() {
                 )}
               </div>
 
-              {/* Assigned Unit / Station & Optional Serial */}
+              {/* Assigned Group & Unit / Station */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Assigned Unit / Station <span className="text-emerald-700">*</span>
+                    Assigned Group <span className="text-emerald-700">*</span>
+                  </label>
+                  <select
+                    value={formData.groupId}
+                    onChange={(e) => {
+                      const selectedVal = e.target.value;
+                      const grp = groupsList.find((g) => g._id === selectedVal);
+                      setFormData((prev) => ({
+                        ...prev,
+                        groupId: selectedVal,
+                        groupName: grp ? grp.name : "All 10RCDG Personnel",
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs cursor-pointer"
+                  >
+                    <option value="">All 10RCDG Personnel (General Roster)</option>
+                    {groupsList.map((g) => (
+                      <option key={g._id} value={g._id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Unit / Station
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. 1001st CDC"
+                    placeholder="e.g. 1001st CDC / 10RCDG HQ"
                     value={formData.unit}
                     onChange={(e) => setFormData((prev) => ({ ...prev, unit: e.target.value }))}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs"
                   />
                 </div>
+              </div>
+
+              {/* Military ID & Email Address */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Military ID / AFPSN <span className="text-slate-400 text-[10px]">(Optional)</span>
@@ -535,20 +569,18 @@ export default function PublicEnlistmentPage() {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-mono font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs"
                   />
                 </div>
-              </div>
-
-              {/* Optional Email */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Email Address <span className="text-slate-400 text-[10px]">(Optional)</span>
-                </label>
-                <input
-                  type="email"
-                  placeholder="soldier@gmail.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs"
-                />
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Email Address <span className="text-slate-400 text-[10px]">(Optional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="soldier@gmail.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs"
+                  />
+                </div>
               </div>
 
               {submissionError && (

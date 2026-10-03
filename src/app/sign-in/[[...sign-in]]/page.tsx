@@ -1,14 +1,42 @@
 import Image from "next/image";
 import { Shield, Radio, Lock, Activity, CheckCircle2, ExternalLink, AlertCircle } from "lucide-react";
-import { signIn } from "@/auth";
+import { signIn, auth } from "@/auth";
 
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reason?: string; duration?: string }>;
 }) {
   const params = await searchParams;
-  const error = params?.error;
+  const session = await auth();
+  const sessionUser = session?.user as any;
+
+  const isSuspended =
+    params?.error === "AccountSuspended" ||
+    sessionUser?.status === "SUSPENDED";
+
+  const isRevoked =
+    !isSuspended &&
+    (params?.error === "AccessRevoked" ||
+      sessionUser?.isRevoked ||
+      sessionUser?.status === "REJECTED");
+
+  const isDenied =
+    !isSuspended &&
+    !isRevoked &&
+    (params?.error === "AccessDenied" ||
+      params?.error === "OAuthAccountNotLinked" ||
+      params?.error === "Configuration");
+
+  const suspendedReason =
+    params?.reason
+      ? decodeURIComponent(params.reason)
+      : sessionUser?.suspendedReason || "Administrative Review";
+
+  const suspendedDuration =
+    params?.duration
+      ? decodeURIComponent(params.duration)
+      : sessionUser?.suspendedDuration || "Indefinite";
   return (
     <div className="relative min-h-dvh lg:h-screen lg:max-h-screen w-full flex flex-col justify-between bg-[#f8fafc] overflow-y-auto lg:overflow-hidden selection:bg-emerald-100 selection:text-emerald-900">
       {/* Official 10RCDG Troop Formation Background with Soft Frosted Overlay */}
@@ -204,36 +232,8 @@ export default async function SignInPage({
                 </p>
               </div>
 
-              {/* Access Denied Security Banner */}
-              {error === "AccessDenied" && (
-                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
-                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-red-900">
-                      Access Denied: Account Not Authorized
-                    </p>
-                    <p className="text-[11px] text-red-700 leading-relaxed mt-0.5">
-                      Your Google account is not on the approved 10RCDG personnel roster. Please contact the Group Commander for access authorization.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {error === "AccessRevoked" && (
-                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
-                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-red-900">
-                      Access Revoked
-                    </p>
-                    <p className="text-[11px] text-red-700 leading-relaxed mt-0.5">
-                      Your system authorization has been revoked or deleted by Command. You no longer have access to this portal.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {error === "AccountSuspended" && (
+              {/* Account Suspended by Command Notice */}
+              {isSuspended && (
                 <div className="mb-4 p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 text-left space-y-2 animate-in fade-in duration-200">
                   <div className="flex items-start gap-2.5">
                     <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
@@ -252,13 +252,13 @@ export default async function SignInPage({
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-amber-800 uppercase text-[10px]">Reason:</span>
                       <span className="font-bold text-amber-950">
-                        {params?.reason ? decodeURIComponent(params.reason) : "Administrative Review"}
+                        {suspendedReason}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-amber-800 uppercase text-[10px]">Duration:</span>
                       <span className="font-bold text-amber-950">
-                        {params?.duration ? decodeURIComponent(params.duration) : "Indefinite"}
+                        {suspendedDuration}
                       </span>
                     </div>
                   </div>
@@ -266,6 +266,36 @@ export default async function SignInPage({
                   <p className="text-[10px] text-amber-800 italic">
                     Please report to the Group Commander or S3 Operations for clearance reinstatement.
                   </p>
+                </div>
+              )}
+
+              {/* Access Revoked Security Banner */}
+              {isRevoked && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-red-900">
+                      Access Revoked
+                    </p>
+                    <p className="text-[11px] text-red-700 leading-relaxed mt-0.5">
+                      Your system authorization has been revoked or deleted by Command. You no longer have access to this portal.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Access Denied Security Banner */}
+              {isDenied && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-red-900">
+                      Access Denied: Account Not Authorized
+                    </p>
+                    <p className="text-[11px] text-red-700 leading-relaxed mt-0.5">
+                      Your Google account is not on the approved 10RCDG personnel roster. Please contact the Group Commander for access authorization.
+                    </p>
+                  </div>
                 </div>
               )}
 

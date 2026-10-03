@@ -350,7 +350,7 @@ export default function PersonnelPage() {
         title: campaignFormData.title.trim(),
         instructions: campaignFormData.instructions.trim() || undefined,
         passcode: campaignFormData.passcode.trim().toUpperCase(),
-        targetUnit: campaignFormData.targetUnit.trim() || "All Units",
+        targetUnit: groupName,
         groupId: campaignFormData.groupId || undefined,
         groupName,
         durationStr,
@@ -363,7 +363,7 @@ export default function PersonnelPage() {
         title: campaignFormData.title.trim(),
         campaignCode: res.campaignCode,
         passcode: campaignFormData.passcode.trim().toUpperCase(),
-        targetUnit: campaignFormData.targetUnit.trim(),
+        targetUnit: groupName,
         duration: durationStr,
         expiresAt: res.expiresAt,
       });
@@ -1061,49 +1061,31 @@ export default function PersonnelPage() {
                 />
               </div>
 
-              {/* Target Unit & Contact Group */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Target Unit / CDC <span className="text-amber-700">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 1001st CDC"
-                    value={campaignFormData.targetUnit}
-                    onChange={(e) =>
-                      setCampaignFormData((prev) => ({ ...prev, targetUnit: e.target.value }))
-                    }
-                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium shadow-2xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Assign to SMS Group
-                  </label>
-                  <select
-                    value={campaignFormData.groupId}
-                    onChange={(e) => {
-                      const selectedVal = e.target.value;
-                      const grp = groupsList.find((g) => g._id === selectedVal);
-                      setCampaignFormData((prev) => ({
-                        ...prev,
-                        groupId: selectedVal,
-                        groupName: grp ? grp.name : "All 10RCDG Personnel",
-                      }));
-                    }}
-                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer"
-                  >
-                    <option value="">All 10RCDG Personnel (General Roster)</option>
-                    {groupsList.map((g) => (
-                      <option key={g._id} value={g._id}>
-                        {g.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Assign to SMS Group */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Assign to SMS Group
+                </label>
+                <select
+                  value={campaignFormData.groupId}
+                  onChange={(e) => {
+                    const selectedVal = e.target.value;
+                    const grp = groupsList.find((g) => g._id === selectedVal);
+                    setCampaignFormData((prev) => ({
+                      ...prev,
+                      groupId: selectedVal,
+                      groupName: grp ? grp.name : "All 10RCDG Personnel",
+                    }));
+                  }}
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer shadow-2xs"
+                >
+                  <option value="">All 10RCDG Personnel (General Roster)</option>
+                  {groupsList.map((g) => (
+                    <option key={g._id} value={g._id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Unit Security Passcode */}

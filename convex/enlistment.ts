@@ -19,7 +19,7 @@ export const createCampaign = mutation({
     title: v.string(),
     instructions: v.optional(v.string()),
     passcode: v.string(),
-    targetUnit: v.string(),
+    targetUnit: v.optional(v.string()),
     groupId: v.optional(v.string()),
     groupName: v.string(),
     durationStr: v.string(),
@@ -40,15 +40,16 @@ export const createCampaign = mutation({
     }
 
     const campaignCode = generateCampaignCode(args.title);
+    const targetUnit = args.targetUnit?.trim() || args.groupName || "All Units";
 
     const campaignId = await ctx.db.insert("enlistmentCampaigns", {
       campaignCode,
       title: args.title.trim(),
       instructions: args.instructions?.trim() || undefined,
       passcode: cleanPasscode,
-      targetUnit: args.targetUnit.trim() || "All Units",
+      targetUnit,
       groupId: args.groupId,
-      groupName: args.groupName.trim() || "Ready Reserve",
+      groupName: args.groupName.trim() || "All 10RCDG Personnel",
       expiresAt,
       duration: args.durationStr.trim(),
       status: "ACTIVE",

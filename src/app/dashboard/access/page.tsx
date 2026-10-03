@@ -83,6 +83,7 @@ export default function AuthorizedPersonnelPage() {
   const [suspendReason, setSuspendReason] = useState("Administrative Review");
   const [customReason, setCustomReason] = useState("");
   const [suspendDuration, setSuspendDuration] = useState("Indefinite (Until Command Reinstatement)");
+  const [customDuration, setCustomDuration] = useState("");
   const [isSubmittingSuspension, setIsSubmittingSuspension] = useState(false);
 
   // Reactivate Modal State
@@ -172,6 +173,7 @@ export default function AuthorizedPersonnelPage() {
       setSuspendReason("Administrative Review");
       setCustomReason("");
       setSuspendDuration("Indefinite (Until Command Reinstatement)");
+      setCustomDuration("");
     }
   };
 
@@ -183,12 +185,17 @@ export default function AuthorizedPersonnelPage() {
         ? customReason.trim() || "Administrative review by Command"
         : suspendReason;
 
+    const finalDuration =
+      suspendDuration === "Custom Duration"
+        ? customDuration.trim() || "Custom Duration"
+        : suspendDuration;
+
     try {
       setIsSubmittingSuspension(true);
       await suspendOfficer({
         id: suspendTarget._id,
         reason: finalReason,
-        duration: suspendDuration,
+        duration: finalDuration,
       });
       setSuspendTarget(null);
     } catch (err: any) {
@@ -852,7 +859,21 @@ export default function AuthorizedPersonnelPage() {
                     <option value="7 Days">7 Days</option>
                     <option value="14 Days">14 Days</option>
                     <option value="30 Days">30 Days</option>
+                    <option value="Custom Duration">Custom Duration (Specify Below)</option>
                   </select>
+
+                  {suspendDuration === "Custom Duration" && (
+                    <div className="mt-2.5">
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 60 Days, 3 Months, Until Q4 Inspection, etc."
+                        value={customDuration}
+                        onChange={(e) => setCustomDuration(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Information Callout */}

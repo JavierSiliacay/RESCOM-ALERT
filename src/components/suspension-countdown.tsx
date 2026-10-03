@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Clock, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
+import { Clock, ShieldAlert, ShieldCheck, CheckCircle2 } from "lucide-react";
 
 interface SuspensionCountdownProps {
   suspendedUntil?: string | number | null;
@@ -99,7 +99,7 @@ export function SuspensionCountdown({
           <div>
             <p className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
               <span>Suspension Concluded</span>
-              <span className="px-1.5 py-0.2 bg-emerald-200/80 text-emerald-900 rounded text-[9px] font-extrabold uppercase">
+              <span className="px-1.5 py-0.2 bg-emerald-200/80 text-emerald-900 rounded text-[9px] font-extrabold uppercase font-mono">
                 Active
               </span>
             </p>
@@ -109,7 +109,7 @@ export function SuspensionCountdown({
           </div>
         </div>
         <div className="p-2 rounded-lg bg-emerald-100/60 border border-emerald-200 text-[11px] text-emerald-900 font-semibold flex items-center justify-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
           <span>You may now sign in with Google below.</span>
         </div>
       </div>

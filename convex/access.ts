@@ -1,11 +1,53 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+// Helper to calculate expiration timestamp from duration string
+export function calculateSuspensionExpiry(durationStr: string): number | undefined {
+  const d = durationStr.toLowerCase().trim();
+  if (d.includes("indefinite") || d.includes("until command")) {
+    return undefined;
+  }
+  const now = Date.now();
+  if (d.includes("24 hour") || d === "1 day" || d.includes("1 day")) {
+    return now + 24 * 60 * 60 * 1000;
+  }
+  if (d.includes("3 day")) {
+    return now + 3 * 24 * 60 * 60 * 1000;
+  }
+  if (d.includes("7 day") || d.includes("1 week")) {
+    return now + 7 * 24 * 60 * 60 * 1000;
+  }
+  if (d.includes("14 day") || d.includes("2 week")) {
+    return now + 14 * 24 * 60 * 60 * 1000;
+  }
+  if (d.includes("30 day") || d.includes("1 month")) {
+    return now + 30 * 24 * 60 * 60 * 1000;
+  }
+
+  // Regex parser for custom duration inputs (e.g. "60 days", "12 hours", "3 months")
+  const matchHours = d.match(/(\d+)\s*(hour|hr|h\b)/);
+  if (matchHours) {
+    return now + parseInt(matchHours[1], 10) * 60 * 60 * 1000;
+  }
+  const matchDays = d.match(/(\d+)\s*(day|d\b)/);
+  if (matchDays) {
+    return now + parseInt(matchDays[1], 10) * 24 * 60 * 60 * 1000;
+  }
+  const matchMonths = d.match(/(\d+)\s*(month|mo\b)/);
+  if (matchMonths) {
+    return now + parseInt(matchMonths[1], 10) * 30 * 24 * 60 * 60 * 1000;
+  }
+
+  return undefined;
+}
+
 // List all authorized officers
 export const list = query({
   args: {},
   handler: async (ctx) => {
     const users = await ctx.db.query("authorizedUsers").collect();
+    const now = Date.now();
+
     return users.map((u) => {
       if (u.email.toLowerCase().trim() === "siliacay.javier@gmail.com") {
         return {
@@ -15,6 +57,22 @@ export const list = query({
           unit: u.unit === "10RCDG HQ" ? "10RCDG HQ / Technical Dev" : u.unit,
         };
       }
+
+      // Check if temporary suspension has expired
+      const isExpired =
+        u.status === "SUSPENDED" &&
+        u.suspendedUntil &&
+        now >= (typeof u.suspendedUntil === "number" ? u.suspendedUntil : Date.parse(u.suspendedUntil));
+
+      if (isExpired) {
+        return {
+          ...u,
+          status: "ACTIVE" as const,
+          suspendedReason: undefined,
+          suspendedDuration: undefined,
+        };
+      }
+
       return u;
     });
   },
@@ -45,6 +103,27 @@ export const checkByEmail = query({
     const allUsers = await ctx.db.query("authorizedUsers").collect();
     const authorized = allUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
     if (authorized) {
+      const now = Date.now();
+      const isExpired =
+        authorized.status === "SUSPENDED" &&
+        authorized.suspendedUntil &&
+        now >= (typeof authorized.suspendedUntil === "number" ? authorized.suspendedUntil : Date.parse(authorized.suspendedUntil));
+
+      // If suspension time has passed, automatically grant active access
+      if (isExpired) {
+        return {
+          isAuthorized: true,
+          user: {
+            name: authorized.name,
+            email: authorized.email,
+            rank: authorized.rank,
+            role: authorized.role,
+            unit: authorized.unit,
+            status: "ACTIVE" as const,
+          },
+        };
+      }
+
       if (authorized.status === "SUSPENDED" || authorized.status === "REJECTED") {
         return {
           isAuthorized: false,
@@ -222,19 +301,24 @@ export const suspendOfficer = mutation({
     }
 
     const now = new Date().toISOString();
+    const suspendedUntilMs = calculateSuspensionExpiry(args.duration);
+
     await ctx.db.patch(args.id, {
       status: "SUSPENDED",
       suspendedReason: args.reason,
       suspendedDuration: args.duration,
       suspendedAt: now,
+      suspendedUntil: suspendedUntilMs ? new Date(suspendedUntilMs).toISOString() : undefined,
     });
+
+    const expiryNote = suspendedUntilMs ? ` (Auto-reactivates at: ${new Date(suspendedUntilMs).toLocaleString("en-US", { timeZone: "Asia/Manila" })})` : " (Indefinite)";
 
     await ctx.db.insert("auditLogs", {
       userName: "Group Commander",
       userRole: "COMMANDER",
       category: "AUTH",
       action: "SUSPEND_ACCESS",
-      details: `Suspended ${officer.rank} ${officer.name} (${officer.email}) - Reason: "${args.reason}", Duration: "${args.duration}"`,
+      details: `Suspended ${officer.rank} ${officer.name} (${officer.email}) - Reason: "${args.reason}", Duration: "${args.duration}"${expiryNote}`,
       ipAddress: "127.0.0.1",
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
@@ -321,6 +405,20 @@ export const heartbeat = mutation({
         lastSeenAt: now,
         lastLogin: "Active Now",
       };
+
+      // Auto-heal expired suspensions
+      if (
+        existing.status === "SUSPENDED" &&
+        existing.suspendedUntil &&
+        now >= (typeof existing.suspendedUntil === "number" ? existing.suspendedUntil : Date.parse(existing.suspendedUntil))
+      ) {
+        patchData.status = "ACTIVE";
+        patchData.suspendedReason = undefined;
+        patchData.suspendedDuration = undefined;
+        patchData.suspendedAt = undefined;
+        patchData.suspendedUntil = undefined;
+      }
+
       if (cleanEmail === "siliacay.javier@gmail.com") {
         patchData.role = "DEVELOPER";
         patchData.rank = "System Developer";

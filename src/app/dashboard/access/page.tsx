@@ -52,6 +52,7 @@ const ROLES_LIST: { label: string; value: UserRole; description: string }[] = [
 export default function AuthorizedPersonnelPage() {
   const officersData = useQuery(api.access.list);
   const createOfficer = useMutation(api.access.create);
+  const updateOfficer = useMutation(api.access.update);
   const updateOfficerRole = useMutation(api.access.updateRole);
   const removeOfficer = useMutation(api.access.remove);
 
@@ -100,23 +101,28 @@ export default function AuthorizedPersonnelPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.email.trim()) return;
+    const cleanEmail = formData.email.trim().toLowerCase();
+    if (!cleanEmail) return;
 
     try {
       setIsSaving(true);
       if (editingOfficer) {
-        await updateOfficerRole({
+        await updateOfficer({
           id: editingOfficer._id,
+          name: formData.name.trim() || cleanEmail.split("@")[0],
+          email: cleanEmail,
+          rank: formData.rank,
           role: formData.role,
+          unit: formData.unit.trim() || "10RCDG HQ",
           status: editingOfficer.status as any,
         });
       } else {
         await createOfficer({
-          name: formData.name || formData.email.split("@")[0],
-          email: formData.email.toLowerCase().trim(),
+          name: formData.name.trim() || cleanEmail.split("@")[0],
+          email: cleanEmail,
           rank: formData.rank,
           role: formData.role,
-          unit: formData.unit,
+          unit: formData.unit.trim() || "10RCDG HQ",
         });
       }
       setIsModalOpen(false);
@@ -128,7 +134,8 @@ export default function AuthorizedPersonnelPage() {
   };
 
   const handleToggleStatus = async (officer: (typeof officers)[number]) => {
-    if (officer.email === "siliacay.javier@gmail.com") {
+    const commanderEmails = ["siliacay.javier@gmail.com", "javiersiliacaysiliacay1234@gmail.com"];
+    if (commanderEmails.includes(officer.email.toLowerCase())) {
       alert("Group Commander account cannot be suspended.");
       return;
     }

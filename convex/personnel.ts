@@ -58,7 +58,30 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const { id, ...data } = args;
-    await ctx.db.patch(id, data);
+    const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("Personnel record not found");
+
+    await ctx.db.patch(id, {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      rank: data.rank,
+      mobileNumber: data.mobileNumber,
+      groupId: data.groupId || "",
+      groupName: data.groupName,
+      unit: data.unit,
+      email: data.email || "",
+    });
+
+    // Record audit log
+    await ctx.db.insert("auditLogs", {
+      userName: "Authorized Officer",
+      userRole: "ADMIN",
+      category: "PERSONNEL",
+      action: "UPDATE_PERSONNEL",
+      details: `Updated record for ${data.rank} ${data.firstName} ${data.lastName} (${data.mobileNumber})`,
+      ipAddress: "127.0.0.1",
+      timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+    });
   },
 });
 

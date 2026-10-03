@@ -91,13 +91,19 @@ export default function PersonnelPage() {
   const handleOpenEditModal = (person: (typeof personnelList)[number]) => {
     setEditingId(person._id);
     setPhoneError(null);
+    
+    // Find matching group by ID or by group name
+    const matchedGroup = groupsList.find(
+      (g) => g._id === person.groupId || g.name === person.groupName
+    );
+
     setFormData({
-      firstName: person.firstName,
-      lastName: person.lastName,
-      rank: person.rank,
-      mobileNumber: person.mobileNumber,
-      groupId: person.groupId || "",
-      unit: person.unit,
+      firstName: person.firstName || "",
+      lastName: person.lastName || "",
+      rank: person.rank || "PVT",
+      mobileNumber: person.mobileNumber || "09",
+      groupId: matchedGroup ? matchedGroup._id : (person.groupId || groupsList[0]?._id || ""),
+      unit: person.unit || "10RCDG HQ",
       email: person.email || "",
     });
     setIsAddModalOpen(true);
@@ -106,39 +112,40 @@ export default function PersonnelPage() {
   const handleSavePersonnel = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!isValidPhMobileNumber(formData.mobileNumber)) {
+    const cleanMobile = formData.mobileNumber.trim();
+    if (!isValidPhMobileNumber(cleanMobile)) {
       setPhoneError("Please enter a valid Philippine mobile number (e.g., 09171234567 or +639171234567).");
       return;
     }
     setPhoneError(null);
 
     const group = groupsList.find((g) => g._id === formData.groupId || g.name === formData.groupId);
-    const groupName = group ? group.name : "General Roster";
+    const groupName = group ? group.name : (formData.groupId ? formData.groupId : "General Roster");
 
     try {
       setIsSaving(true);
       if (editingId) {
         await updatePersonnel({
           id: editingId,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
           rank: formData.rank,
-          mobileNumber: formData.mobileNumber,
-          groupId: formData.groupId,
+          mobileNumber: cleanMobile,
+          groupId: formData.groupId ? formData.groupId : undefined,
           groupName,
-          unit: formData.unit,
-          email: formData.email,
+          unit: formData.unit.trim() || "10RCDG HQ",
+          email: formData.email.trim() ? formData.email.trim().toLowerCase() : undefined,
         });
       } else {
         await createPersonnel({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
           rank: formData.rank,
-          mobileNumber: formData.mobileNumber,
-          groupId: formData.groupId,
+          mobileNumber: cleanMobile,
+          groupId: formData.groupId ? formData.groupId : undefined,
           groupName,
-          unit: formData.unit,
-          email: formData.email,
+          unit: formData.unit.trim() || "10RCDG HQ",
+          email: formData.email.trim() ? formData.email.trim().toLowerCase() : undefined,
         });
       }
       setIsAddModalOpen(false);

@@ -180,30 +180,46 @@ export const submitEnlistment = mutation({
       throw new Error("Invalid unit passcode. Entry denied.");
     }
 
-    // Format mobile number to clean +639 format
-    let cleanMobile = args.mobileNumber.replace(/[^0-9+]/g, "");
-    if (cleanMobile.startsWith("09") && cleanMobile.length === 11) {
-      cleanMobile = "+63" + cleanMobile.slice(1);
-    } else if (cleanMobile.startsWith("9") && cleanMobile.length === 10) {
-      cleanMobile = "+63" + cleanMobile;
-    } else if (cleanMobile.startsWith("639") && cleanMobile.length === 12) {
-      cleanMobile = "+" + cleanMobile;
+    // Standardize to canonical +639XXXXXXXXX
+    const rawDigits = args.mobileNumber.replace(/\D/g, "");
+    let cleanMobile = "";
+    if (rawDigits.startsWith("639") && rawDigits.length === 12) {
+      cleanMobile = "+63" + rawDigits.slice(2);
+    } else if (rawDigits.startsWith("09") && rawDigits.length === 11) {
+      cleanMobile = "+63" + rawDigits.slice(1);
+    } else if (rawDigits.startsWith("9") && rawDigits.length === 10) {
+      cleanMobile = "+63" + rawDigits;
+    } else {
+      cleanMobile = "+63" + rawDigits;
     }
 
-    // Check duplicate in same campaign
-    const existingSubmissions = await ctx.db
-      .query("enlistmentSubmissions")
-      .withIndex("by_campaignId", (q) => q.eq("campaignId", campaign._id))
-      .collect();
+    const normalizePh = (numStr: string) => {
+      const digits = (numStr || "").replace(/\D/g, "");
+      if (digits.startsWith("639") && digits.length === 12) return "+63" + digits.slice(2);
+      if (digits.startsWith("09") && digits.length === 11) return "+63" + digits.slice(1);
+      if (digits.startsWith("9") && digits.length === 10) return "+63" + digits;
+      return "+" + digits;
+    };
 
-    const isDuplicate = existingSubmissions.some(
-      (s) => s.mobileNumber === cleanMobile ||
-        (s.firstName.toLowerCase() === args.firstName.trim().toLowerCase() &&
-         s.lastName.toLowerCase() === args.lastName.trim().toLowerCase())
+    // 1. Check if number already exists in active personnel directory
+    const allPersonnel = await ctx.db.query("personnel").collect();
+    const existingPersonnel = allPersonnel.find((p) => normalizePh(p.mobileNumber) === cleanMobile);
+    if (existingPersonnel) {
+      throw new Error(
+        `This mobile number (${cleanMobile}) is already registered in the active 10RCDG personnel roster as ${existingPersonnel.rank} ${existingPersonnel.firstName} ${existingPersonnel.lastName}.`
+      );
+    }
+
+    // 2. Check if number already exists across enlistment submissions (pending or approved)
+    const allSubmissions = await ctx.db.query("enlistmentSubmissions").collect();
+    const existingSubmission = allSubmissions.find(
+      (s) => s.status !== "REJECTED" && normalizePh(s.mobileNumber) === cleanMobile
     );
 
-    if (isDuplicate) {
-      throw new Error("You have already submitted an enlistment registration for this campaign.");
+    if (existingSubmission) {
+      throw new Error(
+        `This mobile number (${cleanMobile}) has already been submitted for enlistment in batch "${existingSubmission.campaignCode}". Multiple registrations with the same phone number are not permitted.`
+      );
     }
 
     const submissionId = await ctx.db.insert("enlistmentSubmissions", {

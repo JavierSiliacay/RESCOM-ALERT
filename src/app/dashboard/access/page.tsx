@@ -33,11 +33,6 @@ import { Id } from "../../../../convex/_generated/dataModel";
 
 const ROLES_LIST: { label: string; value: UserRole; description: string }[] = [
   {
-    label: "System Developer (Exclusive Root)",
-    value: "DEVELOPER",
-    description: "Master technical developer with full system configuration & database authority",
-  },
-  {
     label: "Group Commander",
     value: "COMMANDER",
     description: "Full operational authority, mass broadcast, and roster oversight",
@@ -470,134 +465,163 @@ export default function AuthorizedPersonnelPage() {
 
       {/* Authorize / Edit Officer Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Modal Header (Pinned) */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800 shrink-0">
                   <UserCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
                     {editingOfficer ? "Edit Officer Access Clearance" : "Authorize New 10RCDG Personnel"}
                   </h3>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-[11px] sm:text-xs text-slate-500">
                     Grant Google OAuth login permissions and set command roles
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Officer Full Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Maj. Alfred Agbong"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Authorized Google Email
-                </label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    required
-                    placeholder="officer.name@gmail.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full pl-3.5 pr-10 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white font-mono"
-                  />
-                  <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Must match the exact Google account used to sign in to RESCOM ALERT.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            {/* Modal Form */}
+            <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0">
+              {/* Scrollable Form Body */}
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Military Rank
-                  </label>
-                  <RankSearchSelect
-                    value={formData.rank}
-                    onChange={(rankCode) => setFormData({ ...formData, rank: rankCode })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Assigned Unit
+                    Officer Full Name
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="10RCDG HQ"
-                    value={formData.unit}
-                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                    placeholder="e.g. Maj. Alfred Agbong"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white font-medium"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  System Role & Authority Level
-                </label>
-                <div className="space-y-2">
-                  {ROLES_LIST.map((r) => (
-                    <label
-                      key={r.value}
-                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                        formData.role === r.value
-                          ? "bg-emerald-50/80 border-emerald-600 ring-1 ring-emerald-600"
-                          : "bg-slate-50 border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="userRole"
-                        value={r.value}
-                        checked={formData.role === r.value}
-                        onChange={() => setFormData({ ...formData, role: r.value })}
-                        className="mt-0.5 text-emerald-700 focus:ring-emerald-600"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-900">{r.label}</div>
-                        <div className="text-[11px] text-slate-500 leading-tight">{r.description}</div>
-                      </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Authorized Google Email
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      required
+                      placeholder="officer.name@gmail.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full pl-3.5 pr-10 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white font-mono"
+                    />
+                    <Mail className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Must match the exact Google account used to sign in to RESCOM ALERT.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Military Rank
                     </label>
-                  ))}
+                    <RankSearchSelect
+                      value={formData.rank}
+                      onChange={(rankCode) => setFormData({ ...formData, rank: rankCode })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Assigned Unit
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="10RCDG HQ"
+                      value={formData.unit}
+                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                      className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    System Role & Authority Level
+                  </label>
+                  <div className="space-y-2">
+                    {/* Developer role (only when editing root developer) */}
+                    {formData.role === "DEVELOPER" && (
+                      <div className="flex items-start gap-3 p-3 rounded-xl border bg-purple-50/80 border-purple-300 ring-1 ring-purple-300">
+                        <input
+                          type="radio"
+                          name="userRole"
+                          value="DEVELOPER"
+                          checked
+                          readOnly
+                          className="mt-0.5 text-purple-700 focus:ring-purple-600"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                            <Code2 className="w-3.5 h-3.5 text-purple-700" />
+                            System Developer (Exclusive Root)
+                          </div>
+                          <div className="text-[11px] text-purple-800/80 leading-tight">
+                            Master technical developer with full system configuration & database authority
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {ROLES_LIST.map((r) => (
+                      <label
+                        key={r.value}
+                        className={`flex items-start gap-3 p-2.5 sm:p-3 rounded-xl border cursor-pointer transition-all ${
+                          formData.role === r.value
+                            ? "bg-emerald-50/80 border-emerald-600 ring-1 ring-emerald-600 shadow-2xs"
+                            : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="userRole"
+                          value={r.value}
+                          checked={formData.role === r.value}
+                          onChange={() => setFormData({ ...formData, role: r.value })}
+                          className="mt-0.5 text-emerald-700 focus:ring-emerald-600"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-slate-900">{r.label}</div>
+                          <div className="text-[11px] text-slate-500 leading-tight">{r.description}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              {/* Modal Footer (Pinned) */}
+              <div className="p-3.5 sm:px-6 sm:py-3.5 border-t border-slate-100 bg-slate-50/90 flex items-center justify-end gap-2.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                  className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 bg-emerald-800 hover:bg-emerald-900 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-900 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   {isSaving ? "Saving..." : editingOfficer ? "Save Changes" : "Confirm Authorization"}
                 </button>
@@ -609,9 +633,9 @@ export default function AuthorizedPersonnelPage() {
 
       {/* Revoke Access Confirmation Modal */}
       {revokeTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
-            <div className="p-6 text-center space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md max-h-[calc(100dvh-2rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 sm:p-6 text-center space-y-4">
               <div className="mx-auto w-12 h-12 rounded-full bg-red-100 border border-red-200 text-red-600 flex items-center justify-center shadow-xs">
                 <Trash2 className="w-6 h-6" />
               </div>

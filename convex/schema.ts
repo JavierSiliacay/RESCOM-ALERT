@@ -96,6 +96,7 @@ export default defineSchema({
     ),
     approvedDate: v.string(),
     lastLogin: v.string(),
+    lastSeenAt: v.optional(v.number()), // Unix timestamp in milliseconds for real-time live presence
   }).index("by_email", ["email"]),
 
   // Hardware Gateway Settings (Developer Config)

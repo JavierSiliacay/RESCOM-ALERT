@@ -5,6 +5,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import {
   LayoutDashboard,
   Users,
@@ -51,6 +53,39 @@ export function DashboardNav({
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const pathname = usePathname();
+
+  const sendHeartbeat = useMutation(api.access.heartbeat);
+
+  // Live Presence Heartbeat (Every 45s & on Focus/Page Navigation)
+  useEffect(() => {
+    if (!userEmail) return;
+
+    const ping = () => {
+      sendHeartbeat({
+        email: userEmail,
+        name: userName,
+        rank: userRank,
+        role: userRole as any,
+      }).catch(() => {});
+    };
+
+    ping();
+    const interval = setInterval(ping, 45_000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        ping();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", ping);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", ping);
+    };
+  }, [userEmail, userName, userRank, userRole, sendHeartbeat]);
 
   // 15-Minute Inactivity Auto-Logout Security Guard
   useEffect(() => {

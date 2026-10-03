@@ -15,6 +15,9 @@ import {
   Mail,
   Crown,
   Radio,
+  Activity,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import { UserRole, UserStatus } from "@/auth";
 import {
@@ -22,6 +25,7 @@ import {
   getRankFullName,
 } from "@/lib/military-ranks";
 import { RankSearchSelect } from "@/components/rank-search-select";
+import { getPresenceStatus } from "@/lib/presence";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -60,7 +64,7 @@ export default function AuthorizedPersonnelPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [presenceFilter, setPresenceFilter] = useState("ALL");
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -73,6 +77,7 @@ export default function AuthorizedPersonnelPage() {
     rank: "CPT",
     role: "OPERATOR" as UserRole,
     unit: "10RCDG HQ",
+    status: "ACTIVE" as UserStatus,
   });
 
   const handleOpenAdd = () => {
@@ -83,6 +88,7 @@ export default function AuthorizedPersonnelPage() {
       rank: "CPT",
       role: "OPERATOR",
       unit: "10RCDG HQ",
+      status: "ACTIVE",
     });
     setIsModalOpen(true);
   };
@@ -95,6 +101,7 @@ export default function AuthorizedPersonnelPage() {
       rank: officer.rank,
       role: officer.role as UserRole,
       unit: officer.unit,
+      status: (officer.status as UserStatus) || "ACTIVE",
     });
     setIsModalOpen(true);
   };
@@ -114,7 +121,7 @@ export default function AuthorizedPersonnelPage() {
           rank: formData.rank,
           role: formData.role,
           unit: formData.unit.trim() || "10RCDG HQ",
-          status: editingOfficer.status as any,
+          status: formData.status as any,
         });
       } else {
         await createOfficer({
@@ -152,7 +159,8 @@ export default function AuthorizedPersonnelPage() {
   };
 
   const handleRevoke = async (id: Id<"authorizedUsers">, email: string) => {
-    if (email === "siliacay.javier@gmail.com") {
+    const commanderEmails = ["siliacay.javier@gmail.com", "javiersiliacaysiliacay1234@gmail.com"];
+    if (commanderEmails.includes(email.toLowerCase())) {
       alert("Primary Group Commander access cannot be revoked.");
       return;
     }
@@ -173,12 +181,21 @@ export default function AuthorizedPersonnelPage() {
       o.rank.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesRole = roleFilter === "ALL" || o.role === roleFilter;
-    const matchesStatus = statusFilter === "ALL" || o.status === statusFilter;
+    
+    const presence = getPresenceStatus(o.lastSeenAt);
+    let matchesPresence = true;
+    if (presenceFilter === "ONLINE") {
+      matchesPresence = presence.isOnline;
+    } else if (presenceFilter === "OFFLINE") {
+      matchesPresence = !presence.isOnline;
+    } else if (presenceFilter === "SUSPENDED") {
+      matchesPresence = o.status === "SUSPENDED";
+    }
 
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesRole && matchesPresence;
   });
 
-  const activeCount = officers.filter((o) => o.status === "ACTIVE" || o.status === "APPROVED").length;
+  const onlineCount = officers.filter((o) => getPresenceStatus(o.lastSeenAt).isOnline).length;
   const commanderCount = officers.filter((o) => o.role === "COMMANDER" || o.role === "ADMIN").length;
 
   return (
@@ -194,7 +211,7 @@ export default function AuthorizedPersonnelPage() {
             Authorized Personnel
           </h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-            Manage authorized officer Google login clearances, assign military roles, and control dispatch permissions.
+            Real-time officer presence tracking, military clearance roles, and login access management.
           </p>
         </div>
 
@@ -223,11 +240,14 @@ export default function AuthorizedPersonnelPage() {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Clearances</p>
-            <p className="text-2xl font-extrabold text-emerald-700 mt-1">{activeCount}</p>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Online Now</p>
+            </div>
+            <p className="text-2xl font-extrabold text-emerald-700 mt-1">{onlineCount}</p>
           </div>
           <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <CheckCircle2 className="w-5 h-5" />
+            <Activity className="w-5 h-5 animate-pulse" />
           </div>
         </div>
 
@@ -255,7 +275,7 @@ export default function AuthorizedPersonnelPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0">
             <Filter className="w-3.5 h-3.5" />
             <span>Role:</span>
@@ -273,13 +293,14 @@ export default function AuthorizedPersonnelPage() {
           </select>
 
           <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            value={presenceFilter}
+            onChange={(e) => setPresenceFilter(e.target.value)}
             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
           >
-            <option value="ALL">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="SUSPENDED">Suspended</option>
+            <option value="ALL">All Activity</option>
+            <option value="ONLINE">🟢 Online Now Only</option>
+            <option value="OFFLINE">🔴 Offline</option>
+            <option value="SUSPENDED">Suspended Accounts</option>
           </select>
         </div>
       </div>
@@ -290,114 +311,134 @@ export default function AuthorizedPersonnelPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="py-3.5 px-4 sm:px-6">Officer & Email</th>
+                <th className="py-3.5 px-4 sm:px-6">Officer & Account</th>
                 <th className="py-3.5 px-4">Military Role</th>
                 <th className="py-3.5 px-4">Assigned Unit</th>
-                <th className="py-3.5 px-4">Clearance Status</th>
-                <th className="py-3.5 px-4">Last Login</th>
+                <th className="py-3.5 px-4">Live Activity</th>
                 <th className="py-3.5 px-4 text-right pr-6">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {filteredOfficers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-10 text-slate-400">
-                    No authorized personnel found matching your filters.
+                  <td colSpan={5} className="text-center py-12 text-slate-400">
+                    <UserCheck className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    <p className="text-sm font-semibold text-slate-700">No personnel found</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Try changing your search query or filter options.</p>
                   </td>
                 </tr>
               ) : (
-                filteredOfficers.map((officer) => (
-                  <tr key={officer._id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3.5 px-4 sm:px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-700 font-bold flex items-center justify-center shrink-0">
-                          {officer.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                            <span>{officer.name}</span>
-                            <span className="text-[10px] font-mono text-slate-400">({officer.rank})</span>
+                filteredOfficers.map((officer) => {
+                  const presence = getPresenceStatus(officer.lastSeenAt);
+                  const isSuspended = officer.status === "SUSPENDED" || officer.status === "REJECTED";
+
+                  return (
+                    <tr key={officer._id} className="hover:bg-slate-50/70 transition-colors">
+                      {/* Officer Info */}
+                      <td className="py-3.5 px-4 sm:px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-bold flex items-center justify-center shrink-0 shadow-2xs">
+                              {officer.name.charAt(0).toUpperCase()}
+                            </div>
+                            {/* Small presence indicator dot on avatar */}
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${presence.dotColor}`}
+                            />
                           </div>
-                          <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1 mt-0.5">
-                            <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                            {officer.email}
+                          <div>
+                            <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                              <span>{officer.name}</span>
+                              <span className="text-[10px] font-mono text-slate-400">({officer.rank})</span>
+                              {isSuspended && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-red-100 text-red-700 border border-red-200 uppercase tracking-wide">
+                                  Suspended
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1 mt-0.5">
+                              <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                              {officer.email}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="py-3.5 px-4">
-                      {officer.role === "COMMANDER" ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 font-mono">
-                          <Crown className="w-3 h-3 text-amber-600 shrink-0" />
-                          COMMANDER
-                        </span>
-                      ) : officer.role === "ADMIN" ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 font-mono">
-                          DEPUTY / ADMIN
-                        </span>
-                      ) : officer.role === "OPERATOR" ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
-                          OPERATIONS (S3)
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
-                          VIEWER
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4 font-medium text-slate-700">
-                      {officer.unit}
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <button
-                        onClick={() => handleToggleStatus(officer)}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
-                          officer.status === "ACTIVE" || officer.status === "APPROVED"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                            : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
-                        }`}
-                        title="Click to toggle status"
-                      >
-                        {officer.status === "ACTIVE" || officer.status === "APPROVED" ? (
-                          <>
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span>Active</span>
-                          </>
+                      {/* Military Role */}
+                      <td className="py-3.5 px-4">
+                        {officer.role === "COMMANDER" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 font-mono shadow-2xs">
+                            <Crown className="w-3 h-3 text-amber-600 shrink-0" />
+                            COMMANDER
+                          </span>
+                        ) : officer.role === "ADMIN" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 font-mono">
+                            DEPUTY / ADMIN
+                          </span>
+                        ) : officer.role === "OPERATOR" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
+                            OPERATIONS (S3)
+                          </span>
                         ) : (
-                          <>
-                            <XCircle className="w-3 h-3" />
-                            <span>Suspended</span>
-                          </>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                            VIEWER
+                          </span>
                         )}
-                      </button>
-                    </td>
+                      </td>
 
-                    <td className="py-3.5 px-4 text-slate-500 text-[11px] font-mono">
-                      {officer.lastLogin}
-                    </td>
+                      {/* Unit */}
+                      <td className="py-3.5 px-4 font-medium text-slate-700">
+                        {officer.unit}
+                      </td>
 
-                    <td className="py-3.5 px-4 text-right pr-6 space-x-1">
-                      <button
-                        onClick={() => handleOpenEdit(officer)}
-                        title="Edit Officer Access"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      {/* Live Activity (Accurate Presence & Timestamp) */}
+                      <td className="py-3.5 px-4">
+                        <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-xs font-mono font-medium shadow-2xs"
+                          style={{
+                            backgroundColor: presence.isOnline ? "#ecfdf5" : "#fff1f2",
+                            borderColor: presence.isOnline ? "#a7f3d0" : "#fecdd3",
+                          }}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${presence.dotColor} shrink-0`} />
+                          <span className={presence.isOnline ? "text-emerald-800 font-bold" : "text-rose-700 font-medium"}>
+                            {presence.label}
+                          </span>
+                        </div>
+                      </td>
 
-                      <button
-                        onClick={() => handleRevoke(officer._id, officer.email)}
-                        title="Revoke Clearance"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right pr-6 space-x-1">
+                        <button
+                          onClick={() => handleToggleStatus(officer)}
+                          title={isSuspended ? "Re-activate Account" : "Suspend Access"}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            isSuspended
+                              ? "text-red-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              : "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                          }`}
+                        >
+                          {isSuspended ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenEdit(officer)}
+                          title="Edit Officer Details & Role"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={() => handleRevoke(officer._id, officer.email)}
+                          title="Revoke Clearance"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

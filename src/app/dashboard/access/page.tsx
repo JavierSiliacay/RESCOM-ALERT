@@ -18,6 +18,7 @@ import {
   Activity,
   ShieldAlert,
   ShieldCheck,
+  Terminal,
 } from "lucide-react";
 import { UserRole, UserStatus } from "@/auth";
 import {
@@ -32,7 +33,12 @@ import { Id } from "../../../../convex/_generated/dataModel";
 
 const ROLES_LIST: { label: string; value: UserRole; description: string }[] = [
   {
-    label: "Commander",
+    label: "System Developer (Exclusive Root)",
+    value: "DEVELOPER",
+    description: "Master technical developer with full system configuration & database authority",
+  },
+  {
+    label: "Group Commander",
     value: "COMMANDER",
     description: "Full operational authority, mass broadcast, and roster oversight",
   },
@@ -297,6 +303,7 @@ export default function AuthorizedPersonnelPage() {
             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
           >
             <option value="ALL">All Roles</option>
+            <option value="DEVELOPER">⚡ System Developer</option>
             <option value="COMMANDER">Commander</option>
             <option value="ADMIN">Deputy Commander / Admin</option>
             <option value="OPERATOR">Operations Officer (S3)</option>
@@ -377,7 +384,12 @@ export default function AuthorizedPersonnelPage() {
 
                       {/* Military Role */}
                       <td className="py-3.5 px-4">
-                        {officer.role === "COMMANDER" ? (
+                        {officer.role === "DEVELOPER" ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-purple-100 text-purple-950 border border-purple-300 font-mono shadow-2xs">
+                            <Terminal className="w-3 h-3 text-purple-700 shrink-0" />
+                            SYSTEM DEVELOPER
+                          </span>
+                        ) : officer.role === "COMMANDER" ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 font-mono shadow-2xs">
                             <Crown className="w-3 h-3 text-amber-600 shrink-0" />
                             COMMANDER

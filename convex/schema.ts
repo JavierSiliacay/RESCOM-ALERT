@@ -81,6 +81,7 @@ export default defineSchema({
     email: v.string(),
     rank: v.string(),
     role: v.union(
+      v.literal("DEVELOPER"),
       v.literal("COMMANDER"),
       v.literal("ADMIN"),
       v.literal("OPERATOR"),

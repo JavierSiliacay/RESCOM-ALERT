@@ -3,7 +3,7 @@ import Google from "next-auth/providers/google";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
 
-export type UserRole = "COMMANDER" | "ADMIN" | "OPERATOR" | "VIEWER";
+export type UserRole = "DEVELOPER" | "COMMANDER" | "ADMIN" | "OPERATOR" | "VIEWER";
 export type UserStatus = "ACTIVE" | "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
 
 export interface AuthorizedUser {
@@ -19,7 +19,9 @@ export interface AuthorizedUser {
   lastLoginAt?: string;
 }
 
-// Immutable Primary Commander Email (Root Super-Admin)
+// Exclusive Master System Developer Email
+const DEVELOPER_EMAIL = "siliacay.javier@gmail.com";
+
 const ROOT_COMMANDER_EMAIL = (
   process.env.COMMANDER_EMAIL || "siliacay.javier@gmail.com"
 ).toLowerCase().trim();
@@ -46,8 +48,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!user.email) return false;
       const userEmail = user.email.toLowerCase().trim();
 
-      // 1. Root Super Commander has unconditional master access
-      if (userEmail === ROOT_COMMANDER_EMAIL) {
+      // 1. Exclusive System Developer & Root Commander have unconditional master access
+      if (userEmail === DEVELOPER_EMAIL || userEmail === ROOT_COMMANDER_EMAIL) {
         return true;
       }
 
@@ -78,7 +80,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user && session.user.email) {
         const userEmail = session.user.email.toLowerCase().trim();
 
-        if (userEmail === ROOT_COMMANDER_EMAIL) {
+        // Exclusive Developer Role for siliacay.javier@gmail.com
+        if (userEmail === DEVELOPER_EMAIL) {
+          (session.user as any).role = "DEVELOPER";
+          (session.user as any).status = "ACTIVE";
+          (session.user as any).rank = "System Developer";
+          (session.user as any).unit = "10RCDG HQ / Technical Dev";
+        } else if (userEmail === ROOT_COMMANDER_EMAIL) {
           (session.user as any).role = "COMMANDER";
           (session.user as any).status = "ACTIVE";
           (session.user as any).rank = "Group Commander";

@@ -257,9 +257,16 @@ export function DashboardNav({
               Connected as
             </span>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300 shadow-2xs font-mono">
-            {userRole || "COMMANDER"}
-          </span>
+          {userRole === "DEVELOPER" ? (
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 bg-purple-100 px-2 py-0.5 rounded border border-purple-300 shadow-2xs font-mono flex items-center gap-1">
+              <span>⚡</span>
+              <span>DEVELOPER</span>
+            </span>
+          ) : (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300 shadow-2xs font-mono">
+              {userRole || "COMMANDER"}
+            </span>
+          )}
         </div>
 
         {/* Navigation Items */}

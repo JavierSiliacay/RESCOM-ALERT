@@ -60,6 +60,7 @@ export const create = mutation({
     email: v.string(),
     rank: v.string(),
     role: v.union(
+      v.literal("DEVELOPER"),
       v.literal("COMMANDER"),
       v.literal("ADMIN"),
       v.literal("OPERATOR"),
@@ -115,6 +116,7 @@ export const update = mutation({
     email: v.string(),
     rank: v.string(),
     role: v.union(
+      v.literal("DEVELOPER"),
       v.literal("COMMANDER"),
       v.literal("ADMIN"),
       v.literal("OPERATOR"),
@@ -156,6 +158,7 @@ export const updateRole = mutation({
   args: {
     id: v.id("authorizedUsers"),
     role: v.union(
+      v.literal("DEVELOPER"),
       v.literal("COMMANDER"),
       v.literal("ADMIN"),
       v.literal("OPERATOR"),
@@ -206,6 +209,7 @@ export const heartbeat = mutation({
     unit: v.optional(v.string()),
     role: v.optional(
       v.union(
+        v.literal("DEVELOPER"),
         v.literal("COMMANDER"),
         v.literal("ADMIN"),
         v.literal("OPERATOR"),

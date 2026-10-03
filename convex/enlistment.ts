@@ -373,3 +373,19 @@ export const closeCampaign = mutation({
     return { success: true };
   },
 });
+
+// 11. Delete Campaign
+export const removeCampaign = mutation({
+  args: { campaignId: v.id("enlistmentCampaigns") },
+  handler: async (ctx, args) => {
+    const subs = await ctx.db
+      .query("enlistmentSubmissions")
+      .withIndex("by_campaignId", (q) => q.eq("campaignId", args.campaignId))
+      .collect();
+    for (const sub of subs) {
+      await ctx.db.delete(sub._id);
+    }
+    await ctx.db.delete(args.campaignId);
+    return { success: true };
+  },
+});

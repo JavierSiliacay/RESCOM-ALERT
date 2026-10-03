@@ -133,6 +133,64 @@ function getDurationPreview(inputStr: string): {
   return { type: "unrecognized" };
 }
 
+function CampaignLiveTimer({
+  expiresAt,
+  isExpired,
+  duration,
+}: {
+  expiresAt: number;
+  isExpired: boolean;
+  duration: string;
+}) {
+  const [timeLeftStr, setTimeLeftStr] = useState<string>("");
+  const [expired, setExpired] = useState<boolean>(isExpired);
+
+  useEffect(() => {
+    const update = () => {
+      const diff = expiresAt - Date.now();
+      if (diff <= 0 || isExpired) {
+        setTimeLeftStr("Closed / Concluded");
+        setExpired(true);
+        return;
+      }
+      setExpired(false);
+      const totalSec = Math.floor(diff / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hours = Math.floor((totalSec % 86400) / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = totalSec % 60;
+
+      if (days > 0) {
+        setTimeLeftStr(`${days}d ${hours}h ${mins}m left`);
+      } else if (hours > 0) {
+        setTimeLeftStr(`${hours}h ${mins}m ${secs}s left`);
+      } else {
+        setTimeLeftStr(`${mins}m ${secs}s left`);
+      }
+    };
+
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [expiresAt, isExpired]);
+
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-slate-500 flex items-center gap-1 font-mono text-[10px]">
+        <Clock className="w-3 h-3 text-amber-600" />
+        Time Remaining:
+      </span>
+      <span
+        className={`font-mono text-[11px] font-bold ${
+          expired ? "text-slate-400" : "text-amber-800 animate-pulse"
+        }`}
+      >
+        {timeLeftStr || duration}
+      </span>
+    </div>
+  );
+}
+
 export default function PersonnelPage() {
   const personnel = useQuery(api.personnel.list);
   const groups = useQuery(api.groups.list);
@@ -150,6 +208,7 @@ export default function PersonnelPage() {
   const bulkApproveSubmissions = useMutation(api.enlistment.bulkApproveSubmissions);
   const rejectSubmission = useMutation(api.enlistment.rejectSubmission);
   const closeCampaign = useMutation(api.enlistment.closeCampaign);
+  const removeCampaign = useMutation(api.enlistment.removeCampaign);
 
   // View Mode: 'ROSTER' | 'ENLISTMENT'
   const [activeTab, setActiveTab] = useState<"ROSTER" | "ENLISTMENT">("ROSTER");
@@ -336,10 +395,15 @@ export default function PersonnelPage() {
       return;
     }
 
-    const durationStr =
-      campaignFormData.durationPreset === "Custom"
-        ? campaignFormData.customDuration
-        : campaignFormData.durationPreset;
+    let durationStr = campaignFormData.durationPreset;
+    if (campaignFormData.durationPreset.startsWith("Custom")) {
+      const customVal = campaignFormData.customDuration.trim();
+      if (!customVal) {
+        alert("Please enter a custom duration (e.g., 5 mins, 2 hours, 45 days).");
+        return;
+      }
+      durationStr = customVal;
+    }
 
     setIsCreatingCampaign(true);
     try {
@@ -430,6 +494,16 @@ export default function PersonnelPage() {
         await closeCampaign({ campaignId: id });
       } catch (err: any) {
         alert(err?.message || "Failed to close campaign");
+      }
+    }
+  };
+
+  const handleRemoveCampaign = async (id: Id<"enlistmentCampaigns">) => {
+    if (confirm("Permanently delete this enlistment campaign and all associated submissions?")) {
+      try {
+        await removeCampaign({ campaignId: id });
+      } catch (err: any) {
+        alert(err?.message || "Failed to delete campaign");
       }
     }
   };
@@ -759,7 +833,7 @@ export default function PersonnelPage() {
                         </span>
                       </div>
 
-                      {/* Passcode & Expiry Info */}
+                      {/* Passcode & Live Expiry Info */}
                       <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-slate-500 flex items-center gap-1 font-mono text-[10px]">
@@ -771,11 +845,16 @@ export default function PersonnelPage() {
                         <div className="flex items-center justify-between">
                           <span className="text-slate-500 flex items-center gap-1 font-mono text-[10px]">
                             <Clock className="w-3 h-3 text-slate-500" />
-                            Duration:
+                            Window Config:
                           </span>
                           <span className="font-mono text-slate-700">{camp.duration}</span>
                         </div>
-                        <div className="flex items-center justify-between">
+                        <CampaignLiveTimer
+                          expiresAt={camp.expiresAt}
+                          isExpired={camp.isExpired}
+                          duration={camp.duration}
+                        />
+                        <div className="flex items-center justify-between pt-0.5 border-t border-slate-200/60">
                           <span className="text-slate-500 text-[10px]">Submissions:</span>
                           <span className="font-bold text-emerald-700">
                             {camp.totalSubmissions} ({camp.pendingCount} pending)
@@ -804,15 +883,25 @@ export default function PersonnelPage() {
                         <span>Share / QR</span>
                       </button>
 
-                      {!camp.isExpired && (
+                      <div className="flex items-center gap-1">
+                        {!camp.isExpired && (
+                          <button
+                            type="button"
+                            onClick={() => handleCloseCampaign(camp._id)}
+                            className="px-2.5 py-1.5 hover:bg-amber-50 text-slate-500 hover:text-amber-800 font-bold text-[11px] rounded-xl transition-colors cursor-pointer"
+                          >
+                            Close Early
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => handleCloseCampaign(camp._id)}
-                          className="px-2.5 py-1.5 hover:bg-red-50 text-slate-500 hover:text-red-600 font-bold text-[11px] rounded-xl transition-colors cursor-pointer"
+                          onClick={() => handleRemoveCampaign(camp._id)}
+                          className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                          title="Delete Campaign"
                         >
-                          Close Early
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 ))}

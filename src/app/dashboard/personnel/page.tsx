@@ -1086,15 +1086,17 @@ export default function PersonnelPage() {
                   <select
                     value={campaignFormData.groupId}
                     onChange={(e) => {
-                      const grp = groupsList.find((g) => g._id === e.target.value);
+                      const selectedVal = e.target.value;
+                      const grp = groupsList.find((g) => g._id === selectedVal);
                       setCampaignFormData((prev) => ({
                         ...prev,
-                        groupId: e.target.value,
-                        groupName: grp ? grp.name : "Ready Reserve",
+                        groupId: selectedVal,
+                        groupName: grp ? grp.name : "All 10RCDG Personnel",
                       }));
                     }}
                     className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer"
                   >
+                    <option value="">All 10RCDG Personnel (General Roster)</option>
                     {groupsList.map((g) => (
                       <option key={g._id} value={g._id}>
                         {g.name}
@@ -1356,6 +1358,7 @@ export default function PersonnelPage() {
                     onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600"
                   >
+                    <option value="">All 10RCDG Personnel (General Roster)</option>
                     {groupsList.map((g) => (
                       <option key={g._id} value={g._id}>
                         {g.name}

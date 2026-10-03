@@ -1150,24 +1150,27 @@ export default function PersonnelPage() {
                   onChange={(e) =>
                     setCampaignFormData((prev) => ({ ...prev, durationPreset: e.target.value }))
                   }
-                  className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer"
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer"
                 >
+                  <option value="1 Hour">1 Hour</option>
                   <option value="6 Hours">6 Hours</option>
                   <option value="12 Hours">12 Hours</option>
                   <option value="24 Hours">24 Hours (1 Day)</option>
                   <option value="3 Days">3 Days</option>
                   <option value="7 Days">7 Days (1 Week)</option>
-                  <option value="Custom">Custom Duration (Specify Below)</option>
+                  <option value="14 Days">14 Days</option>
+                  <option value="30 Days">30 Days</option>
+                  <option value="Custom Duration">Custom Duration (Specify Below)</option>
                 </select>
 
-                {campaignFormData.durationPreset === "Custom" && (() => {
+                {campaignFormData.durationPreset === "Custom Duration" && (() => {
                   const preview = getDurationPreview(campaignFormData.customDuration);
                   return (
-                    <div className="mt-2 space-y-2 animate-in fade-in duration-150">
+                    <div className="mt-2.5 space-y-2.5 animate-in fade-in duration-150">
                       <input
                         type="text"
                         required
-                        placeholder="e.g. 18 Hours, 2 Weeks, 45 Days..."
+                        placeholder="e.g. 1 Hour, 30 Minutes, 45 Days, 3 Months, 2w..."
                         value={campaignFormData.customDuration}
                         onChange={(e) =>
                           setCampaignFormData((prev) => ({
@@ -1175,11 +1178,56 @@ export default function PersonnelPage() {
                             customDuration: e.target.value,
                           }))
                         }
-                        className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium shadow-2xs"
+                        className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium shadow-2xs"
                       />
+                      {/* Quick duration preset suggestion chips */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mr-1">Quick Select:</span>
+                        {["1 Hour", "2 Hours", "12 Hours", "45 Days", "60 Days", "3 Months"].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() =>
+                              setCampaignFormData((prev) => ({
+                                ...prev,
+                                customDuration: preset,
+                              }))
+                            }
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                              campaignFormData.customDuration === preset
+                                ? "bg-amber-100 text-amber-950 border-amber-300 ring-1 ring-amber-300"
+                                : "bg-slate-100/80 hover:bg-slate-200 text-slate-700 border-slate-200"
+                            }`}
+                          >
+                            +{preset}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Live Smart Auto-Correction & Expiry Preview */}
                       {preview.type === "valid" && (
-                        <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 font-mono">
-                          ✓ Window closes: {preview.expiryDateFormatted}
+                        <div className="p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-xs text-emerald-950 flex items-start gap-2 animate-in fade-in duration-150 shadow-2xs">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold flex items-center gap-1.5 flex-wrap text-emerald-900">
+                              <span>Window closes in:</span>
+                              <span className="px-1.5 py-0.2 bg-emerald-200/80 text-emerald-950 rounded text-[10px] font-mono font-extrabold">
+                                {preview.normalizedLabel}
+                              </span>
+                            </div>
+                            <div className="text-[10.5px] text-emerald-700 font-mono mt-0.5">
+                              Exact Auto-Close: {preview.expiryDateFormatted}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {preview.type === "unrecognized" && campaignFormData.customDuration.trim().length > 0 && (
+                        <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-300 text-xs text-amber-950 flex items-start gap-2 animate-in fade-in duration-150">
+                          <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                          <div className="text-[11px] leading-relaxed">
+                            <span className="font-bold text-amber-900">Custom Text Format:</span> Will default to 24 Hours. For custom duration, pick a quick select chip above or type e.g. <code className="bg-amber-200/60 px-1 py-0.5 rounded font-mono font-bold text-[10px]">2 Weeks</code>, <code className="bg-amber-200/60 px-1 py-0.5 rounded font-mono font-bold text-[10px]">45 Days</code>, or <code className="bg-amber-200/60 px-1 py-0.5 rounded font-mono font-bold text-[10px]">1 Hour</code>.
+                          </div>
                         </div>
                       )}
                     </div>

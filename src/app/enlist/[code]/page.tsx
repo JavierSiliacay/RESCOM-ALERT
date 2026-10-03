@@ -23,6 +23,26 @@ import {
 import { RankSearchSelect } from "@/components/rank-search-select";
 import { sanitizePhMobileInput, isValidPhMobileNumber, formatPhMobileDisplay } from "@/lib/sms";
 
+function extractCleanErrorMessage(err: any): string {
+  if (!err) return "Failed to submit enlistment.";
+  if (err.data && typeof err.data === "string") return err.data;
+  if (typeof err.message === "string") {
+    const raw = err.message;
+    const match = raw.match(/Uncaught (?:Error|ConvexError):\s*([^\n\r]+)/i);
+    if (match && match[1]) return match[1].trim();
+
+    const cleaned = raw
+      .replace(/\[CONVEX[^\]]*\]/g, "")
+      .replace(/\[Request ID:[^\]]*\]/g, "")
+      .replace(/Server Error Called by client/g, "")
+      .replace(/Server Error/g, "")
+      .trim();
+    if (cleaned) return cleaned;
+    return raw;
+  }
+  return String(err);
+}
+
 export default function PublicEnlistmentPage() {
   const params = useParams();
   const campaignCode = (params?.code as string) || "";
@@ -157,7 +177,7 @@ export default function PublicEnlistmentPage() {
       });
       setIsSubmitted(true);
     } catch (err: any) {
-      const msg = err?.message || "Failed to submit enlistment. Please verify your passcode.";
+      const msg = extractCleanErrorMessage(err);
       if (msg.toLowerCase().includes("passcode")) {
         setIsUnlocked(false);
         setPasscodeError("Incorrect unit security passcode. Please re-enter the authorized key.");

@@ -1,5 +1,5 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { calculateSuspensionExpiry } from "./access";
 
 // Helper to generate a clean, readable campaign slug code (e.g. "1001-muster-8N2K")
@@ -169,15 +169,15 @@ export const submitEnlistment = mutation({
     const campaign = allCampaigns.find((c) => c.campaignCode.toLowerCase() === cleanCode);
 
     if (!campaign) {
-      throw new Error("Invalid or non-existent enlistment campaign.");
+      throw new ConvexError("Invalid or non-existent enlistment campaign.");
     }
 
     if (Date.now() >= campaign.expiresAt || campaign.status === "CLOSED") {
-      throw new Error("This enlistment registration window has closed.");
+      throw new ConvexError("This enlistment registration window has closed.");
     }
 
     if (campaign.passcode.trim().toUpperCase() !== args.passcode.trim().toUpperCase()) {
-      throw new Error("Invalid unit passcode. Entry denied.");
+      throw new ConvexError("Invalid unit passcode. Entry denied.");
     }
 
     // Standardize to canonical +639XXXXXXXXX
@@ -205,8 +205,8 @@ export const submitEnlistment = mutation({
     const allPersonnel = await ctx.db.query("personnel").collect();
     const existingPersonnel = allPersonnel.find((p) => normalizePh(p.mobileNumber) === cleanMobile);
     if (existingPersonnel) {
-      throw new Error(
-        `This mobile number (${cleanMobile}) is already registered in the active 10RCDG personnel roster as ${existingPersonnel.rank} ${existingPersonnel.firstName} ${existingPersonnel.lastName}.`
+      throw new ConvexError(
+        `This mobile number (${cleanMobile}) is already registered in the official personnel directory as ${existingPersonnel.rank} ${existingPersonnel.firstName} ${existingPersonnel.lastName}.`
       );
     }
 
@@ -217,8 +217,8 @@ export const submitEnlistment = mutation({
     );
 
     if (existingSubmission) {
-      throw new Error(
-        `This mobile number (${cleanMobile}) has already been submitted for enlistment in batch "${existingSubmission.campaignCode}". Multiple registrations with the same phone number are not permitted.`
+      throw new ConvexError(
+        `This mobile number (${cleanMobile}) has already submitted registration in batch "${existingSubmission.campaignCode}". Multiple registrations with the same phone number are not permitted.`
       );
     }
 

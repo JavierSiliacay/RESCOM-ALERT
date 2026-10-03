@@ -26,7 +26,11 @@ export const proxy = auth((req) => {
   // Redirect unauthorized or revoked user trying to access protected routes
   if (!isAuthorized && !isSignInPage) {
     const signInUrl = new URL("/sign-in", req.nextUrl.origin);
-    if (user?.isRevoked) {
+    if (user?.status === "SUSPENDED") {
+      signInUrl.searchParams.set("error", "AccountSuspended");
+      if (user.suspendedReason) signInUrl.searchParams.set("reason", user.suspendedReason);
+      if (user.suspendedDuration) signInUrl.searchParams.set("duration", user.suspendedDuration);
+    } else if (user?.isRevoked) {
       signInUrl.searchParams.set("error", "AccessRevoked");
     }
     return NextResponse.redirect(signInUrl);

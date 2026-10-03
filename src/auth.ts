@@ -60,15 +60,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const authCheck = await convex.query(api.access.checkByEmail, { email: userEmail });
           if (authCheck?.user) {
             const status = authCheck.user.status;
-            if (status === "SUSPENDED") {
-              const reason = encodeURIComponent(authCheck.user.suspendedReason || "Administrative review by Command");
-              const duration = encodeURIComponent(authCheck.user.suspendedDuration || "Indefinite");
-              return `/sign-in?error=AccountSuspended&reason=${reason}&duration=${duration}`;
-            }
-            if (status === "REJECTED") {
-              return "/sign-in?error=AccessRevoked";
-            }
             if (status === "ACTIVE" || status === "APPROVED") {
+              return true;
+            }
+            // For suspended/rejected accounts, allow handshake so session receives reason & duration, then proxy middleware routes them to exact error screen
+            if (status === "SUSPENDED" || status === "REJECTED") {
               return true;
             }
           }
@@ -78,7 +74,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       // If user is revoked or not in authorized roster, deny access
-      return "/sign-in?error=AccessDenied";
+      return false;
     },
 
     async session({ session }) {
@@ -104,17 +100,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           let rank: string = "Staff Officer";
           let unit: string = "10RCDG HQ";
           let isRevoked = true;
+          let suspendedReason: string | undefined = undefined;
+          let suspendedDuration: string | undefined = undefined;
 
           try {
             const convex = getConvexClient();
             if (convex) {
               const authCheck = await convex.query(api.access.checkByEmail, { email: userEmail });
-              if (authCheck?.isAuthorized && authCheck.user) {
+              if (authCheck?.user) {
                 role = (authCheck.user.role as UserRole) || "VIEWER";
                 status = (authCheck.user.status as UserStatus) || "ACTIVE";
                 rank = authCheck.user.rank || rank;
                 unit = authCheck.user.unit || unit;
-                isRevoked = status === "SUSPENDED" || status === "REJECTED";
+                isRevoked = !authCheck.isAuthorized || status === "SUSPENDED" || status === "REJECTED";
+                suspendedReason = authCheck.user.suspendedReason;
+                suspendedDuration = authCheck.user.suspendedDuration;
               }
             }
           } catch (err) {
@@ -126,6 +126,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           (session.user as any).rank = rank;
           (session.user as any).unit = unit;
           (session.user as any).isRevoked = isRevoked;
+          (session.user as any).suspendedReason = suspendedReason;
+          (session.user as any).suspendedDuration = suspendedDuration;
         }
       }
       return session;

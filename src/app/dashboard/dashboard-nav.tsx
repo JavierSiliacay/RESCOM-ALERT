@@ -69,8 +69,14 @@ export function DashboardNav({
         liveAuth.user?.status === "SUSPENDED" ||
         liveAuth.user?.status === "REJECTED"
       ) {
-        // Immediate real-time force sign-out
-        signOut({ callbackUrl: "/sign-in?error=AccessRevoked" });
+        // Immediate real-time force sign-out with appropriate error message
+        if (liveAuth.user?.status === "SUSPENDED") {
+          const reason = encodeURIComponent(liveAuth.user?.suspendedReason || "Administrative Review");
+          const duration = encodeURIComponent(liveAuth.user?.suspendedDuration || "Indefinite");
+          signOut({ callbackUrl: `/sign-in?error=AccountSuspended&reason=${reason}&duration=${duration}` });
+        } else {
+          signOut({ callbackUrl: "/sign-in?error=AccessRevoked" });
+        }
       }
     }
   }, [liveAuth, userEmail]);

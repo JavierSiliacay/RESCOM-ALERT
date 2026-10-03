@@ -73,7 +73,8 @@ export function DashboardNav({
         if (liveAuth.user?.status === "SUSPENDED") {
           const reason = encodeURIComponent(liveAuth.user?.suspendedReason || "Administrative Review");
           const duration = encodeURIComponent(liveAuth.user?.suspendedDuration || "Indefinite");
-          signOut({ callbackUrl: `/sign-in?error=AccountSuspended&reason=${reason}&duration=${duration}` });
+          const until = encodeURIComponent(String(liveAuth.user?.suspendedUntil || ""));
+          signOut({ callbackUrl: `/sign-in?error=AccountSuspended&reason=${reason}&duration=${duration}&until=${until}` });
         } else {
           signOut({ callbackUrl: "/sign-in?error=AccessRevoked" });
         }

@@ -1,11 +1,12 @@
 import Image from "next/image";
 import { Shield, Radio, Lock, Activity, CheckCircle2, ExternalLink, AlertCircle } from "lucide-react";
 import { signIn, auth } from "@/auth";
+import { SuspensionCountdown } from "@/components/suspension-countdown";
 
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; reason?: string; duration?: string }>;
+  searchParams: Promise<{ error?: string; reason?: string; duration?: string; until?: string }>;
 }) {
   const params = await searchParams;
   const session = await auth();
@@ -37,6 +38,11 @@ export default async function SignInPage({
     params?.duration
       ? decodeURIComponent(params.duration)
       : sessionUser?.suspendedDuration || "Indefinite";
+
+  const suspendedUntil =
+    params?.until
+      ? decodeURIComponent(params.until)
+      : sessionUser?.suspendedUntil;
   return (
     <div className="relative min-h-dvh lg:h-screen lg:max-h-screen w-full flex flex-col justify-between bg-[#f8fafc] overflow-y-auto lg:overflow-hidden selection:bg-emerald-100 selection:text-emerald-900">
       {/* Official 10RCDG Troop Formation Background with Soft Frosted Overlay */}
@@ -232,41 +238,13 @@ export default async function SignInPage({
                 </p>
               </div>
 
-              {/* Account Suspended by Command Notice */}
+              {/* Account Suspended by Command Notice with Live Digital Countdown */}
               {isSuspended && (
-                <div className="mb-4 p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 text-left space-y-2 animate-in fade-in duration-200">
-                  <div className="flex items-start gap-2.5">
-                    <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-bold text-amber-950">
-                        Account Suspended by Command
-                      </p>
-                      <p className="text-[11px] text-amber-900 leading-relaxed mt-0.5">
-                        Your operational clearance has been temporarily suspended by 10RCDG Command.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Suspension Metadata Details */}
-                  <div className="p-2.5 rounded-lg bg-amber-100/60 border border-amber-200 text-[11px] space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-amber-800 uppercase text-[10px]">Reason:</span>
-                      <span className="font-bold text-amber-950">
-                        {suspendedReason}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-amber-800 uppercase text-[10px]">Duration:</span>
-                      <span className="font-bold text-amber-950">
-                        {suspendedDuration}
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-[10px] text-amber-800 italic">
-                    Please report to the Group Commander or S3 Operations for clearance reinstatement.
-                  </p>
-                </div>
+                <SuspensionCountdown
+                  suspendedUntil={suspendedUntil}
+                  suspendedDuration={suspendedDuration}
+                  suspendedReason={suspendedReason}
+                />
               )}
 
               {/* Access Revoked Security Banner */}

@@ -30,6 +30,7 @@ export const proxy = auth((req) => {
       signInUrl.searchParams.set("error", "AccountSuspended");
       if (user.suspendedReason) signInUrl.searchParams.set("reason", user.suspendedReason);
       if (user.suspendedDuration) signInUrl.searchParams.set("duration", user.suspendedDuration);
+      if (user.suspendedUntil) signInUrl.searchParams.set("until", String(user.suspendedUntil));
     } else if (user?.isRevoked) {
       signInUrl.searchParams.set("error", "AccessRevoked");
     }

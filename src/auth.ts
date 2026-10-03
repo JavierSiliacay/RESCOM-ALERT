@@ -105,6 +105,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 token.isRevoked = !authCheck.isAuthorized || token.status === "SUSPENDED" || token.status === "REJECTED";
                 token.suspendedReason = authCheck.user.suspendedReason;
                 token.suspendedDuration = authCheck.user.suspendedDuration;
+                token.suspendedUntil = authCheck.user.suspendedUntil;
               } else {
                 token.role = null;
                 token.status = "REJECTED";
@@ -128,6 +129,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         (session.user as any).isRevoked = token.isRevoked;
         (session.user as any).suspendedReason = token.suspendedReason;
         (session.user as any).suspendedDuration = token.suspendedDuration;
+        (session.user as any).suspendedUntil = token.suspendedUntil;
       }
       return session;
     },

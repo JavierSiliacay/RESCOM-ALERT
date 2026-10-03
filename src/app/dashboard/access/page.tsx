@@ -19,6 +19,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   Code2,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { UserRole, UserStatus } from "@/auth";
 import {
@@ -53,6 +55,108 @@ const ROLES_LIST: { label: string; value: UserRole; description: string }[] = [
     description: "Read-only access to view telemetry and unit rosters",
   },
 ];
+
+function getDurationPreview(inputStr: string): {
+  type: "empty" | "indefinite" | "valid" | "unrecognized";
+  normalizedLabel?: string;
+  expiryDateFormatted?: string;
+} {
+  let d = inputStr.toLowerCase().trim();
+  if (!d) return { type: "empty" };
+  if (d.includes("indefinite") || d.includes("until command") || d.includes("manual") || d.includes("permanent")) {
+    return { type: "indefinite", normalizedLabel: "Indefinite (Awaiting Command Reinstatement)" };
+  }
+
+  const wordToNum: Record<string, string> = {
+    "a ": "1 ",
+    "an ": "1 ",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "twelve": "12",
+    "fourteen": "14",
+    "twenty": "20",
+    "thirty": "30",
+    "sixty": "60",
+    "ninety": "90",
+  };
+  for (const [w, n] of Object.entries(wordToNum)) {
+    d = d.replace(new RegExp(`\\b${w}\\b`, "g"), n);
+  }
+
+  let ms = 0;
+  let normalizedLabel = "";
+
+  if (d === "tomorrow") {
+    ms = 24 * 60 * 60 * 1000;
+    normalizedLabel = "1 Day (Tomorrow)";
+  } else if (d === "next week") {
+    ms = 7 * 24 * 60 * 60 * 1000;
+    normalizedLabel = "1 Week (7 Days)";
+  } else if (d === "next month") {
+    ms = 30 * 24 * 60 * 60 * 1000;
+    normalizedLabel = "1 Month (30 Days)";
+  } else {
+    const matchMinutes = d.match(/(\d+)\s*(minute|min|m\b)/);
+    const matchHours = d.match(/(\d+)\s*(hour|hr|h\b)/);
+    const matchWeeks = d.match(/(\d+)\s*(week|wk|w\b)/);
+    const matchMonths = d.match(/(\d+)\s*(month|mo\b)/);
+    const matchDays = d.match(/(\d+)\s*(day|d\b)?/);
+
+    if (matchMinutes) {
+      const val = parseInt(matchMinutes[1], 10);
+      ms = val * 60 * 1000;
+      normalizedLabel = `${val} Minute${val > 1 ? "s" : ""}`;
+    } else if (matchHours) {
+      const val = parseInt(matchHours[1], 10);
+      ms = val * 60 * 60 * 1000;
+      normalizedLabel = `${val} Hour${val > 1 ? "s" : ""}`;
+    } else if (matchWeeks) {
+      const val = parseInt(matchWeeks[1], 10);
+      ms = val * 7 * 24 * 60 * 60 * 1000;
+      normalizedLabel = `${val} Week${val > 1 ? "s" : ""}`;
+    } else if (matchMonths) {
+      const val = parseInt(matchMonths[1], 10);
+      ms = val * 30 * 24 * 60 * 60 * 1000;
+      normalizedLabel = `${val} Month${val > 1 ? "s" : ""}`;
+    } else if (matchDays && matchDays[1]) {
+      const val = parseInt(matchDays[1], 10);
+      ms = val * 24 * 60 * 60 * 1000;
+      normalizedLabel = `${val} Day${val > 1 ? "s" : ""}`;
+    } else {
+      const parsedDate = Date.parse(inputStr);
+      if (!isNaN(parsedDate) && parsedDate > Date.now()) {
+        ms = parsedDate - Date.now();
+        normalizedLabel = new Date(parsedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      }
+    }
+  }
+
+  if (ms > 0) {
+    const targetDate = new Date(Date.now() + ms);
+    return {
+      type: "valid",
+      normalizedLabel,
+      expiryDateFormatted: targetDate.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
+    };
+  }
+
+  return { type: "unrecognized" };
+}
 
 export default function AuthorizedPersonnelPage() {
   const officersData = useQuery(api.access.list);
@@ -854,6 +958,8 @@ export default function AuthorizedPersonnelPage() {
                     <option value="Indefinite (Until Command Reinstatement)">
                       Indefinite (Until Command Reinstatement)
                     </option>
+                    <option value="1 Hour">1 Hour</option>
+                    <option value="12 Hours">12 Hours</option>
                     <option value="24 Hours">24 Hours</option>
                     <option value="3 Days">3 Days</option>
                     <option value="7 Days">7 Days</option>
@@ -862,18 +968,75 @@ export default function AuthorizedPersonnelPage() {
                     <option value="Custom Duration">Custom Duration (Specify Below)</option>
                   </select>
 
-                  {suspendDuration === "Custom Duration" && (
-                    <div className="mt-2.5">
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. 60 Days, 3 Months, Until Q4 Inspection, etc."
-                        value={customDuration}
-                        onChange={(e) => setCustomDuration(e.target.value)}
-                        className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium"
-                      />
-                    </div>
-                  )}
+                  {suspendDuration === "Custom Duration" && (() => {
+                    const preview = getDurationPreview(customDuration);
+                    return (
+                      <div className="mt-2.5 space-y-2.5 animate-in fade-in duration-150">
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. 1 Hour, 30 Minutes, 45 Days, 3 Months, 2w..."
+                          value={customDuration}
+                          onChange={(e) => setCustomDuration(e.target.value)}
+                          className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium shadow-2xs"
+                        />
+                        {/* Quick duration preset suggestion chips */}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mr-1">Quick Select:</span>
+                          {["1 Hour", "2 Hours", "12 Hours", "45 Days", "60 Days", "3 Months"].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => setCustomDuration(preset)}
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                                customDuration === preset
+                                  ? "bg-amber-100 text-amber-950 border-amber-300 ring-1 ring-amber-300"
+                                  : "bg-slate-100/80 hover:bg-slate-200 text-slate-700 border-slate-200"
+                              }`}
+                            >
+                              +{preset}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Live Smart Auto-Correction & Expiry Preview */}
+                        {preview.type === "valid" && (
+                          <div className="p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-xs text-emerald-950 flex items-start gap-2 animate-in fade-in duration-150 shadow-2xs">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold flex items-center gap-1.5 flex-wrap text-emerald-900">
+                                <span>Auto-reinstates in:</span>
+                                <span className="px-1.5 py-0.2 bg-emerald-200/80 text-emerald-950 rounded text-[10px] font-mono font-extrabold">
+                                  {preview.normalizedLabel}
+                                </span>
+                              </div>
+                              <div className="text-[10.5px] text-emerald-700 font-mono mt-0.5">
+                                Exact Auto-Lift: {preview.expiryDateFormatted}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {preview.type === "indefinite" && (
+                          <div className="p-2 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-700 flex items-center gap-2 animate-in fade-in duration-150">
+                            <Clock className="w-4 h-4 text-slate-500 shrink-0" />
+                            <span className="text-[11px] font-medium">
+                              Indefinite — Account remains locked until manually reinstated by Command.
+                            </span>
+                          </div>
+                        )}
+
+                        {preview.type === "unrecognized" && customDuration.trim().length > 0 && (
+                          <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-300 text-xs text-amber-950 flex items-start gap-2 animate-in fade-in duration-150">
+                            <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                            <div className="text-[11px] leading-relaxed">
+                              <span className="font-bold text-amber-900">Custom Text Format:</span> Will safely default to manual indefinite suspension. For automatic self-reactivation, pick a preset above or type e.g. <code className="bg-amber-200/60 px-1 py-0.5 rounded font-mono font-bold text-[10px]">2 Weeks</code>, <code className="bg-amber-200/60 px-1 py-0.5 rounded font-mono font-bold text-[10px]">45 Days</code>, or <code className="bg-amber-200/60 px-1 py-0.5 rounded font-mono font-bold text-[10px]">1 Hour</code>.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Information Callout */}

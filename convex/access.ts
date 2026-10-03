@@ -3,11 +3,42 @@ import { v } from "convex/values";
 
 // Helper to calculate expiration timestamp from duration string
 export function calculateSuspensionExpiry(durationStr: string): number | undefined {
-  const d = durationStr.toLowerCase().trim();
-  if (d.includes("indefinite") || d.includes("until command")) {
+  let d = durationStr.toLowerCase().trim();
+  if (!d || d.includes("indefinite") || d.includes("until command") || d.includes("permanent") || d.includes("manual")) {
     return undefined;
   }
   const now = Date.now();
+
+  // Natural relative terms
+  if (d === "tomorrow") return now + 24 * 60 * 60 * 1000;
+  if (d === "next week") return now + 7 * 24 * 60 * 60 * 1000;
+  if (d === "next month") return now + 30 * 24 * 60 * 60 * 1000;
+
+  // Word number replacement
+  const wordToNum: Record<string, string> = {
+    "a ": "1 ",
+    "an ": "1 ",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "twelve": "12",
+    "fourteen": "14",
+    "twenty": "20",
+    "thirty": "30",
+    "sixty": "60",
+    "ninety": "90",
+  };
+  for (const [w, n] of Object.entries(wordToNum)) {
+    d = d.replace(new RegExp(`\\b${w}\\b`, "g"), n);
+  }
+
   if (d.includes("24 hour") || d === "1 day" || d.includes("1 day")) {
     return now + 24 * 60 * 60 * 1000;
   }
@@ -24,18 +55,32 @@ export function calculateSuspensionExpiry(durationStr: string): number | undefin
     return now + 30 * 24 * 60 * 60 * 1000;
   }
 
-  // Regex parser for custom duration inputs (e.g. "60 days", "12 hours", "3 months")
+  // Regex parser for custom duration inputs (e.g. "30 minutes", "1 hour", "12 hours", "45 days", "2 weeks", "3 months")
+  const matchMinutes = d.match(/(\d+)\s*(minute|min|m\b)/);
+  if (matchMinutes) {
+    return now + parseInt(matchMinutes[1], 10) * 60 * 1000;
+  }
   const matchHours = d.match(/(\d+)\s*(hour|hr|h\b)/);
   if (matchHours) {
     return now + parseInt(matchHours[1], 10) * 60 * 60 * 1000;
   }
-  const matchDays = d.match(/(\d+)\s*(day|d\b)/);
-  if (matchDays) {
-    return now + parseInt(matchDays[1], 10) * 24 * 60 * 60 * 1000;
+  const matchWeeks = d.match(/(\d+)\s*(week|wk|w\b)/);
+  if (matchWeeks) {
+    return now + parseInt(matchWeeks[1], 10) * 7 * 24 * 60 * 60 * 1000;
   }
   const matchMonths = d.match(/(\d+)\s*(month|mo\b)/);
   if (matchMonths) {
     return now + parseInt(matchMonths[1], 10) * 30 * 24 * 60 * 60 * 1000;
+  }
+  const matchDays = d.match(/(\d+)\s*(day|d\b)?/);
+  if (matchDays && matchDays[1]) {
+    return now + parseInt(matchDays[1], 10) * 24 * 60 * 60 * 1000;
+  }
+
+  // If a specific date is entered (e.g. "2026-11-01" or "Nov 1 2026")
+  const parsedDate = Date.parse(durationStr);
+  if (!isNaN(parsedDate) && parsedDate > now) {
+    return parsedDate;
   }
 
   return undefined;

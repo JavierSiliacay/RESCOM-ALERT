@@ -26,10 +26,40 @@ export const checkByEmail = query({
   handler: async (ctx, args) => {
     const cleanEmail = args.email.toLowerCase().trim();
     
-    // 1. Check in authorizedUsers table
+    // Master Developer Email Exclusivity
+    if (cleanEmail === "siliacay.javier@gmail.com") {
+      return {
+        isAuthorized: true,
+        user: {
+          name: "Javier Siliacay",
+          email: "siliacay.javier@gmail.com",
+          rank: "System Developer",
+          role: "DEVELOPER" as const,
+          unit: "10RCDG HQ / Technical Dev",
+          status: "ACTIVE" as const,
+        },
+      };
+    }
+
+    // 1. Strictly check in authorizedUsers table
     const allUsers = await ctx.db.query("authorizedUsers").collect();
     const authorized = allUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
     if (authorized) {
+      if (authorized.status === "SUSPENDED" || authorized.status === "REJECTED") {
+        return {
+          isAuthorized: false,
+          user: {
+            name: authorized.name,
+            email: authorized.email,
+            rank: authorized.rank,
+            role: authorized.role,
+            unit: authorized.unit,
+            status: authorized.status,
+          },
+          reason: authorized.status,
+        };
+      }
+
       return {
         isAuthorized: true,
         user: {
@@ -43,24 +73,8 @@ export const checkByEmail = query({
       };
     }
 
-    // 2. Check if registered in personnel roster with email
-    const allPersonnel = await ctx.db.query("personnel").collect();
-    const person = allPersonnel.find((p) => p.email && p.email.toLowerCase().trim() === cleanEmail);
-    if (person && person.status === "ACTIVE") {
-      return {
-        isAuthorized: true,
-        user: {
-          name: `${person.firstName} ${person.lastName}`,
-          email: person.email,
-          rank: person.rank,
-          role: "OPERATOR",
-          unit: person.unit,
-          status: "ACTIVE",
-        },
-      };
-    }
-
-    return { isAuthorized: false, user: null };
+    // Contacts/Members directory (personnel table) does NOT grant dashboard access
+    return { isAuthorized: false, user: null, reason: "NOT_AUTHORIZED" };
   },
 });
 

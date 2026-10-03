@@ -219,6 +219,20 @@ export default async function SignInPage({
                 </div>
               )}
 
+              {error === "AccessRevoked" && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-red-900">
+                      Access Revoked
+                    </p>
+                    <p className="text-[11px] text-red-700 leading-relaxed mt-0.5">
+                      Your system authorization has been revoked or deleted by Command. You no longer have access to this portal.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {error === "AccountSuspended" && (
                 <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
                   <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />

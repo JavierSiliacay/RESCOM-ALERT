@@ -86,26 +86,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           (session.user as any).status = "ACTIVE";
           (session.user as any).rank = "System Developer";
           (session.user as any).unit = "10RCDG HQ / Technical Dev";
+          (session.user as any).isRevoked = false;
         } else if (userEmail === ROOT_COMMANDER_EMAIL) {
           (session.user as any).role = "COMMANDER";
           (session.user as any).status = "ACTIVE";
           (session.user as any).rank = "Group Commander";
           (session.user as any).unit = "10RCDG HQ";
+          (session.user as any).isRevoked = false;
         } else {
-          let role: UserRole = "VIEWER";
-          let status: UserStatus = "ACTIVE";
+          let role: UserRole | null = null;
+          let status: UserStatus = "REJECTED";
           let rank: string = "Staff Officer";
           let unit: string = "10RCDG HQ";
+          let isRevoked = true;
 
           try {
             const convex = getConvexClient();
             if (convex) {
               const authCheck = await convex.query(api.access.checkByEmail, { email: userEmail });
               if (authCheck?.isAuthorized && authCheck.user) {
-                role = (authCheck.user.role as UserRole) || role;
-                status = (authCheck.user.status as UserStatus) || status;
+                role = (authCheck.user.role as UserRole) || "VIEWER";
+                status = (authCheck.user.status as UserStatus) || "ACTIVE";
                 rank = authCheck.user.rank || rank;
                 unit = authCheck.user.unit || unit;
+                isRevoked = status === "SUSPENDED" || status === "REJECTED";
               }
             }
           } catch (err) {
@@ -116,6 +120,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           (session.user as any).status = status;
           (session.user as any).rank = rank;
           (session.user as any).unit = unit;
+          (session.user as any).isRevoked = isRevoked;
         }
       }
       return session;

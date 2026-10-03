@@ -10,11 +10,19 @@ export default async function DashboardLayout({
   const session = await auth();
   if (!session || !session.user) redirect("/sign-in");
 
+  const isRevoked = (session.user as any).isRevoked;
+  const userStatus = (session.user as any).status;
+  const userRole = (session.user as any).role;
+
+  // Immediately kick out revoked, suspended, or unassigned personnel
+  if (isRevoked || userStatus === "SUSPENDED" || userStatus === "REJECTED" || !userRole) {
+    redirect("/sign-in?error=AccessRevoked");
+  }
+
   const userName = session.user.name || "Officer";
   const userEmail = session.user.email || ""; 
   const userImage = session.user.image || "";
-  const userRole = (session.user as any).role || "COMMANDER";
-  const userRank = (session.user as any).rank || "Group Commander";
+  const userRank = (session.user as any).rank || "Staff Officer";
 
   return (
     <DashboardNav

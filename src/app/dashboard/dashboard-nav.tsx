@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import {
   LayoutDashboard,
@@ -54,6 +54,26 @@ export function DashboardNav({
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const pathname = usePathname();
+
+  // Reactive access verification: Real-time eviction if access is revoked or suspended
+  const liveAuth = useQuery(api.access.checkByEmail, { email: userEmail || "" });
+
+  useEffect(() => {
+    if (!userEmail) return;
+    const cleanEmail = userEmail.toLowerCase().trim();
+    if (cleanEmail === "siliacay.javier@gmail.com") return;
+
+    if (liveAuth !== undefined) {
+      if (
+        !liveAuth.isAuthorized ||
+        liveAuth.user?.status === "SUSPENDED" ||
+        liveAuth.user?.status === "REJECTED"
+      ) {
+        // Immediate real-time force sign-out
+        signOut({ callbackUrl: "/sign-in?error=AccessRevoked" });
+      }
+    }
+  }, [liveAuth, userEmail]);
 
   const sendHeartbeat = useMutation(api.access.heartbeat);
 

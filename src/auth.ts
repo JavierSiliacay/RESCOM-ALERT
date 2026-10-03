@@ -77,64 +77,59 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return false;
     },
 
-    async session({ session }) {
-      if (session.user && session.user.email) {
-        const userEmail = session.user.email.toLowerCase().trim();
-
-        // Exclusive Developer Role for siliacay.javier@gmail.com
+    async jwt({ token }) {
+      if (token.email) {
+        const userEmail = token.email.toLowerCase().trim();
         if (userEmail === DEVELOPER_EMAIL) {
-          (session.user as any).role = "DEVELOPER";
-          (session.user as any).status = "ACTIVE";
-          (session.user as any).rank = "System Developer";
-          (session.user as any).unit = "10RCDG HQ / Technical Dev";
-          (session.user as any).isRevoked = false;
+          token.role = "DEVELOPER";
+          token.status = "ACTIVE";
+          token.rank = "System Developer";
+          token.unit = "10RCDG HQ / Technical Dev";
+          token.isRevoked = false;
         } else if (userEmail === ROOT_COMMANDER_EMAIL) {
-          (session.user as any).role = "COMMANDER";
-          (session.user as any).status = "ACTIVE";
-          (session.user as any).rank = "Group Commander";
-          (session.user as any).unit = "10RCDG HQ";
-          (session.user as any).isRevoked = false;
+          token.role = "COMMANDER";
+          token.status = "ACTIVE";
+          token.rank = "Group Commander";
+          token.unit = "10RCDG HQ";
+          token.isRevoked = false;
         } else {
-          let role: UserRole | null = null;
-          let status: UserStatus = "REJECTED";
-          let rank: string = "Staff Officer";
-          let unit: string = "10RCDG HQ";
-          let isRevoked = true;
-          let suspendedReason: string | undefined = undefined;
-          let suspendedDuration: string | undefined = undefined;
-
           try {
             const convex = getConvexClient();
             if (convex) {
               const authCheck = await convex.query(api.access.checkByEmail, { email: userEmail });
               if (authCheck?.user) {
-                role = (authCheck.user.role as UserRole) || "VIEWER";
-                status = (authCheck.user.status as UserStatus) || "ACTIVE";
-                rank = authCheck.user.rank || rank;
-                unit = authCheck.user.unit || unit;
-                isRevoked = !authCheck.isAuthorized || status === "SUSPENDED" || status === "REJECTED";
-                suspendedReason = authCheck.user.suspendedReason;
-                suspendedDuration = authCheck.user.suspendedDuration;
+                token.role = authCheck.user.role || "VIEWER";
+                token.status = authCheck.user.status || "ACTIVE";
+                token.rank = authCheck.user.rank || "Staff Officer";
+                token.unit = authCheck.user.unit || "10RCDG HQ";
+                token.isRevoked = !authCheck.isAuthorized || token.status === "SUSPENDED" || token.status === "REJECTED";
+                token.suspendedReason = authCheck.user.suspendedReason;
+                token.suspendedDuration = authCheck.user.suspendedDuration;
+              } else {
+                token.role = null;
+                token.status = "REJECTED";
+                token.isRevoked = true;
               }
             }
           } catch (err) {
-            console.error("Convex session role query error:", err);
+            console.error("Convex JWT query error:", err);
           }
-
-          (session.user as any).role = role;
-          (session.user as any).status = status;
-          (session.user as any).rank = rank;
-          (session.user as any).unit = unit;
-          (session.user as any).isRevoked = isRevoked;
-          (session.user as any).suspendedReason = suspendedReason;
-          (session.user as any).suspendedDuration = suspendedDuration;
         }
       }
-      return session;
+      return token;
     },
 
-    async jwt({ token }) {
-      return token;
+    async session({ session, token }) {
+      if (session.user && token) {
+        (session.user as any).role = token.role;
+        (session.user as any).status = token.status;
+        (session.user as any).rank = token.rank;
+        (session.user as any).unit = token.unit;
+        (session.user as any).isRevoked = token.isRevoked;
+        (session.user as any).suspendedReason = token.suspendedReason;
+        (session.user as any).suspendedDuration = token.suspendedDuration;
+      }
+      return session;
     },
   },
   session: {

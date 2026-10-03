@@ -2,7 +2,14 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
 export const proxy = auth((req) => {
-  const isLoggedIn = !!req.auth;
+  const user = req.auth?.user as any;
+  const isAuthorized =
+    !!user &&
+    !user.isRevoked &&
+    !!user.role &&
+    user.status !== "SUSPENDED" &&
+    user.status !== "REJECTED";
+
   const isSignInPage = req.nextUrl.pathname.startsWith("/sign-in");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
   const isApi = req.nextUrl.pathname.startsWith("/api");
@@ -12,17 +19,21 @@ export const proxy = auth((req) => {
   }
 
   // Handle unauthenticated API calls with 401 JSON
-  if (isApi && !isLoggedIn) {
+  if (isApi && !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Redirect unauthenticated user trying to access protected routes
-  if (!isLoggedIn && !isSignInPage) {
-    return NextResponse.redirect(new URL("/sign-in", req.nextUrl.origin));
+  // Redirect unauthorized or revoked user trying to access protected routes
+  if (!isAuthorized && !isSignInPage) {
+    const signInUrl = new URL("/sign-in", req.nextUrl.origin);
+    if (user?.isRevoked) {
+      signInUrl.searchParams.set("error", "AccessRevoked");
+    }
+    return NextResponse.redirect(signInUrl);
   }
 
-  // Redirect authenticated user away from sign-in page to dashboard
-  if (isLoggedIn && isSignInPage) {
+  // Redirect authorized user away from sign-in page to dashboard
+  if (isAuthorized && isSignInPage) {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
   }
 

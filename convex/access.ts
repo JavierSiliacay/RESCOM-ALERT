@@ -55,6 +55,10 @@ export const checkByEmail = query({
             role: authorized.role,
             unit: authorized.unit,
             status: authorized.status,
+            suspendedReason: authorized.suspendedReason,
+            suspendedDuration: authorized.suspendedDuration,
+            suspendedAt: authorized.suspendedAt,
+            suspendedUntil: authorized.suspendedUntil,
           },
           reason: authorized.status,
         };
@@ -200,6 +204,69 @@ export const updateRole = mutation({
   handler: async (ctx, args) => {
     const { id, ...data } = args;
     await ctx.db.patch(id, data);
+  },
+});
+
+// Suspend officer with specific reason and duration
+export const suspendOfficer = mutation({
+  args: {
+    id: v.id("authorizedUsers"),
+    reason: v.string(),
+    duration: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const officer = await ctx.db.get(args.id);
+    if (!officer) throw new Error("Officer not found");
+    if (officer.email.toLowerCase().trim() === "siliacay.javier@gmail.com") {
+      throw new Error("System Developer clearance cannot be suspended");
+    }
+
+    const now = new Date().toISOString();
+    await ctx.db.patch(args.id, {
+      status: "SUSPENDED",
+      suspendedReason: args.reason,
+      suspendedDuration: args.duration,
+      suspendedAt: now,
+    });
+
+    await ctx.db.insert("auditLogs", {
+      userName: "Group Commander",
+      userRole: "COMMANDER",
+      category: "AUTH",
+      action: "SUSPEND_ACCESS",
+      details: `Suspended ${officer.rank} ${officer.name} (${officer.email}) - Reason: "${args.reason}", Duration: "${args.duration}"`,
+      ipAddress: "127.0.0.1",
+      timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+    });
+  },
+});
+
+// Reactivate a suspended officer
+export const reactivateOfficer = mutation({
+  args: {
+    id: v.id("authorizedUsers"),
+  },
+  handler: async (ctx, args) => {
+    const officer = await ctx.db.get(args.id);
+    if (!officer) throw new Error("Officer not found");
+
+    await ctx.db.patch(args.id, {
+      status: "ACTIVE",
+      suspendedReason: undefined,
+      suspendedDuration: undefined,
+      suspendedAt: undefined,
+      suspendedUntil: undefined,
+    });
+
+    await ctx.db.insert("auditLogs", {
+      userName: "Group Commander",
+      userRole: "COMMANDER",
+      category: "AUTH",
+      action: "REINSTATE_ACCESS",
+      details: `Reinstated active clearance for ${officer.rank} ${officer.name} (${officer.email})`,
+      ipAddress: "127.0.0.1",
+      timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+    });
   },
 });
 

@@ -60,6 +60,8 @@ export default function AuthorizedPersonnelPage() {
   const updateOfficer = useMutation(api.access.update);
   const updateOfficerRole = useMutation(api.access.updateRole);
   const removeOfficer = useMutation(api.access.remove);
+  const suspendOfficer = useMutation(api.access.suspendOfficer);
+  const reactivateOfficer = useMutation(api.access.reactivateOfficer);
 
   const officers = officersData || [];
 
@@ -75,6 +77,17 @@ export default function AuthorizedPersonnelPage() {
   // Revoke Confirmation Modal State
   const [revokeTarget, setRevokeTarget] = useState<(typeof officers)[number] | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
+
+  // Suspension Modal State
+  const [suspendTarget, setSuspendTarget] = useState<(typeof officers)[number] | null>(null);
+  const [suspendReason, setSuspendReason] = useState("Administrative Review");
+  const [customReason, setCustomReason] = useState("");
+  const [suspendDuration, setSuspendDuration] = useState("Indefinite (Until Command Reinstatement)");
+  const [isSubmittingSuspension, setIsSubmittingSuspension] = useState(false);
+
+  // Reactivate Modal State
+  const [reactivateTarget, setReactivateTarget] = useState<(typeof officers)[number] | null>(null);
+  const [isReactivating, setIsReactivating] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -145,21 +158,56 @@ export default function AuthorizedPersonnelPage() {
     }
   };
 
-  const handleToggleStatus = async (officer: (typeof officers)[number]) => {
+  const handleToggleStatus = (officer: (typeof officers)[number]) => {
     const commanderEmail = "siliacay.javier@gmail.com";
     if (officer.email.toLowerCase() === commanderEmail.toLowerCase()) {
-      alert("Group Commander account cannot be suspended.");
+      alert("Master Developer / Commander account cannot be suspended.");
       return;
     }
-    const newStatus = officer.status === "ACTIVE" || officer.status === "APPROVED" ? "SUSPENDED" : "ACTIVE";
+    const isSuspended = officer.status === "SUSPENDED" || officer.status === "REJECTED";
+    if (isSuspended) {
+      setReactivateTarget(officer);
+    } else {
+      setSuspendTarget(officer);
+      setSuspendReason("Administrative Review");
+      setCustomReason("");
+      setSuspendDuration("Indefinite (Until Command Reinstatement)");
+    }
+  };
+
+  const handleConfirmSuspension = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!suspendTarget) return;
+    const finalReason =
+      suspendReason === "Other (Specify Below)"
+        ? customReason.trim() || "Administrative review by Command"
+        : suspendReason;
+
     try {
-      await updateOfficerRole({
-        id: officer._id,
-        role: officer.role as any,
-        status: newStatus as any,
+      setIsSubmittingSuspension(true);
+      await suspendOfficer({
+        id: suspendTarget._id,
+        reason: finalReason,
+        duration: suspendDuration,
       });
+      setSuspendTarget(null);
     } catch (err: any) {
-      alert(err?.message || "Failed to toggle status");
+      alert(err?.message || "Failed to suspend officer");
+    } finally {
+      setIsSubmittingSuspension(false);
+    }
+  };
+
+  const handleConfirmReactivate = async () => {
+    if (!reactivateTarget) return;
+    try {
+      setIsReactivating(true);
+      await reactivateOfficer({ id: reactivateTarget._id });
+      setReactivateTarget(null);
+    } catch (err: any) {
+      alert(err?.message || "Failed to reinstate officer access");
+    } finally {
+      setIsReactivating(false);
     }
   };
 
@@ -645,7 +693,7 @@ export default function AuthorizedPersonnelPage() {
                   Revoke Access Clearance?
                 </h3>
                 <p className="text-xs text-slate-500">
-                  This action will immediately terminate login privileges for this account.
+                  This action will permanently remove this account from the authorized personnel registry.
                 </p>
               </div>
 
@@ -665,7 +713,7 @@ export default function AuthorizedPersonnelPage() {
               <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-left text-[11px] text-amber-900 flex items-start gap-2">
                 <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                 <span>
-                  Once revoked, this user will receive an <strong>Access Denied</strong> error upon attempting to sign in.
+                  Once revoked, this user will receive an <strong>Access Revoked</strong> notice upon attempting to sign in.
                 </span>
               </div>
 
@@ -686,6 +734,208 @@ export default function AuthorizedPersonnelPage() {
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>{isRevoking ? "Revoking..." : "Revoke Access"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suspend Access Confirmation Modal with Reason & Duration */}
+      {suspendTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Modal Header (Pinned) */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-amber-50/80 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0 border border-amber-200">
+                  <ShieldAlert className="w-5 h-5 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
+                    Suspend Officer Clearance
+                  </h3>
+                  <p className="text-[11px] sm:text-xs text-slate-500">
+                    Temporarily restrict login access and specify official terms
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSuspendTarget(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleConfirmSuspension} className="flex flex-col flex-1 min-h-0">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+                {/* Officer Summary Card */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0 font-mono">
+                    {suspendTarget.rank}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {suspendTarget.rank} {suspendTarget.name}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate font-mono">
+                      {suspendTarget.email} • {suspendTarget.unit}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Suspension Reason Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Suspension Reason
+                  </label>
+                  <div className="space-y-1.5">
+                    {[
+                      "Administrative Review",
+                      "Security / Protocol Audit",
+                      "Duty Reassignment / Leave of Absence",
+                      "Temporary Inactivity Hold",
+                      "Other (Specify Below)",
+                    ].map((reasonOption) => (
+                      <label
+                        key={reasonOption}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer text-xs transition-all ${
+                          suspendReason === reasonOption
+                            ? "bg-amber-50/90 border-amber-400 text-amber-950 font-bold ring-1 ring-amber-300 shadow-2xs"
+                            : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 font-medium"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="suspendReason"
+                          value={reasonOption}
+                          checked={suspendReason === reasonOption}
+                          onChange={() => setSuspendReason(reasonOption)}
+                          className="text-amber-700 focus:ring-amber-600"
+                        />
+                        <span>{reasonOption}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {suspendReason === "Other (Specify Below)" && (
+                    <div className="mt-2.5">
+                      <textarea
+                        required
+                        rows={2}
+                        placeholder="Explain the specific reason for suspension..."
+                        value={customReason}
+                        onChange={(e) => setCustomReason(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium resize-none"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Suspension Duration */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Suspension Duration
+                  </label>
+                  <select
+                    value={suspendDuration}
+                    onChange={(e) => setSuspendDuration(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer"
+                  >
+                    <option value="Indefinite (Until Command Reinstatement)">
+                      Indefinite (Until Command Reinstatement)
+                    </option>
+                    <option value="24 Hours">24 Hours</option>
+                    <option value="3 Days">3 Days</option>
+                    <option value="7 Days">7 Days</option>
+                    <option value="14 Days">14 Days</option>
+                    <option value="30 Days">30 Days</option>
+                  </select>
+                </div>
+
+                {/* Information Callout */}
+                <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <span>
+                    When attempting to sign in, the officer will see this official reason and duration on their sign-in screen.
+                  </span>
+                </div>
+              </div>
+
+              {/* Modal Footer (Pinned) */}
+              <div className="p-3.5 sm:px-6 sm:py-3.5 border-t border-slate-100 bg-slate-50/90 flex items-center justify-end gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSuspendTarget(null)}
+                  disabled={isSubmittingSuspension}
+                  className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingSuspension}
+                  className="px-5 py-2 bg-amber-700 hover:bg-amber-800 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                  <span>{isSubmittingSuspension ? "Suspending..." : "Confirm Suspension"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reactivate Clearance Confirmation Modal */}
+      {reactivateTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md max-h-[calc(100dvh-2rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 sm:p-6 text-center space-y-4">
+              <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-700 flex items-center justify-center shadow-xs">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Reinstate Officer Access?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Restore active login clearance and broadcast privileges for this account.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500 uppercase text-[10px]">Officer:</span>
+                  <span className="font-bold text-slate-900 font-mono">
+                    {reactivateTarget.rank} {reactivateTarget.name}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500 uppercase text-[10px]">Google Email:</span>
+                  <span className="font-mono text-slate-700 font-medium">{reactivateTarget.email}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setReactivateTarget(null)}
+                  disabled={isReactivating}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReactivate}
+                  disabled={isReactivating}
+                  className="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>{isReactivating ? "Reinstating..." : "Reinstate Access"}</span>
                 </button>
               </div>
             </div>

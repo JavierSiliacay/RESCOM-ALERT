@@ -98,6 +98,10 @@ export default defineSchema({
     approvedDate: v.string(),
     lastLogin: v.string(),
     lastSeenAt: v.optional(v.number()), // Unix timestamp in milliseconds for real-time live presence
+    suspendedReason: v.optional(v.string()),
+    suspendedDuration: v.optional(v.string()),
+    suspendedAt: v.optional(v.string()),
+    suspendedUntil: v.optional(v.string()),
   }).index("by_email", ["email"]),
 
   // Hardware Gateway Settings (Developer Config)

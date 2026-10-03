@@ -234,16 +234,38 @@ export default async function SignInPage({
               )}
 
               {error === "AccountSuspended" && (
-                <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
-                  <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-amber-900">
-                      Account Inactive or Suspended
-                    </p>
-                    <p className="text-[11px] text-amber-800 leading-relaxed mt-0.5">
-                      Your account access has been temporarily placed on hold. Please report to 10RCDG Operations.
-                    </p>
+                <div className="mb-4 p-3.5 rounded-xl bg-amber-50/90 border border-amber-300 text-left space-y-2 animate-in fade-in duration-200">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-amber-950">
+                        Account Suspended by Command
+                      </p>
+                      <p className="text-[11px] text-amber-900 leading-relaxed mt-0.5">
+                        Your operational clearance has been temporarily suspended by 10RCDG Command.
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Suspension Metadata Details */}
+                  <div className="p-2.5 rounded-lg bg-amber-100/60 border border-amber-200 text-[11px] space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-amber-800 uppercase text-[10px]">Reason:</span>
+                      <span className="font-bold text-amber-950">
+                        {params?.reason ? decodeURIComponent(params.reason) : "Administrative Review"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-amber-800 uppercase text-[10px]">Duration:</span>
+                      <span className="font-bold text-amber-950">
+                        {params?.duration ? decodeURIComponent(params.duration) : "Indefinite"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-amber-800 italic">
+                    Please report to the Group Commander or S3 Operations for clearance reinstatement.
+                  </p>
                 </div>
               )}
 

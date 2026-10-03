@@ -58,10 +58,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const convex = getConvexClient();
         if (convex) {
           const authCheck = await convex.query(api.access.checkByEmail, { email: userEmail });
-          if (authCheck?.isAuthorized && authCheck.user) {
+          if (authCheck?.user) {
             const status = authCheck.user.status;
-            if (status === "SUSPENDED" || status === "REJECTED") {
-              return "/sign-in?error=AccountSuspended";
+            if (status === "SUSPENDED") {
+              const reason = encodeURIComponent(authCheck.user.suspendedReason || "Administrative review by Command");
+              const duration = encodeURIComponent(authCheck.user.suspendedDuration || "Indefinite");
+              return `/sign-in?error=AccountSuspended&reason=${reason}&duration=${duration}`;
+            }
+            if (status === "REJECTED") {
+              return "/sign-in?error=AccessRevoked";
             }
             if (status === "ACTIVE" || status === "APPROVED") {
               return true;

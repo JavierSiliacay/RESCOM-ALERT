@@ -36,8 +36,6 @@ import java.util.Locale
 
 class AlertActivity : Activity() {
 
-    private var mediaPlayer: MediaPlayer? = null
-    private var vibrator: Vibrator? = null
     private var senderNumber: String = ""
     private var alertMessage: String = ""
     private var isSilenced: Boolean = false
@@ -67,14 +65,27 @@ class AlertActivity : Activity() {
             setTurnScreenOn(true)
             val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
             keyguardManager?.requestDismissKeyguard(this, null)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        }
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+
+        // Force CPU & Screen to stay awake and full brightness
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            val wakeLock = pm?.newWakeLock(
+                android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                        android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                        android.os.PowerManager.ON_AFTER_RELEASE,
+                "10RCDG:AlertActivityWake"
             )
+            wakeLock?.acquire(20000)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
         // Light status bar with dark icons for minimal clean aesthetic
@@ -86,68 +97,15 @@ class AlertActivity : Activity() {
     }
 
     private fun startSirenAndVibration() {
-        try {
-            // Audio channel: USAGE_ALARM (Plays even if phone is on Silent/Mute)
-            val audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-
-            // Priority 1: Play dedicated 10RCDG military air-raid siren sound from raw resources
-            val resId = resources.getIdentifier("siren", "raw", packageName)
-            val alertUri: Uri? = if (resId != 0) {
-                Uri.parse("android.resource://$packageName/$resId")
-            } else {
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            }
-
-            if (alertUri != null) {
-                mediaPlayer = MediaPlayer().apply {
-                    setAudioAttributes(audioAttributes)
-                    setDataSource(applicationContext, alertUri)
-                    isLooping = true
-                    prepare()
-                    start()
-                }
-            }
-
-            // Continuous tactical pulse vibration: wait 0ms, vibrate 800ms, pause 400ms, vibrate 800ms...
-            val vibrationPattern = longArrayOf(0, 800, 400, 800, 400, 1000)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vibrator = vibratorManager?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createWaveform(vibrationPattern, 0)) // 0 = repeat
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(vibrationPattern, 0)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        TacticalAlarmManager.start(this)
     }
 
     private fun stopSirenAndVibration() {
         if (isSilenced) return
         isSilenced = true
-        try {
-            mediaPlayer?.let {
-                if (it.isPlaying) {
-                    it.stop()
-                }
-                it.release()
-            }
-            mediaPlayer = null
-            vibrator?.cancel()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        TacticalAlarmManager.stop()
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+        nm?.cancel(10001)
     }
 
     private fun handleAcknowledge() {

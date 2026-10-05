@@ -57,7 +57,8 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
-  const allGood = perms.hasSmsPermission && perms.isBatteryIgnored;
+  const isOverlayOk = perms.canDrawOverlays !== false && perms.canFullScreen !== false;
+  const allGood = perms.hasSmsPermission && perms.isBatteryIgnored && isOverlayOk;
   const steps = [
     {
       key: "sms",
@@ -74,6 +75,14 @@ export const ProfileScreen: React.FC = () => {
       ok: perms.isBatteryIgnored,
       action: () => alertBridgeService.requestBatteryExemption(),
       actionLabel: "FIX NOW",
+    },
+    {
+      key: "overlay",
+      title: "Full-screen alarm takeover",
+      desc: "Allows the siren to pop up over the lock screen like an alarm clock.",
+      ok: isOverlayOk,
+      action: () => alertBridgeService.requestOverlayPermission(),
+      actionLabel: "ENABLE",
     },
   ];
 

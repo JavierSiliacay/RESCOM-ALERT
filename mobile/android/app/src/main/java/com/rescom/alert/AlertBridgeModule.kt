@@ -1,5 +1,6 @@
 package com.rescom.alert
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -94,6 +95,37 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun requestOverlayPermission(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                    data = Uri.parse("package:${reactContext.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                reactContext.startActivity(intent)
+                promise.resolve(true)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(reactContext)) {
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                    data = Uri.parse("package:${reactContext.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                reactContext.startActivity(intent)
+                promise.resolve(true)
+            } else {
+                // Fallback to app details
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${reactContext.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                reactContext.startActivity(intent)
+                promise.resolve(true)
+            }
+        } catch (e: Exception) {
+            promise.reject("OVERLAY_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
     fun checkPermissions(promise: Promise) {
         try {
             val map = Arguments.createMap()
@@ -108,8 +140,27 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
                 isBatteryIgnored = pm?.isIgnoringBatteryOptimizations(reactContext.packageName) ?: false
             }
 
+            var canDrawOverlays = true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                canDrawOverlays = Settings.canDrawOverlays(reactContext)
+            }
+
+            var canFullScreen = true
+            if (Build.VERSION.SDK_INT >= 34) {
+                val nm = reactContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                try {
+                    val method = NotificationManager::class.java.getMethod("canUseFullScreenIntent")
+                    canFullScreen = (method.invoke(nm) as? Boolean) ?: true
+                } catch (e: Exception) {
+                    canFullScreen = true
+                }
+            }
+
             map.putBoolean("hasSmsPermission", hasSms)
             map.putBoolean("isBatteryIgnored", isBatteryIgnored)
+            map.putBoolean("canDrawOverlays", canDrawOverlays)
+            map.putBoolean("canFullScreen", canFullScreen)
+            map.putBoolean("isFullyArmed", hasSms && isBatteryIgnored && canDrawOverlays && canFullScreen)
             promise.resolve(map)
         } catch (e: Exception) {
             promise.reject("CHECK_PERMISSIONS_FAILED", e.message, e)

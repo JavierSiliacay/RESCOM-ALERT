@@ -5,6 +5,9 @@ const { AlertBridge } = NativeModules;
 export interface PermissionStatus {
   hasSmsPermission: boolean;
   isBatteryIgnored: boolean;
+  canDrawOverlays?: boolean;
+  canFullScreen?: boolean;
+  isFullyArmed?: boolean;
 }
 
 export interface RawAlertItem {
@@ -64,6 +67,18 @@ export const alertBridgeService = {
     if (Platform.OS !== "android" || !AlertBridge) return false;
     try {
       return await AlertBridge.requestBatteryOptimization();
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /**
+   * Opens Android overlay / full-screen alarm permission settings
+   */
+  requestOverlayPermission: async (): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return false;
+    try {
+      return await AlertBridge.requestOverlayPermission();
     } catch (e) {
       return false;
     }

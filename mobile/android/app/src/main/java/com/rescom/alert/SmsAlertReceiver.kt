@@ -1,5 +1,6 @@
 package com.rescom.alert
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -56,7 +57,10 @@ class SmsAlertReceiver : BroadcastReceiver() {
     }
 
     private fun launchAlertActivity(context: Context, sender: String, message: String) {
-        // 1. Acquire WakeLock to turn on CPU & screen immediately
+        // 1. Immediately fire dedicated siren audio & vibration (never delay sound)
+        TacticalAlarmManager.start(context)
+
+        // 2. Acquire WakeLock to turn on CPU & screen immediately
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
         val wakeLock = powerManager?.newWakeLock(
             PowerManager.FULL_WAKE_LOCK or
@@ -64,19 +68,20 @@ class SmsAlertReceiver : BroadcastReceiver() {
                     PowerManager.ON_AFTER_RELEASE,
             "10RCDG:SmsAlertWakeLock"
         )
-        wakeLock?.acquire(15000) // 15 seconds wake lock
+        wakeLock?.acquire(30000) // 30 seconds wake lock
 
-        // 2. Prepare AlertActivity Intent
+        // 3. Prepare AlertActivity Intent
         val alertIntent = Intent(context, AlertActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("EXTRA_SENDER", sender)
             putExtra("EXTRA_MESSAGE", message)
             putExtra("EXTRA_TIMESTAMP", System.currentTimeMillis())
         }
 
-        // 3. Create Notification Channel on Android 8.0+
+        // 4. Create Notification Channel on Android 8.0+
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && notificationManager != null) {
             val channel = NotificationChannel(
@@ -92,7 +97,7 @@ class SmsAlertReceiver : BroadcastReceiver() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        // 4. Build Full-Screen Intent (Required on Android 10+ to launch activity over lockscreen from background)
+        // 5. Build Full-Screen Intent (Required on Android 10+ to launch activity over lockscreen from background)
         val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
@@ -104,6 +109,17 @@ class SmsAlertReceiver : BroadcastReceiver() {
             alertIntent,
             pendingIntentFlags
         )
+
+        // 6. Schedule AlarmClockInfo to force Android OS to execute as an official Alarm Clock (bypasses background activity blocks)
+        try {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && alarmManager != null) {
+                val alarmClockInfo = AlarmManager.AlarmClockInfo(System.currentTimeMillis(), fullScreenPendingIntent)
+                alarmManager.setAlarmClock(alarmClockInfo, fullScreenPendingIntent)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "AlarmManager setAlarmClock: ${e.message}")
+        }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -119,11 +135,11 @@ class SmsAlertReceiver : BroadcastReceiver() {
 
         notificationManager?.notify(NOTIFICATION_ID, notification)
 
-        // 5. Also attempt direct startActivity (works directly if screen is unlocked or OEM allows it)
+        // 7. Direct startActivity attempt (instant popup if screen is already on or OEM permits it)
         try {
             context.startActivity(alertIntent)
         } catch (e: Exception) {
-            Log.w(TAG, "Direct startActivity blocked by background restriction, fullScreenIntent will handle it: ${e.message}")
+            Log.w(TAG, "Direct startActivity blocked by background restriction, fullScreenIntent/AlarmClock will handle it: ${e.message}")
         }
     }
 }

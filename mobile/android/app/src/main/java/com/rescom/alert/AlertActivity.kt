@@ -24,6 +24,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -74,6 +76,13 @@ class AlertActivity : Activity() {
                         WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
+
+        // Light status bar with dark icons for minimal clean aesthetic
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            window.statusBarColor = Color.parseColor("#F8FAFC")
+        }
     }
 
     private fun startSirenAndVibration() {
@@ -84,10 +93,13 @@ class AlertActivity : Activity() {
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
 
-            // Try default alarm sound or fallback to notification ringtone
-            var alertUri: Uri? = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            if (alertUri == null) {
-                alertUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            // Priority 1: Play dedicated 10RCDG military air-raid siren sound from raw resources
+            val resId = resources.getIdentifier("siren", "raw", packageName)
+            val alertUri: Uri? = if (resId != 0) {
+                Uri.parse("android.resource://$packageName/$resId")
+            } else {
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
             }
 
             if (alertUri != null) {
@@ -171,7 +183,7 @@ class AlertActivity : Activity() {
     private fun createTacticalLayout(): View {
         val rootLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#090D16")) // Deep tactical midnight
+            setBackgroundColor(Color.parseColor("#F8FAFC")) // Clean slate-50 background
             setPadding(dp(20), dp(36), dp(20), dp(24))
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -179,51 +191,88 @@ class AlertActivity : Activity() {
             )
         }
 
-        // 1. Top Alert Badge
+        // 1. Top Minimal Emergency Badge
         val topBadge = TextView(this).apply {
-            text = "🚨 OFFICIAL COMMAND DISPATCH // 10RCDG"
-            setTextColor(Color.parseColor("#F59E0B")) // Amber
+            text = "🚨  10RCDG EMERGENCY ALERT"
+            setTextColor(Color.parseColor("#DC2626")) // Red-600
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setPadding(dp(12), dp(6), dp(12), dp(6))
+            setPadding(dp(14), dp(6), dp(14), dp(6))
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#1F180A"))
-                setStroke(dp(1), Color.parseColor("#F59E0B"))
-                cornerRadius = dp(8).toFloat()
+                setColor(Color.parseColor("#FEF2F2")) // Red-50
+                setStroke(dp(1), Color.parseColor("#FECACA")) // Red-200
+                cornerRadius = dp(20).toFloat()
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                setMargins(0, 0, 0, dp(14))
             }
         }
         rootLayout.addView(topBadge)
 
-        // 2. Headline
+        // 2. Circular Emblem Logo (rescom-emblem.jpg)
+        val logoContainer = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(84), dp(84)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                setMargins(0, 0, 0, dp(12))
+            }
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.WHITE)
+                setStroke(dp(2), Color.parseColor("#E2E8F0")) // Slate-200 border
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                clipToOutline = true
+                elevation = dp(3).toFloat()
+            }
+        }
+        val logoView = ImageView(this).apply {
+            val resId = resources.getIdentifier("rescom_emblem", "drawable", packageName)
+            if (resId != 0) {
+                setImageResource(resId)
+            }
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        logoContainer.addView(logoView)
+        rootLayout.addView(logoContainer)
+
+        // 3. Organization Header & Title
         val titleView = TextView(this).apply {
-            text = "MANDATORY MUSTER ALERT"
-            setTextColor(Color.parseColor("#FFFFFF"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            text = "10RCDG RESCOM, PA"
+            setTextColor(Color.parseColor("#0F172A")) // Slate-900
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setPadding(0, dp(16), 0, dp(4))
         }
         rootLayout.addView(titleView)
 
-        // 3. Subtitle / Timestamp
+        // 4. Timestamp
         val timeView = TextView(this).apply {
-            val nowStr = SimpleDateFormat("EEEE, MMMM dd, yyyy • HH:mm:ss'H'", Locale.getDefault()).format(Date())
+            val nowStr = SimpleDateFormat("EEEE, MMMM dd, yyyy • HH:mm'H'", Locale.getDefault()).format(Date())
             text = nowStr
-            setTextColor(Color.parseColor("#94A3B8"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            setTextColor(Color.parseColor("#64748B")) // Slate-500
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             gravity = Gravity.CENTER
+            setPadding(0, dp(2), 0, dp(16))
         }
         rootLayout.addView(timeView)
 
-        // 4. Card Box for SMS Message Content
+        // 5. Clean, Minimal White Card Box for SMS Order Content
         val scrollView = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0,
                 1.0f
             ).apply {
-                setMargins(0, dp(20), 0, dp(20))
+                setMargins(0, 0, 0, dp(16))
             }
         }
 
@@ -231,23 +280,29 @@ class AlertActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(18), dp(18), dp(18))
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#131B2E"))
-                setStroke(dp(2), Color.parseColor("#DC2626")) // Crimson emergency border
+                setColor(Color.WHITE)
+                setStroke(dp(1), Color.parseColor("#E2E8F0")) // Slate-200
                 cornerRadius = dp(16).toFloat()
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                elevation = dp(2).toFloat()
             }
         }
 
         val messageHeader = TextView(this).apply {
             text = "DISPATCH FROM: $senderNumber"
-            setTextColor(Color.parseColor("#EF4444"))
+            setTextColor(Color.parseColor("#047857")) // Emerald-700
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             typeface = Typeface.DEFAULT_BOLD
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                letterSpacing = 0.05f
+            }
         }
         messageCard.addView(messageHeader)
 
         val messageBody = TextView(this).apply {
             text = alertMessage
-            setTextColor(Color.parseColor("#F8FAFC"))
+            setTextColor(Color.parseColor("#0F172A")) // Slate-900
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             typeface = Typeface.DEFAULT_BOLD
             setPadding(0, dp(10), 0, 0)
@@ -258,36 +313,37 @@ class AlertActivity : Activity() {
         scrollView.addView(messageCard)
         rootLayout.addView(scrollView)
 
-        // 5. Action Buttons (Acknowledge & Silence)
+        // 6. Action Buttons
         val btnAcknowledge = Button(this).apply {
-            text = "🛡️ ACKNOWLEDGE & REPORT IN"
-            setTextColor(Color.parseColor("#FFFFFF"))
+            text = "✓ I RECEIVED THIS ORDER"
+            setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             typeface = Typeface.DEFAULT_BOLD
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#047857")) // Emerald Green
+                setColor(Color.parseColor("#047857")) // Emerald-700
                 cornerRadius = dp(12).toFloat()
             }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(54)
+                dp(52)
             )
             setOnClickListener { handleAcknowledge() }
         }
         rootLayout.addView(btnAcknowledge)
 
         val btnSilence = Button(this).apply {
-            text = "MUTE SIREN & DISMISS"
-            setTextColor(Color.parseColor("#94A3B8"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            text = "Mute Siren & Dismiss"
+            setTextColor(Color.parseColor("#475569")) // Slate-600
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             typeface = Typeface.DEFAULT_BOLD
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#1E293B"))
+                setColor(Color.parseColor("#F1F5F9")) // Slate-100
+                setStroke(dp(1), Color.parseColor("#CBD5E1")) // Slate-300
                 cornerRadius = dp(12).toFloat()
             }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(44)
+                dp(46)
             ).apply {
                 setMargins(0, dp(10), 0, 0)
             }

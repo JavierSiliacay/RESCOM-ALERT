@@ -1,350 +1,178 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   Alert,
+  AppState,
+  Linking,
+  PermissionsAndroid,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { alertBridgeService, PermissionStatus } from "../services/alertBridge";
-import { SoldierProfile } from "../types";
+import { colors, radius, shadow } from "../theme";
 
 export const ProfileScreen: React.FC = () => {
-  const [profile, setProfile] = useState<SoldierProfile>({
-    rank: "PVT",
-    firstName: "Juan",
-    lastName: "Dela Cruz",
-    serialNumber: "948123-PA",
-    mobileNumber: "0951 781 9847",
-    unit: "1001st CDC (Davao del Norte)",
-    groupName: "Ready Reserve Battalion",
-    readiness: "READY",
-  });
+  const [perms, setPerms] = useState<PermissionStatus>({ hasSmsPermission: false, isBatteryIgnored: false });
 
-  const [permissions, setPermissions] = useState<PermissionStatus>({
-    hasSmsPermission: true,
-    isBatteryIgnored: false,
-  });
-
-  const checkPerms = async () => {
-    const res = await alertBridgeService.checkSystemPermissions();
-    setPermissions(res);
-  };
+  const refresh = async () => setPerms(await alertBridgeService.checkSystemPermissions());
 
   useEffect(() => {
-    checkPerms();
+    refresh();
+    // Re-check when the soldier comes back from Android settings
+    const sub = AppState.addEventListener("change", (s) => s === "active" && refresh());
+    return () => sub.remove();
   }, []);
 
-  const handleRequestBattery = async () => {
-    await alertBridgeService.requestBatteryExemption();
-    setTimeout(checkPerms, 2000);
+  const handleRequestSms = async () => {
+    if (Platform.OS !== "android") return;
+    try {
+      const permsToAsk = [
+        PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
+        PermissionsAndroid.PERMISSIONS.READ_SMS,
+      ];
+      if (typeof Platform.Version === "number" && Platform.Version >= 33) {
+        const postNotif = (PermissionsAndroid.PERMISSIONS as any).POST_NOTIFICATIONS;
+        if (postNotif) permsToAsk.push(postNotif);
+      }
+      const results = await PermissionsAndroid.requestMultiple(permsToAsk);
+      const granted =
+        results[PermissionsAndroid.PERMISSIONS.RECEIVE_SMS] ===
+        PermissionsAndroid.RESULTS.GRANTED;
+      if (!granted) {
+        Alert.alert(
+          "Permission Required",
+          "Android blocked SMS access. Please tap 'Settings' -> 'Permissions' -> enable SMS so the siren can trigger offline.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
+      refresh();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleClearHistory = () => {
-    Alert.alert(
-      "Clear Alert History",
-      "Are you sure you want to clear stored local broadcast logs on this device?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear",
-          style: "destructive",
-          onPress: async () => {
-            await alertBridgeService.clearHistory();
-            Alert.alert("Cleared", "Local broadcast history cleared.");
-          },
-        },
-      ]
-    );
-  };
+  const allGood = perms.hasSmsPermission && perms.isBatteryIgnored;
+  const steps = [
+    {
+      key: "sms",
+      title: "Read text messages",
+      desc: "Lets the app see alerts from Headquarters.",
+      ok: perms.hasSmsPermission,
+      action: handleRequestSms,
+      actionLabel: "ALLOW",
+    },
+    {
+      key: "battery",
+      title: "Keep running in background",
+      desc: "Stops your phone from putting the siren to sleep.",
+      ok: perms.isBatteryIgnored,
+      action: () => alertBridgeService.requestBatteryExemption(),
+      actionLabel: "FIX NOW",
+    },
+  ];
+
+  const handleClear = () =>
+    Alert.alert("Clear saved alerts?", "This removes old alerts from this phone only.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Clear", style: "destructive", onPress: () => alertBridgeService.clearHistory() },
+    ]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Soldier ID Card */}
-      <View style={styles.profileCard}>
-        <View style={styles.profileHeader}>
-          <View style={styles.rankBadge}>
-            <Text style={styles.rankBadgeText}>{profile.rank}</Text>
-          </View>
-          <View style={styles.headerText}>
-            <Text style={styles.soldierName}>
-              {profile.rank} {profile.firstName} {profile.lastName}
-            </Text>
-            <Text style={styles.serialText}>AFPSN: {profile.serialNumber}</Text>
-          </View>
-        </View>
+      <Text style={styles.eyebrow}>PHONE SETUP</Text>
+      <Text style={styles.h1}>Is my phone ready?</Text>
+      <Text style={styles.lead}>Both items below must be green so the siren can wake you up.</Text>
 
-        <View style={styles.infoDivider} />
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Assigned Unit:</Text>
-          <Text style={styles.infoValue}>{profile.unit}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Contact Group:</Text>
-          <Text style={styles.infoValue}>{profile.groupName}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Mobile Number:</Text>
-          <Text style={styles.infoValueHighlight}>{profile.mobileNumber}</Text>
+      {/* Overall status banner */}
+      <View style={[styles.banner, allGood ? styles.bannerOk : styles.bannerWarn]}>
+        <View style={[styles.bannerDot, { backgroundColor: allGood ? "#10b981" : "#f59e0b" }]} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.bannerTitle, { color: allGood ? colors.primary : colors.amberDark }]}>
+            {allGood ? "All set — your phone will ring for alerts" : "Action needed"}
+          </Text>
+          {!allGood && <Text style={styles.bannerText}>Fix the item marked below.</Text>}
         </View>
       </View>
 
-      {/* Permissions & Emergency Device Health */}
-      <View style={styles.settingsCard}>
-        <Text style={styles.sectionTitle}>🛡️ DEVICE ALARM HEALTH & PERMISSIONS</Text>
-        <Text style={styles.sectionDesc}>
-          Ensure all permissions are active so emergency dispatches can wake your screen and sound the siren.
-        </Text>
-
-        {/* Permission 1: SMS Broadcast Receiver */}
-        <View style={styles.permRow}>
-          <View style={styles.permInfo}>
-            <Text style={styles.permName}>SMS Broadcast Interceptor</Text>
-            <Text style={styles.permDesc}>Catches [10RCDG] emergency signals offline</Text>
+      {/* Setup checks */}
+      <View style={styles.card}>
+        {steps.map((s, i) => (
+          <View key={s.key} style={[styles.step, i === steps.length - 1 && { borderBottomWidth: 0 }]}>
+            <View style={[styles.stepIcon, s.ok ? styles.stepIconOk : styles.stepIconBad]}>
+              {s.ok ? <View style={styles.tick} /> : <Text style={styles.bang}>!</Text>}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stepTitle}>{s.title}</Text>
+              <Text style={styles.stepDesc}>{s.desc}</Text>
+            </View>
+            {s.ok ? (
+              <Text style={styles.okText}>ON</Text>
+            ) : s.action ? (
+              <TouchableOpacity style={styles.fixBtn} onPress={s.action} activeOpacity={0.85}>
+                <Text style={styles.fixText}>{s.actionLabel}</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.offText}>OFF</Text>
+            )}
           </View>
-          <View
-            style={[
-              styles.statusBadge,
-              permissions.hasSmsPermission ? styles.statusActive : styles.statusWarning,
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                permissions.hasSmsPermission ? styles.statusTextActive : styles.statusTextWarning,
-              ]}
-            >
-              {permissions.hasSmsPermission ? "ACTIVE" : "PERMISSION REQUIRED"}
-            </Text>
-          </View>
-        </View>
-
-        {/* Permission 2: Lock Screen & Alarm Audio */}
-        <View style={styles.permRow}>
-          <View style={styles.permInfo}>
-            <Text style={styles.permName}>Full-Screen Lock Siren</Text>
-            <Text style={styles.permDesc}>Wakes display and sounds alarm over Silent</Text>
-          </View>
-          <View style={[styles.statusBadge, styles.statusActive]}>
-            <Text style={[styles.statusText, styles.statusTextActive]}>ACTIVE</Text>
-          </View>
-        </View>
-
-        {/* Permission 3: Battery Optimization Exemption */}
-        <View style={styles.permRow}>
-          <View style={styles.permInfo}>
-            <Text style={styles.permName}>Infinix / Xiaomi Battery Saver</Text>
-            <Text style={styles.permDesc}>Prevents background app sleep</Text>
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.statusBadge,
-              permissions.isBatteryIgnored ? styles.statusActive : styles.statusAction,
-            ]}
-            onPress={handleRequestBattery}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                permissions.isBatteryIgnored ? styles.statusTextActive : styles.statusTextAction,
-              ]}
-            >
-              {permissions.isBatteryIgnored ? "OPTIMIZED" : "ENABLE NOW"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        ))}
       </View>
 
-      {/* Danger Zone / Local Logs */}
-      <View style={styles.dangerCard}>
-        <TouchableOpacity
-          style={styles.clearBtn}
-          onPress={handleClearHistory}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.clearBtnText}>🗑️ Clear Local Alert History</Text>
-        </TouchableOpacity>
-        <Text style={styles.footerNote}>
-          10th Regional Community Defense Group (10RCDG) • Reserve Command, Philippine Army
+      {/* Help */}
+      <View style={[styles.card, { marginTop: 14 }]}>
+        <Text style={styles.cardTitle}>Need help?</Text>
+        <Text style={styles.help}>
+          If the siren does not ring during a test, contact your CDC Adjutant or 10RCDG S3 Operations.
         </Text>
       </View>
+
+      <TouchableOpacity style={styles.clearBtn} onPress={handleClear} activeOpacity={0.8}>
+        <Text style={styles.clearText}>Clear saved alerts on this phone</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.footer}>RESCOM ALERT · Version 1.0 · 10RCDG RESCOM, PA</Text>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#090D16",
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  profileCard: {
-    backgroundColor: "#131B2E",
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "#1E293B",
-    marginBottom: 20,
-  },
-  profileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  rankBadge: {
-    backgroundColor: "#047857",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#10B981",
-    marginRight: 14,
-  },
-  rankBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "bold",
-    fontFamily: "monospace",
-  },
-  headerText: {
-    flex: 1,
-  },
-  soldierName: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  serialText: {
-    color: "#F59E0B",
-    fontSize: 11,
-    fontWeight: "bold",
-    fontFamily: "monospace",
-    marginTop: 2,
-  },
-  infoDivider: {
-    height: 1,
-    backgroundColor: "#1E293B",
-    marginVertical: 14,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  infoLabel: {
-    color: "#64748B",
-    fontSize: 12,
-  },
-  infoValue: {
-    color: "#E2E8F0",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  infoValueHighlight: {
-    color: "#10B981",
-    fontSize: 12,
-    fontWeight: "bold",
-    fontFamily: "monospace",
-  },
-  settingsCard: {
-    backgroundColor: "#111827",
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "#1E293B",
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    color: "#E2E8F0",
-    fontSize: 12,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  sectionDesc: {
-    color: "#64748B",
-    fontSize: 11,
-    lineHeight: 16,
-    marginBottom: 16,
-  },
-  permRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1E293B",
-  },
-  permInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  permName: {
-    color: "#F1F5F9",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  permDesc: {
-    color: "#64748B",
-    fontSize: 10,
-    marginTop: 2,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
-  statusActive: {
-    backgroundColor: "#064E3B",
-  },
-  statusWarning: {
-    backgroundColor: "#451A03",
-  },
-  statusAction: {
-    backgroundColor: "#B45309",
-  },
-  statusText: {
-    fontSize: 9,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-  },
-  statusTextActive: {
-    color: "#6EE7B7",
-  },
-  statusTextWarning: {
-    color: "#FCD34D",
-  },
-  statusTextAction: {
-    color: "#FFFFFF",
-  },
-  dangerCard: {
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  clearBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: "#1E293B",
-    marginBottom: 16,
-  },
-  clearBtnText: {
-    color: "#94A3B8",
-    fontSize: 11,
-    fontWeight: "bold",
-  },
-  footerNote: {
-    color: "#475569",
-    fontSize: 10,
-    textAlign: "center",
-    fontFamily: "monospace",
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 16, paddingBottom: 32 },
+  eyebrow: { fontSize: 11, fontWeight: "700", color: colors.primary, letterSpacing: 1 },
+  h1: { fontSize: 24, fontWeight: "800", color: colors.text, marginTop: 2 },
+  lead: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 4, marginBottom: 16 },
+
+  banner: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderRadius: radius.lg, borderWidth: 1, marginBottom: 12 },
+  bannerOk: { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder },
+  bannerWarn: { backgroundColor: colors.amberSoft, borderColor: colors.amberBorder },
+  bannerDot: { width: 10, height: 10, borderRadius: 5 },
+  bannerTitle: { fontSize: 14, fontWeight: "800" },
+  bannerText: { fontSize: 12, color: colors.amberDark, marginTop: 2 },
+
+  card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: 16, paddingVertical: 4, ...shadow },
+  cardTitle: { fontSize: 15, fontWeight: "800", color: colors.text, marginTop: 12 },
+  help: { fontSize: 13, color: colors.textMuted, lineHeight: 19, marginTop: 4, marginBottom: 14 },
+
+  step: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
+  stepIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  stepIconOk: { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder },
+  stepIconBad: { backgroundColor: colors.amberSoft, borderColor: colors.amberBorder },
+  tick: { width: 6, height: 12, borderRightWidth: 2.5, borderBottomWidth: 2.5, borderColor: colors.primary, transform: [{ rotate: "45deg" }], marginTop: -3 },
+  bang: { fontSize: 16, fontWeight: "900", color: colors.amberDark },
+  stepTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
+  stepDesc: { fontSize: 13, color: colors.textMuted, marginTop: 2, lineHeight: 18 },
+  okText: { fontSize: 12, fontWeight: "800", color: colors.primary },
+  offText: { fontSize: 12, fontWeight: "800", color: colors.amberDark },
+  fixBtn: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 8 },
+  fixText: { color: "#fff", fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
+
+  clearBtn: { marginTop: 18, paddingVertical: 14, borderRadius: radius.md, borderWidth: 1, borderColor: colors.redBorder, backgroundColor: colors.card, alignItems: "center" },
+  clearText: { color: colors.red, fontWeight: "700", fontSize: 14 },
+  footer: { textAlign: "center", fontSize: 11, color: colors.textFaint, marginTop: 20 },
 });

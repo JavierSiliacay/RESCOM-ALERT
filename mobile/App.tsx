@@ -1,217 +1,195 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  SafeAreaView,
+  Image,
+  PermissionsAndroid,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
-import { ReadinessScreen } from "./src/screens/ReadinessScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { colors } from "./src/theme";
 
-type TabKey = "ALERTS" | "READINESS" | "PROFILE";
+type TabKey = "ALERTS" | "SETUP";
 
-function App(): React.JSX.Element {
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "ALERTS", label: "Alerts" },
+  { key: "SETUP", label: "Phone Setup" },
+];
+
+function TabGlyph({ tab, active }: { tab: TabKey; active: boolean }) {
+  const c = active ? colors.primary : colors.textFaint;
+  if (tab === "ALERTS") {
+    // bell icon
+    return (
+      <View style={{ alignItems: "center", height: 20, justifyContent: "flex-end" }}>
+        <View style={{ width: 14, height: 13, borderTopLeftRadius: 7, borderTopRightRadius: 7, borderWidth: 2, borderBottomWidth: 0, borderColor: c }} />
+        <View style={{ width: 18, height: 2, backgroundColor: c, borderRadius: 1 }} />
+        <View style={{ width: 5, height: 3, backgroundColor: c, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, marginTop: 1 }} />
+      </View>
+    );
+  }
+  // shield check icon for phone setup / security
+  return (
+    <View style={{ width: 16, height: 19, borderWidth: 2, borderColor: c, borderTopLeftRadius: 3, borderTopRightRadius: 3, borderBottomLeftRadius: 9, borderBottomRightRadius: 9, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: 4, height: 7, borderRightWidth: 2, borderBottomWidth: 2, borderColor: c, transform: [{ rotate: "45deg" }], marginTop: -2 }} />
+    </View>
+  );
+}
+
+function Shell(): React.JSX.Element {
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<TabKey>("ALERTS");
 
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      const perms = [
+        PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
+        PermissionsAndroid.PERMISSIONS.READ_SMS,
+      ];
+      if (typeof Platform.Version === "number" && Platform.Version >= 33) {
+        const postNotif = (PermissionsAndroid.PERMISSIONS as any).POST_NOTIFICATIONS;
+        if (postNotif) perms.push(postNotif);
+      }
+      PermissionsAndroid.requestMultiple(perms).catch(() => {});
+    }
+  }, []);
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#090D16" />
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" />
 
-      {/* Official 10RCDG Tactical App Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.headerBadge}>
-            <Text style={styles.headerBadgeText}>10RCDG</Text>
+      {/* Header — same lockup as the web sidebar */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.seals}>
+          <View style={[styles.seal, { zIndex: 2 }]}>
+            <Image source={require("./src/assets/rescom-pa-seal.png")} style={styles.sealImg} />
           </View>
-          <View>
-            <Text style={styles.headerTitle}>RESCOM ALERT</Text>
-            <Text style={styles.headerSubtitle}>// Tactical Response Network</Text>
+          <View style={[styles.seal, { marginLeft: -8 }]}>
+            <Image source={require("./src/assets/rescom-emblem.jpg")} style={styles.sealImg} />
           </View>
         </View>
-
-        <View style={styles.headerRight}>
-          <View style={styles.securePill}>
-            <Text style={styles.secureDot}>●</Text>
-            <Text style={styles.secureText}>OFFLINE READY</Text>
-          </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.brand}>
+            <Text style={{ color: colors.primaryDark }}>RESCOM </Text>
+            <Text style={{ color: colors.amber }}>ALERT</Text>
+          </Text>
+          <Text style={styles.brandSub}>10RCDG RESCOM, PA</Text>
         </View>
       </View>
 
-      {/* Active Tab Screen Content */}
-      <View style={styles.screenContainer}>
+      {/* Status strip — same as web "Connected as" bar */}
+      <View style={styles.strip}>
+        <View style={styles.stripDot} />
+        <Text style={styles.stripText}>Siren protection is ON</Text>
+        <View style={{ flex: 1 }} />
+        <View style={styles.stripPill}>
+          <Text style={styles.stripPillText}>NO INTERNET NEEDED</Text>
+        </View>
+      </View>
+
+      <View style={{ flex: 1 }}>
         {activeTab === "ALERTS" && <AlertsScreen />}
-        {activeTab === "READINESS" && <ReadinessScreen />}
-        {activeTab === "PROFILE" && <ProfileScreen />}
+        {activeTab === "SETUP" && <ProfileScreen />}
       </View>
 
-      {/* Tactical 3-Tab Bottom Navigation Bar */}
-      <View style={styles.bottomBar}>
-        {/* Tab 1: ALERTS */}
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === "ALERTS" && styles.tabButtonActive]}
-          onPress={() => setActiveTab("ALERTS")}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.tabIcon}>🚨</Text>
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === "ALERTS" && styles.tabLabelActive,
-            ]}
-          >
-            ALERTS
-          </Text>
-        </TouchableOpacity>
-
-        {/* Tab 2: READINESS */}
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === "READINESS" && styles.tabButtonActive,
-          ]}
-          onPress={() => setActiveTab("READINESS")}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.tabIcon}>🛡️</Text>
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === "READINESS" && styles.tabLabelActive,
-            ]}
-          >
-            READINESS
-          </Text>
-        </TouchableOpacity>
-
-        {/* Tab 3: PROFILE */}
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === "PROFILE" && styles.tabButtonActive]}
-          onPress={() => setActiveTab("PROFILE")}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.tabIcon}>👤</Text>
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === "PROFILE" && styles.tabLabelActive,
-            ]}
-          >
-            PROFILE
-          </Text>
-        </TouchableOpacity>
+      {/* Bottom navigation */}
+      <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+        {TABS.map((t) => {
+          const active = activeTab === t.key;
+          return (
+            <TouchableOpacity
+              key={t.key}
+              style={styles.tab}
+              onPress={() => setActiveTab(t.key)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.tabIndicator, active && styles.tabIndicatorOn]} />
+              <View style={[styles.tabIconWrap, active && styles.tabIconWrapOn]}>
+                <TabGlyph tab={t.key} active={active} />
+              </View>
+              <Text style={[styles.tabLabel, active && styles.tabLabelOn]}>{t.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
-    </SafeAreaView>
+    </View>
+  );
+}
+
+export default function App(): React.JSX.Element {
+  return (
+    <SafeAreaProvider>
+      <Shell />
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#090D16",
-  },
+  root: { flex: 1, backgroundColor: colors.bg },
   header: {
-    height: 60,
-    backgroundColor: "#0D1322",
-    borderBottomWidth: 1,
-    borderBottomColor: "#1E293B",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 12,
     paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
+  seals: { flexDirection: "row" },
+  seal: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 2,
+    borderColor: "#f59e0b",
+    backgroundColor: colors.card,
+    overflow: "hidden",
   },
-  headerBadge: {
-    backgroundColor: "#047857",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#10B981",
-    marginRight: 10,
-  },
-  headerBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "bold",
-    fontFamily: "monospace",
-  },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    color: "#94A3B8",
-    fontSize: 9,
-    fontFamily: "monospace",
-  },
-  headerRight: {
-    alignItems: "flex-end",
-  },
-  securePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0F291E",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#059669",
-  },
-  secureDot: {
-    color: "#10B981",
-    fontSize: 8,
-    marginRight: 4,
-  },
-  secureText: {
-    color: "#6EE7B7",
-    fontSize: 9,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-  },
-  screenContainer: {
-    flex: 1,
-  },
-  bottomBar: {
-    height: 64,
-    backgroundColor: "#0D1322",
-    borderTopWidth: 1,
-    borderTopColor: "#1E293B",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    paddingHorizontal: 8,
-  },
-  tabButton: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  tabButtonActive: {
-    backgroundColor: "#17233D",
-  },
-  tabIcon: {
-    fontSize: 16,
-    marginBottom: 2,
-  },
-  tabLabel: {
-    color: "#64748B",
-    fontSize: 10,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-  },
-  tabLabelActive: {
-    color: "#F59E0B",
-  },
-});
+  sealImg: { width: "100%", height: "100%" },
+  brand: { fontSize: 17, fontWeight: "800", letterSpacing: 0.6 },
+  brandSub: { fontSize: 11, color: colors.textMuted, fontWeight: "500", marginTop: 1 },
 
-export default App;
+  strip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: colors.primarySoft,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primaryTint,
+  },
+  stripDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10b981", marginRight: 8 },
+  stripText: { fontSize: 12, fontWeight: "600", color: colors.primary },
+  stripPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: colors.amberTint,
+    borderWidth: 1,
+    borderColor: colors.amberBorder,
+  },
+  stripPillText: { fontSize: 9, fontWeight: "800", color: colors.amberDark, letterSpacing: 0.5 },
+
+  tabBar: {
+    flexDirection: "row",
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  tab: { flex: 1, alignItems: "center", paddingTop: 0 },
+  tabIndicator: { height: 3, width: 32, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, backgroundColor: "transparent", marginBottom: 6 },
+  tabIndicatorOn: { backgroundColor: colors.primary },
+  tabIconWrap: { width: 48, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  tabIconWrapOn: { backgroundColor: colors.primarySoft },
+  tabLabel: { fontSize: 12, fontWeight: "600", color: colors.textMuted, marginTop: 3 },
+  tabLabelOn: { color: colors.primary, fontWeight: "800" },
+});

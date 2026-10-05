@@ -26,7 +26,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const fullMessage = title ? `[${title}]\n${message}` : message;
+    // Ensure outgoing SMS broadcasts strictly contain the official 10RCDG identifier
+    let fullMessage = message.trim();
+    const has10rcdg =
+      fullMessage.toUpperCase().includes("10RCDG") ||
+      (title && title.toUpperCase().includes("10RCDG"));
+
+    if (title && title.trim()) {
+      const cleanTitle = title.trim();
+      const finalTitle = cleanTitle.toUpperCase().includes("10RCDG")
+        ? cleanTitle
+        : `10RCDG ${cleanTitle}`;
+      fullMessage = `[${finalTitle}]\n${fullMessage}`;
+    } else if (!has10rcdg) {
+      fullMessage = `[10RCDG ALERT]\n${fullMessage}`;
+    }
 
     const result = await dispatchSms({
       recipients,

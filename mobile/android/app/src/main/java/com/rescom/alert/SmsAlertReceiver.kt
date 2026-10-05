@@ -1,5 +1,9 @@
 package com.rescom.alert
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -8,14 +12,15 @@ import android.os.PowerManager
 import android.provider.Telephony
 import android.telephony.SmsMessage
 import android.util.Log
+import androidx.core.app.NotificationCompat
 
 class SmsAlertReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "10RCDG_SMS_RECEIVER"
+        private const val CHANNEL_ID = "10RCDG_EMERGENCY_ALERTS"
+        private const val NOTIFICATION_ID = 10001
         const val ALERT_PREFIX = "[10RCDG"
-        const val RED_ALERT_KEYWORD = "RED ALERT"
-        const val MUSTER_KEYWORD = "MUSTER"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -36,15 +41,15 @@ class SmsAlertReceiver : BroadcastReceiver() {
             val fullMessage = fullBodyBuilder.toString()
             Log.d(TAG, "Received SMS from: $sender - Body: $fullMessage")
 
-            // Check if this is an official 10RCDG Tactical Broadcast
-            val isOfficialAlert = fullMessage.contains(ALERT_PREFIX, ignoreCase = true) ||
-                    fullMessage.contains(RED_ALERT_KEYWORD, ignoreCase = true) ||
-                    fullMessage.contains(MUSTER_KEYWORD, ignoreCase = true)
-
-            if (isOfficialAlert) {
-                Log.w(TAG, "OFFICIAL 10RCDG EMERGENCY BROADCAST DETECTED! Triggering Full-Screen Alarm...")
-                launchAlertActivity(context, sender, fullMessage)
+            // Strictly require official "10RCDG" identifier in message body
+            val hasOfficialTag = fullMessage.contains("10RCDG", ignoreCase = true)
+            if (!hasOfficialTag) {
+                Log.d(TAG, "Ignored SMS: does not contain official 10RCDG identifier.")
+                return
             }
+
+            Log.w(TAG, "OFFICIAL 10RCDG EMERGENCY BROADCAST DETECTED! Triggering Full-Screen Alarm...")
+            launchAlertActivity(context, sender, fullMessage)
         } catch (e: Exception) {
             Log.e(TAG, "Error processing incoming SMS alert: ${e.message}", e)
         }
@@ -59,9 +64,9 @@ class SmsAlertReceiver : BroadcastReceiver() {
                     PowerManager.ON_AFTER_RELEASE,
             "10RCDG:SmsAlertWakeLock"
         )
-        wakeLock?.acquire(10000) // 10 seconds wake lock
+        wakeLock?.acquire(15000) // 15 seconds wake lock
 
-        // 2. Launch Full-Screen Alert Activity over lock screen
+        // 2. Prepare AlertActivity Intent
         val alertIntent = Intent(context, AlertActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -71,6 +76,54 @@ class SmsAlertReceiver : BroadcastReceiver() {
             putExtra("EXTRA_TIMESTAMP", System.currentTimeMillis())
         }
 
-        context.startActivity(alertIntent)
+        // 3. Create Notification Channel on Android 8.0+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && notificationManager != null) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "10RCDG Emergency Siren Alarms",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Tactical emergency siren notifications"
+                setBypassDnd(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        // 4. Build Full-Screen Intent (Required on Android 10+ to launch activity over lockscreen from background)
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val fullScreenPendingIntent = PendingIntent.getActivity(
+            context,
+            System.currentTimeMillis().toInt(),
+            alertIntent,
+            pendingIntentFlags
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("🚨 10RCDG EMERGENCY ORDER")
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager?.notify(NOTIFICATION_ID, notification)
+
+        // 5. Also attempt direct startActivity (works directly if screen is unlocked or OEM allows it)
+        try {
+            context.startActivity(alertIntent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Direct startActivity blocked by background restriction, fullScreenIntent will handle it: ${e.message}")
+        }
     }
 }

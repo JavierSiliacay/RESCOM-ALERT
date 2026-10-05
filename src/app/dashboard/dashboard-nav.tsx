@@ -24,16 +24,8 @@ import {
   Loader2,
   UserCheck,
   Code2,
+  Smartphone,
 } from "lucide-react";
-
-const navItems = [
-  { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Members & Contacts", href: "/dashboard/personnel", icon: Users },
-  { label: "Contact Groups", href: "/dashboard/groups", icon: FolderKanban },
-  { label: "Messaging", href: "/dashboard/messaging", icon: Send },
-  { label: "Authorized Personnel", href: "/dashboard/access", icon: UserCheck },
-  { label: "Gateway Settings", href: "/dashboard/settings", icon: Settings },
-];
 
 export function DashboardNav({
   userEmail,
@@ -54,6 +46,22 @@ export function DashboardNav({
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const pathname = usePathname();
+
+  const isDeveloper =
+    userRole === "DEVELOPER" ||
+    (userEmail && userEmail.toLowerCase().trim() === "siliacay.javier@gmail.com");
+
+  const navItems = [
+    { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    { label: "Members & Contacts", href: "/dashboard/personnel", icon: Users },
+    { label: "Contact Groups", href: "/dashboard/groups", icon: FolderKanban },
+    { label: "Messaging", href: "/dashboard/messaging", icon: Send },
+    { label: "Authorized Personnel", href: "/dashboard/access", icon: UserCheck },
+    { label: "10RCDG RESCOM APP", href: "/dashboard/app", icon: Smartphone },
+    ...(isDeveloper
+      ? [{ label: "Gateway Settings", href: "/dashboard/settings", icon: Settings }]
+      : []),
+  ];
 
   // Reactive access verification: Real-time eviction if access is revoked or suspended
   const liveAuth = useQuery(api.access.checkByEmail, { email: userEmail || "" });

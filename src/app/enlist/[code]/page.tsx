@@ -19,6 +19,8 @@ import {
   Sparkles,
   Check,
   UserCheck,
+  Smartphone,
+  Download,
 } from "lucide-react";
 import { RankSearchSelect } from "@/components/rank-search-select";
 import { sanitizePhMobileInput, isValidPhMobileNumber, formatPhMobileDisplay } from "@/lib/sms";
@@ -346,6 +348,39 @@ export default function PublicEnlistmentPage() {
               <p className="text-[11px] text-emerald-800 leading-relaxed">
                 Once reviewed by S3 Operations, your mobile number will be activated to receive official 10RCDG SMS alerts and mobilization orders.
               </p>
+            </div>
+
+            {/* Offline Siren Companion App Banner */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-emerald-300 text-left space-y-3 shadow-xs">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-lg bg-emerald-100 border border-emerald-200 text-emerald-800 shrink-0">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <span>Install RESCOM-ALERT Mobile App</span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      OFFLINE GSM
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Install the companion app on your phone so incoming Red Alerts will sound an emergency siren even on Silent mode.
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href={
+                  process.env.NEXT_PUBLIC_SOLDIER_APK_URL ||
+                  "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/latest/download/rescom-alert.apk"
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md active:scale-98 uppercase tracking-wider"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Android APK</span>
+              </a>
             </div>
           </div>
         ) : !isUnlocked ? (

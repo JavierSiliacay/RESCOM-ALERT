@@ -22,7 +22,12 @@ export const ProfileScreen: React.FC = () => {
   useEffect(() => {
     refresh();
     // Re-check when the soldier comes back from Android settings
-    const sub = AppState.addEventListener("change", (s) => s === "active" && refresh());
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") {
+        refresh();
+        setTimeout(refresh, 500);
+      }
+    });
     return () => sub.remove();
   }, []);
 
@@ -57,7 +62,10 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
-  const isOverlayOk = perms.canDrawOverlays !== false && perms.canFullScreen !== false;
+  const isOverlayOk =
+    typeof Platform.Version === "number" && Platform.Version >= 34
+      ? perms.canFullScreen !== false
+      : perms.canDrawOverlays !== false || perms.canFullScreen !== false;
   const allGood = perms.hasSmsPermission && perms.isBatteryIgnored && isOverlayOk;
   const steps = [
     {

@@ -156,11 +156,17 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
                 }
             }
 
+            val overlayOrFullScreenOk = if (Build.VERSION.SDK_INT >= 34) {
+                canFullScreen
+            } else {
+                canDrawOverlays || canFullScreen
+            }
+
             map.putBoolean("hasSmsPermission", hasSms)
             map.putBoolean("isBatteryIgnored", isBatteryIgnored)
             map.putBoolean("canDrawOverlays", canDrawOverlays)
             map.putBoolean("canFullScreen", canFullScreen)
-            map.putBoolean("isFullyArmed", hasSms && isBatteryIgnored && canDrawOverlays && canFullScreen)
+            map.putBoolean("isFullyArmed", hasSms && isBatteryIgnored && overlayOrFullScreenOk)
             promise.resolve(map)
         } catch (e: Exception) {
             promise.reject("CHECK_PERMISSIONS_FAILED", e.message, e)

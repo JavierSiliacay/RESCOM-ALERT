@@ -234,12 +234,12 @@ export default function SoldierDownloadPage() {
           {/* Live Telemetry Pill */}
           {stats && (
             <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-              <span className="flex items-center gap-1.5">
-                <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Troops Armed:</span>
+              <span className="flex items-center gap-1.5 font-medium text-slate-600">
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Total App Downloads:</span>
               </span>
-              <span className="font-bold text-slate-800">
-                {stats.uniqueDevices} {stats.uniqueDevices === 1 ? "Device" : "Devices"} Ready
+              <span className="font-bold text-slate-900 bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200/60 text-[11px]">
+                {stats.uniqueDevices} {stats.uniqueDevices === 1 ? "Device" : "Devices"}
               </span>
             </div>
           )}

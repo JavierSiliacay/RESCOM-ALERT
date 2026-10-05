@@ -85,3 +85,17 @@ export const getStats = query({
     };
   },
 });
+
+/**
+ * Clears all download telemetry records (used for test resets).
+ */
+export const reset = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const records = await ctx.db.query("appDownloads").collect();
+    for (const record of records) {
+      await ctx.db.delete(record._id);
+    }
+    return { deleted: records.length };
+  },
+});

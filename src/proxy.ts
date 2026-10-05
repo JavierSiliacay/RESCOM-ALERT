@@ -12,10 +12,11 @@ export const proxy = auth((req) => {
 
   const isSignInPage = req.nextUrl.pathname.startsWith("/sign-in");
   const isEnlistPage = req.nextUrl.pathname.startsWith("/enlist");
+  const isDownloadPage = req.nextUrl.pathname.startsWith("/download");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
   const isApi = req.nextUrl.pathname.startsWith("/api");
 
-  if (isAuthApi || isEnlistPage) {
+  if (isAuthApi || isEnlistPage || isDownloadPage) {
     return NextResponse.next();
   }
 
@@ -25,7 +26,7 @@ export const proxy = auth((req) => {
   }
 
   // Redirect unauthorized or revoked user trying to access protected routes
-  if (!isAuthorized && !isSignInPage && !isEnlistPage) {
+  if (!isAuthorized && !isSignInPage && !isEnlistPage && !isDownloadPage) {
     const signInUrl = new URL("/sign-in", req.nextUrl.origin);
     if (user?.status === "SUSPENDED") {
       signInUrl.searchParams.set("error", "AccountSuspended");

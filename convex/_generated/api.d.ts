@@ -11,6 +11,7 @@
 import type * as access from "../access.js";
 import type * as auditLogs from "../auditLogs.js";
 import type * as broadcasts from "../broadcasts.js";
+import type * as downloads from "../downloads.js";
 import type * as enlistment from "../enlistment.js";
 import type * as groups from "../groups.js";
 import type * as personnel from "../personnel.js";
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   access: typeof access;
   auditLogs: typeof auditLogs;
   broadcasts: typeof broadcasts;
+  downloads: typeof downloads;
   enlistment: typeof enlistment;
   groups: typeof groups;
   personnel: typeof personnel;

@@ -156,4 +156,18 @@ export default defineSchema({
     .index("by_campaignCode", ["campaignCode"])
     .index("by_mobileNumber", ["mobileNumber"])
     .index("by_status", ["status"]),
+
+  // Mobile App Download Telemetry (Unique Device Tracking)
+  appDownloads: defineTable({
+    deviceId: v.string(), // Client persistent device UUID
+    userAgent: v.string(), // Full browser user-agent
+    deviceModel: v.optional(v.string()), // e.g. "Realme 8", "Samsung Galaxy A52"
+    osVersion: v.optional(v.string()), // e.g. "Android 13"
+    ipAddress: v.optional(v.string()),
+    firstDownloadedAt: v.string(),
+    lastDownloadedAt: v.string(),
+    downloadCount: v.number(), // Tracks repeat downloads without inflating device count
+  })
+    .index("by_deviceId", ["deviceId"])
+    .index("by_lastDownloadedAt", ["lastDownloadedAt"]),
 });

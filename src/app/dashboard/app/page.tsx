@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import {
   Smartphone,
@@ -22,19 +22,33 @@ import {
   Check,
   Phone,
   HelpCircle,
+  Users,
+  Activity,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 export default function MobileAppPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [activeTab, setActiveTab] = useState<"OVERVIEW" | "INSTALL_GUIDE" | "PROTOCOLS">("OVERVIEW");
+  const [downloadPortalUrl, setDownloadPortalUrl] = useState("");
+
+  const stats = useQuery(api.downloads.getStats);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setDownloadPortalUrl(`${window.location.origin}/download`);
+    }
+  }, []);
 
   const apkDownloadUrl =
     process.env.NEXT_PUBLIC_SOLDIER_APK_URL ||
-    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/latest/download/rescom-alert.apk";
+    "/downloads/rescom-alert.apk";
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(apkDownloadUrl);
+    const urlToCopy = downloadPortalUrl || `${window.location.origin}/download`;
+    navigator.clipboard.writeText(urlToCopy);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
   };
@@ -199,7 +213,7 @@ export default function MobileAppPage() {
 
                 <div className="p-3.5 bg-white rounded-xl shadow-xs border border-slate-200">
                   <QRCodeSVG
-                    value={apkDownloadUrl}
+                    value={downloadPortalUrl || "https://rescom-alert.com/download"}
                     size={144}
                     level="H"
                     includeMargin={false}
@@ -208,13 +222,13 @@ export default function MobileAppPage() {
 
                 <div className="w-full space-y-2">
                   <a
-                    href={apkDownloadUrl}
+                    href="/download"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md active:scale-98 uppercase tracking-wider"
                   >
-                    <Download className="w-4 h-4" />
-                    <span>Download APK File</span>
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Open Download Portal</span>
                   </a>
 
                   <button
@@ -224,7 +238,7 @@ export default function MobileAppPage() {
                     {copiedLink ? (
                       <>
                         <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-emerald-700 font-bold">Download Link Copied!</span>
+                        <span className="text-emerald-700 font-bold">Portal Link Copied!</span>
                       </>
                     ) : (
                       <>
@@ -233,9 +247,121 @@ export default function MobileAppPage() {
                       </>
                     )}
                   </button>
+
+                  <a
+                    href={apkDownloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-[11px] text-slate-500 hover:text-slate-800 underline transition-colors pt-1"
+                  >
+                    Direct APK Binary (.apk)
+                  </a>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Live Troop Sideload Telemetry Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-7 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 uppercase tracking-wide">
+                  <Activity className="w-4 h-4 text-emerald-600" />
+                  <span>Troop Readiness Telemetry</span>
+                </div>
+                <h3 className="text-lg font-extrabold text-slate-900">
+                  Live Mobile App Sideload Counter
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  Deduplicated by Device ID
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/80 space-y-1">
+                <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
+                  <span>UNIQUE DEVICES ARMED</span>
+                  <Smartphone className="w-4 h-4 text-emerald-700" />
+                </div>
+                <div className="text-3xl font-black text-emerald-950">
+                  {stats ? stats.uniqueDevices : 0}
+                </div>
+                <p className="text-[11px] text-emerald-700">
+                  Distinct soldier phones equipped with the siren app
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                  <span>TOTAL DOWNLOADS</span>
+                  <Download className="w-4 h-4 text-slate-500" />
+                </div>
+                <div className="text-3xl font-black text-slate-900">
+                  {stats ? stats.totalDownloads : 0}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Includes repeat downloads and updates
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-1 sm:col-span-2 lg:col-span-1">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-800">
+                  <span>ANTI-INFLATION FILTER</span>
+                  <Shield className="w-4 h-4 text-amber-700" />
+                </div>
+                <div className="text-xs font-bold text-amber-900 pt-1">
+                  1 Phone = 1 Head Count
+                </div>
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  Soldiers tapping download multiple times will never inflate your unique readiness tally.
+                </p>
+              </div>
+            </div>
+
+            {/* Recent Device Installations */}
+            {stats && stats.recentDownloads && stats.recentDownloads.length > 0 && (
+              <div className="pt-2">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5">
+                  Recent Device Activity
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {stats.recentDownloads.map((d: any) => (
+                    <div
+                      key={d.id}
+                      className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1"
+                    >
+                      <div className="font-bold text-slate-800 truncate flex items-center justify-between">
+                        <span>{d.deviceModel}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">
+                          {d.osVersion}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 flex items-center justify-between">
+                        <span>
+                          {new Date(d.lastDownloadedAt).toLocaleDateString([], {
+                            month: "short",
+                            day: "numeric",
+                          })}{" "}
+                          •{" "}
+                          {new Date(d.lastDownloadedAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        {d.downloadCount > 1 && (
+                          <span className="text-[10px] text-emerald-700 font-bold">
+                            {d.downloadCount}x
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Quick Specifications in Clean Light Cards */}

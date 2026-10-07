@@ -21,13 +21,8 @@
 It allows military commanders and operations officers to send urgent call-ups and disaster warnings that **sound a loud emergency siren on soldiers' mobile phones and turn on their screens—even if their phones are locked, muted, or have no internet.**
 
 <div align="center">
-
-| 🖥️ 1. DISPATCH | ➔ | 📡 2. TRANSMIT | ➔ | 🚨 3. SIREN WAKE | ➔ | ✅ 4. COMPLIANCE |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| <img src="public/icons_diagram/icon_web.png" width="68" height="68" alt="Command Web Portal" /><br/>**Command Web Portal**<br/><sub>Officer transmits emergency order to target battalions</sub> | ➔ | <img src="public/icons_diagram/icon_tower.png" width="68" height="68" alt="Cellular Airwaves" /><br/>**Cellular Airwaves**<br/><sub>Smart / Globe / DITO text<br/>**(Zero internet / load needed)**</sub> | ➔ | <img src="public/icons_diagram/icon_phone.png" width="68" height="68" alt="Soldier Phone Siren" /><br/>**Soldier's Phone**<br/><sub>**LOUD SIREN SOUNDS**<br/>Screen wakes up even on silent</sub> | ➔ | <img src="public/icons_diagram/icon_check.png" width="68" height="68" alt="Troop Acknowledgment" /><br/>**Troop Headcount**<br/><sub>Soldier taps button to stop siren & confirm readiness</sub> |
-
+  <img src="public/system-flow-diagram.png" alt="RESCOM ALERT Emergency Signal Flow" width="100%" />
 </div>
-
 
 ---
 

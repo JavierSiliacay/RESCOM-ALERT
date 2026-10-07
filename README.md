@@ -14,7 +14,7 @@
 
 ---
 
-## Overview
+## 🎯 Overview
 
 **RESCOM ALERT** is an official emergency communication system built for the **10th Regional Community Defense Group (10RCDG)**.
 
@@ -26,11 +26,11 @@ It enables commanders and operations officers to issue urgent mobilization order
 
 ---
 
-## Operational Problem
+## ⚠️ Operational Problem
 
 During natural disasters and sudden alert status escalations, conventional communication methods fail to achieve immediate troop muster:
 
-| Operational Condition | Commercial Messaging (Messenger, Viber) | Standard SMS | RESCOM ALERT |
+| Operational Condition | Commercial Apps (Messenger, Viber) | Standard SMS | RESCOM ALERT |
 | :--- | :--- | :--- | :--- |
 | **Phone on Silent or Mute** | Ineffective (Device remains muted) | Ineffective (Standard chime is easily missed) | Emergency siren sounds at full volume |
 | **Phone Screen Locked** | Screen remains dark | Displays standard notification | Screen automatically turns on with order |
@@ -39,7 +39,7 @@ During natural disasters and sudden alert status escalations, conventional commu
 
 ---
 
-## How It Works
+## 🔄 How It Works
 
 ### Step 1: Dispatch
 An authorized officer accesses the command portal, selects the target unit (such as a Community Defense Center or battalion), enters the mobilization order, and transmits the broadcast.
@@ -52,7 +52,7 @@ Personnel review the order on screen and tap **"I RECEIVED THIS ORDER"**. The si
 
 ---
 
-## Key Operational Capabilities
+## 🛡️ Key Capabilities
 
 - **Bypass Silent and Mute Settings**: Ensures critical call-ups are heard regardless of device sound profiles.
 - **Zero Internet Requirement**: Operates through standard cellular signals without requiring mobile data or Wi-Fi.
@@ -64,7 +64,7 @@ Personnel review the order on screen and tap **"I RECEIVED THIS ORDER"**. The si
 
 ---
 
-## System Users
+## 👥 System Users
 
 - **Command Staff**: Dispatches emergency mobilizations and monitors regional troop response tallies.
 - **Community Defense Centers (CDCs)**: Maintains personnel rosters and coordinates localized unit mobilizations.
@@ -72,7 +72,7 @@ Personnel review the order on screen and tap **"I RECEIVED THIS ORDER"**. The si
 
 ---
 
-## Frequently Asked Questions
+## ❓ Frequently Asked Questions
 
 #### Do personnel require mobile data or internet to receive alerts?
 No. Alerts transmit across standard cellular airwaves. Basic cellular coverage is sufficient to receive broadcasts.

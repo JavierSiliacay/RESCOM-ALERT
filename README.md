@@ -10,6 +10,14 @@
   **10th Regional Community Defense Group (10RCDG)**  
   *Reserve Command, Philippine Army*
 
+  <p>
+    <img src="https://img.shields.io/badge/Web_Portal-Next.js-black?style=for-the-badge&logo=next.js" alt="Web Portal" />
+    &nbsp;
+    <img src="https://img.shields.io/badge/Mobile_App-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android App" />
+    &nbsp;
+    <img src="https://img.shields.io/badge/Architecture-Monorepo-065f46?style=for-the-badge&logo=git" alt="Monorepo" />
+  </p>
+
 </div>
 
 ---
@@ -19,6 +27,10 @@
 **RESCOM ALERT** is an official emergency communication system built for the **10th Regional Community Defense Group (10RCDG)**.
 
 It enables commanders and operations officers to issue urgent mobilization orders and disaster advisories that trigger an emergency siren on personnel devices and wake locked screens, even when phones are muted, locked, or without internet access.
+
+### Monorepo Structure
+- **Web Command Portal** (`src/`): Web dashboard for headquarters to dispatch broadcasts and manage troop rosters.
+- **Android Field App** (`mobile/`): Native Android companion application with offline emergency siren engine for soldiers.
 
 <div align="center">
   <img src="public/system-flow-diagram.png" alt="RESCOM ALERT Emergency Signal Flow" width="100%" />

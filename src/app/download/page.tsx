@@ -15,6 +15,11 @@ import {
   ExternalLink,
   Sparkles,
   Loader2,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
+  ShieldCheck,
+  Settings,
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -54,13 +59,15 @@ export default function SoldierDownloadPage() {
   const [deviceInfo, setDeviceInfo] = useState({ model: "Android Phone", os: "Android" });
   const [downloadStarted, setDownloadStarted] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [showTroubleshooting, setShowTroubleshooting] = useState(false);
+  const [troubleshootTab, setTroubleshootTab] = useState<"protect" | "restricted">("protect");
 
   const recordDownload = useMutation(api.downloads.record);
   const stats = useQuery(api.downloads.getStats);
 
   const apkUrl =
     process.env.NEXT_PUBLIC_SOLDIER_APK_URL ||
-    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/latest/download/rescom-alert.apk";
+    "https://drive.google.com/file/d/1iZXxFqzFDSs5wWG79xH8PnybZWC2tKrX/view?usp=sharing";
 
   useEffect(() => {
     // 1. Persistent Device ID (Deduplication)
@@ -175,7 +182,7 @@ export default function SoldierDownloadPage() {
                 Release Package
               </div>
               <div className="text-lg font-extrabold text-slate-900">
-                RESCOM-ALERT v1.0
+                RESCOM-ALERT v1.0.1
               </div>
             </div>
             <div className="text-right">
@@ -270,8 +277,8 @@ export default function SoldierDownloadPage() {
                 2
               </div>
               <div className="text-xs text-slate-600 leading-relaxed">
-                <strong className="text-slate-900 block font-bold">Install Anyway</strong>
-                If your phone prompts <em>"Install unknown apps"</em>, toggle <strong>Allow</strong> for Chrome or Files, then tap <strong>Install</strong>.
+                <strong className="text-slate-900 block font-bold">Install Anyway & Play Protect</strong>
+                If prompted <em>&quot;Install unknown apps&quot;</em>, toggle <strong>Allow</strong>. If Google Play Protect warns or blocks installation, tap <em>&quot;More details → Install anyway&quot;</em> (or see the Play Protect fix below).
               </div>
             </div>
 
@@ -280,11 +287,136 @@ export default function SoldierDownloadPage() {
                 3
               </div>
               <div className="text-xs text-slate-600 leading-relaxed">
-                <strong className="text-slate-900 block font-bold">Allow SMS in App</strong>
-                Open <strong>RESCOM ALERT</strong>. When prompted, tap <strong>"Allow"</strong> so the app can hear incoming emergency mobilization orders.
+                <strong className="text-slate-900 block font-bold">Allow SMS & Restricted Settings</strong>
+                Open <strong>RESCOM ALERT</strong> and tap <strong>&quot;Allow&quot;</strong>. On Android 13–15, if SMS is greyed out or says <em>&quot;Restricted setting&quot;</em>, see the 3-dots unlock guide below.
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Android Troubleshooting & Setup Guide Accordion */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
+          <button
+            type="button"
+            onClick={() => setShowTroubleshooting(!showTroubleshooting)}
+            className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50/80 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                <HelpCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <span>Having Trouble Installing or Enabling SMS?</span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                    HELP
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Step-by-step fix for Google Play Protect & Android 13–15 permissions.
+                </div>
+              </div>
+            </div>
+            <div className="text-slate-400 pl-2 shrink-0">
+              {showTroubleshooting ? (
+                <ChevronUp className="w-4 h-4 text-slate-600" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-600" />
+              )}
+            </div>
+          </button>
+
+          {showTroubleshooting && (
+            <div className="p-4 pt-1 border-t border-slate-100 space-y-4 bg-slate-50/50">
+              {/* Tab Selector */}
+              <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setTroubleshootTab("protect")}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                    troubleshootTab === "protect"
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  🛡️ 1. Play Protect Block
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTroubleshootTab("restricted")}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                    troubleshootTab === "restricted"
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  🔒 2. Android 13–15 SMS Fix
+                </button>
+              </div>
+
+              {troubleshootTab === "protect" ? (
+                <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                    <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                    <span>Temporarily Disable Play Protect During Install</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Google Play Protect scans apps for SMS capabilities. Because this is an official private military app distributed outside the Play Store, Play Protect may block installation.
+                  </p>
+                  <ol className="text-xs text-slate-700 space-y-2 list-decimal list-inside pl-1">
+                    <li className="leading-relaxed">
+                      Open the <strong>Google Play Store</strong> app.
+                    </li>
+                    <li className="leading-relaxed">
+                      Tap your <strong>Profile Icon</strong> at the top right corner.
+                    </li>
+                    <li className="leading-relaxed">
+                      Tap <strong>Play Protect</strong>.
+                    </li>
+                    <li className="leading-relaxed">
+                      Tap the <strong>Gear icon (⚙️)</strong> in the top right corner.
+                    </li>
+                    <li className="leading-relaxed">
+                      Turn OFF <strong>&quot;Scan apps with Play Protect&quot;</strong> (this disables both toggles).
+                    </li>
+                    <li className="leading-relaxed">
+                      Return to your <strong>Downloads</strong> folder and install <strong>RESCOM ALERT</strong>.
+                    </li>
+                    <li className="leading-relaxed text-emerald-800 font-semibold">
+                      Once installed, re-open Play Protect Settings and turn both toggles back <strong>ON</strong>.
+                    </li>
+                  </ol>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                    <Settings className="w-4 h-4 text-emerald-700" />
+                    <span>Unlock Restricted Settings for SMS (Android 13, 14, 15)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    On modern Android, SMS permissions for sideloaded apps are restricted by default and greyed out in settings.
+                  </p>
+                  <ol className="text-xs text-slate-700 space-y-2 list-decimal list-inside pl-1">
+                    <li className="leading-relaxed">
+                      Long-press the <strong>RESCOM ALERT</strong> icon on your home screen and tap <strong>App info (ⓘ)</strong> <em>(or go to Settings → Apps → RESCOM ALERT)</em>.
+                    </li>
+                    <li className="leading-relaxed">
+                      Tap the <strong>three dots (⋮)</strong> in the top-right corner.
+                    </li>
+                    <li className="leading-relaxed">
+                      Tap <strong>&quot;Allow restricted settings&quot;</strong> and verify with your phone PIN or fingerprint.
+                    </li>
+                    <li className="leading-relaxed">
+                      Tap <strong>Permissions</strong> → tap <strong>SMS</strong> → select <strong>&quot;Allow&quot;</strong>.
+                    </li>
+                    <li className="leading-relaxed text-emerald-800 font-semibold">
+                      Open <strong>RESCOM ALERT</strong> → go to <strong>Phone Setup</strong> to verify SMS is <strong>ON</strong>.
+                    </li>
+                  </ol>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Core Specs Grid */}
@@ -314,7 +446,7 @@ export default function SoldierDownloadPage() {
       {/* Footer */}
       <footer className="py-6 border-t border-slate-200 text-center text-xs text-slate-400 space-y-1">
         <div>10RCDG Reserve Community Defense Group, RESCOM, Philippine Army</div>
-        <div>Confidential Troop Mobilization System · v1.0.0</div>
+        <div>Confidential Troop Mobilization System · v1.0.1</div>
       </footer>
     </div>
   );

@@ -15,7 +15,12 @@ import { alertBridgeService, PermissionStatus } from "../services/alertBridge";
 import { colors, radius, shadow } from "../theme";
 
 export const ProfileScreen: React.FC = () => {
-  const [perms, setPerms] = useState<PermissionStatus>({ hasSmsPermission: false, isBatteryIgnored: false });
+  const [perms, setPerms] = useState<PermissionStatus>({
+    hasSmsPermission: false,
+    isBatteryIgnored: false,
+    canFullScreen: false,
+    canDrawOverlays: false,
+  });
 
   const refresh = async () => setPerms(await alertBridgeService.checkSystemPermissions());
 
@@ -48,8 +53,8 @@ export const ProfileScreen: React.FC = () => {
         PermissionsAndroid.RESULTS.GRANTED;
       if (!granted) {
         Alert.alert(
-          "Permission Required",
-          "Android blocked SMS access. Please tap 'Settings' -> 'Permissions' -> enable SMS so the siren can trigger offline.",
+          "SMS Permission Required",
+          "Android blocked SMS access.\n\nNote for Android 13–15:\nIn App Info, tap the 3 dots (⋮) in the top-right corner → tap 'Allow restricted settings' → then tap 'Permissions' and enable SMS.",
           [
             { text: "Cancel", style: "cancel" },
             { text: "Open Settings", onPress: () => Linking.openSettings() },
@@ -64,8 +69,8 @@ export const ProfileScreen: React.FC = () => {
 
   const isOverlayOk =
     typeof Platform.Version === "number" && Platform.Version >= 34
-      ? perms.canFullScreen !== false
-      : perms.canDrawOverlays !== false || perms.canFullScreen !== false;
+      ? Boolean(perms.canFullScreen)
+      : Boolean(perms.canDrawOverlays || perms.canFullScreen);
   const allGood = perms.hasSmsPermission && perms.isBatteryIgnored && isOverlayOk;
   const steps = [
     {
@@ -153,7 +158,7 @@ export const ProfileScreen: React.FC = () => {
         <Text style={styles.clearText}>Clear saved alerts on this phone</Text>
       </TouchableOpacity>
 
-      <Text style={styles.footer}>RESCOM ALERT · Version 1.0 · 10RCDG RESCOM, PA</Text>
+      <Text style={styles.footer}>RESCOM ALERT · Version 1.0.1 · 10RCDG RESCOM, PA</Text>
     </ScrollView>
   );
 };

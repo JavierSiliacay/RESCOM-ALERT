@@ -11,9 +11,9 @@
   *Reserve Command, Philippine Army*
 
   <p>
-    <img src="https://img.shields.io/badge/Web_Portal-Next.js-black?style=for-the-badge&logo=next.js" alt="Web Portal" />
+    <img src="https://img.shields.io/badge/Web-Portal-1d4ed8?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Web Portal" />
     &nbsp;
-    <img src="https://img.shields.io/badge/Mobile_App-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android App" />
+    <img src="https://img.shields.io/badge/Android-App-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android App" />
     &nbsp;
     <img src="https://img.shields.io/badge/Architecture-Monorepo-065f46?style=for-the-badge&logo=git" alt="Monorepo" />
   </p>

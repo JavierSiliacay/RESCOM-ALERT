@@ -42,7 +42,8 @@ import { RankSearchSelect } from "@/components/rank-search-select";
 import { EnlistmentShareModal } from "@/components/enlistment-share-modal";
 
 /**
- * Highlight matching words/characters with a light-green badge
+ * Highlight matching words/characters with a light-green badge.
+ * Space-insensitive, punctuation-insensitive, and case-insensitive.
  */
 function HighlightMatch({ text, query }: { text: string; query: string }) {
   const trimmed = query.trim();
@@ -50,27 +51,50 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
     return <span>{text}</span>;
   }
 
-  // Escape regex special characters
-  const escapedQuery = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(`(${escapedQuery})`, "gi");
-  const parts = text.split(regex);
+  // Tokenize by spaces to allow multi-word or spaced matching
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return <span>{text}</span>;
 
-  return (
-    <span>
-      {parts.map((part, index) =>
-        part.toLowerCase() === trimmed.toLowerCase() ? (
-          <mark
-            key={index}
-            className="bg-emerald-200 text-emerald-950 font-extrabold px-1 py-0.5 rounded-sm shadow-2xs"
-          >
-            {part}
-          </mark>
-        ) : (
-          <span key={index}>{part}</span>
-        )
-      )}
-    </span>
-  );
+  // Build pattern for tokens: if numeric or phone-like, allow optional spaces or hyphens between digits
+  const tokenPatterns = tokens.map((token) => {
+    if (/^[+\d\-()]+$/.test(token)) {
+      const digitsOnly = token.replace(/\D/g, "");
+      if (digitsOnly.length > 0) {
+        return digitsOnly
+          .split("")
+          .map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .join("[\\s\\-_]*");
+      }
+    }
+    return token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  });
+
+  try {
+    const fullPattern = `(${tokenPatterns.join("|")})`;
+    const regex = new RegExp(fullPattern, "gi");
+    const parts = text.split(regex);
+
+    return (
+      <span>
+        {parts.map((part, index) => {
+          if (!part) return null;
+          const isMatch = tokenPatterns.some((pattern) => new RegExp(`^${pattern}$`, "gi").test(part));
+          return isMatch ? (
+            <mark
+              key={index}
+              className="bg-emerald-200 text-emerald-950 font-extrabold px-1 py-0.5 rounded-sm shadow-2xs"
+            >
+              {part}
+            </mark>
+          ) : (
+            <span key={index}>{part}</span>
+          );
+        })}
+      </span>
+    );
+  } catch {
+    return <span>{text}</span>;
+  }
 }
 
 // Duration preview helper for campaign generator
@@ -320,18 +344,93 @@ export default function PersonnelPage() {
 
   const trimmedQuery = searchQuery.trim().toLowerCase();
 
-  // Filtered Personnel List (matches stored soldier name, mobile, rank, unit, or group)
+  // Filtered Personnel List (space-insensitive and case-insensitive for numbers and names)
   const filteredPersonnel = personnelList.filter((person) => {
-    const q = trimmedQuery;
+    if (!trimmedQuery) {
+      const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
+      const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
+      return matchesGroup && matchesStatus;
+    }
+
+    // 1. Mobile number normalization (strips all spaces, dashes, +, (), etc.)
+    const qDigits = trimmedQuery.replace(/\D/g, "");
+    const qClean = trimmedQuery.replace(/[\s\-_+()]/g, "");
+
+    const rawMobile = (person.mobileNumber || "").toLowerCase();
+    const cleanMobile = rawMobile.replace(/[\s\-_+()]/g, "");
+    const mobileDigits = rawMobile.replace(/\D/g, "");
+
+    const formattedMobile = formatPhMobileDisplay(person.mobileNumber).toLowerCase();
+    const formattedDigits = formattedMobile.replace(/\D/g, "");
+
+    // Cross-match local (09...) and international (639...) formats
+    const localMobileDigits = mobileDigits.startsWith("63")
+      ? "0" + mobileDigits.slice(2)
+      : mobileDigits;
+    const intlMobileDigits = mobileDigits.startsWith("0")
+      ? "63" + mobileDigits.slice(1)
+      : mobileDigits;
+
+    const matchesMobile =
+      rawMobile.includes(trimmedQuery) ||
+      cleanMobile.includes(qClean) ||
+      formattedMobile.includes(trimmedQuery) ||
+      (qDigits.length > 0 && (
+        mobileDigits.includes(qDigits) ||
+        formattedDigits.includes(qDigits) ||
+        localMobileDigits.includes(qDigits) ||
+        intlMobileDigits.includes(qDigits)
+      ));
+
+    // 2. Name, Rank, Unit & Group (space-insensitive and multi-word token matching)
+    const fullName = `${person.firstName} ${person.lastName}`.toLowerCase();
+    const cleanFullName = fullName.replace(/[\s\-_]/g, "");
+
     const rankFullName = getRankFullName(person.rank).toLowerCase();
+    const rankCode = person.rank.toLowerCase();
+
+    const unit = (person.unit || "").toLowerCase();
+    const cleanUnit = unit.replace(/[\s\-_]/g, "");
+
+    const groupName = (person.groupName || "").toLowerCase();
+
+    // Multi-word tokens: "cruz juan" or "juan bgen" matches "BGEN Juan Dela Cruz"
+    const words = trimmedQuery.split(/\s+/).filter(Boolean);
+    const matchesAllTokens = words.length > 0 && words.every((w) => {
+      const wClean = w.replace(/[\s\-_+()]/g, "");
+      return (
+        fullName.includes(w) ||
+        cleanFullName.includes(wClean) ||
+        rankCode.includes(w) ||
+        rankFullName.includes(w) ||
+        unit.includes(w) ||
+        groupName.includes(w) ||
+        cleanMobile.includes(wClean)
+      );
+    });
+
+    const matchesName =
+      fullName.includes(trimmedQuery) ||
+      cleanFullName.includes(qClean) ||
+      matchesAllTokens;
+
+    const matchesRank =
+      rankCode.includes(trimmedQuery) ||
+      rankFullName.includes(trimmedQuery) ||
+      rankFullName.replace(/[\s\-_]/g, "").includes(qClean);
+
+    const matchesUnit =
+      unit.includes(trimmedQuery) ||
+      cleanUnit.includes(qClean);
+
+    const matchesGroupText = groupName.includes(trimmedQuery);
+
     const matchesSearch =
-      !q ||
-      `${person.firstName} ${person.lastName}`.toLowerCase().includes(q) ||
-      person.mobileNumber.includes(q) ||
-      person.rank.toLowerCase().includes(q) ||
-      rankFullName.includes(q) ||
-      person.unit.toLowerCase().includes(q) ||
-      (person.groupName && person.groupName.toLowerCase().includes(q));
+      matchesMobile ||
+      matchesName ||
+      matchesRank ||
+      matchesUnit ||
+      matchesGroupText;
 
     const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
     const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
@@ -736,7 +835,6 @@ export default function PersonnelPage() {
                   {/* Dropdown Header Bar */}
                   <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50/90 border-b border-slate-100 text-[11px]">
                     <span className="font-semibold text-slate-500 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
                       Instant String Match
                     </span>
                     <span className="font-bold text-slate-700 font-mono text-[10px] bg-white px-2 py-0.5 rounded-full border border-slate-200">

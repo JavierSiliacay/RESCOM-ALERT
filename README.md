@@ -14,11 +14,11 @@
 
 ---
 
-## 📌 What is RESCOM ALERT?
+## Overview
 
 **RESCOM ALERT** is an official emergency communication system built for the **10th Regional Community Defense Group (10RCDG)**.
 
-It allows military commanders and operations officers to send urgent call-ups and disaster warnings that **sound a loud emergency siren on soldiers' mobile phones and turn on their screens—even if their phones are locked, muted, or have no internet.**
+It enables commanders and operations officers to issue urgent mobilization orders and disaster advisories that trigger an emergency siren on personnel devices and wake locked screens, even when phones are muted, locked, or without internet access.
 
 <div align="center">
   <img src="public/system-flow-diagram.png" alt="RESCOM ALERT Emergency Signal Flow" width="100%" />
@@ -26,72 +26,65 @@ It allows military commanders and operations officers to send urgent call-ups an
 
 ---
 
-## ❓ The Problem: Why Regular Texts & Chat Apps Fail
+## Operational Problem
 
-During typhoons, earthquakes, and sudden Red Alert call-ups, conventional messaging apps fail to mobilize troops quickly:
+During natural disasters and sudden alert status escalations, conventional communication methods fail to achieve immediate troop muster:
 
-| Situation in the Field | Messenger / Viber / WhatsApp | Normal SMS Text | 🛡️ RESCOM ALERT |
+| Operational Condition | Commercial Messaging (Messenger, Viber) | Standard SMS | RESCOM ALERT |
 | :--- | :--- | :--- | :--- |
-| **Phone is on Silent or Mute** | ❌ Stays silent (soldier sleeps through it) | ❌ Quiet buzz or ding | ✅ **Loud emergency siren plays at full volume** |
-| **Phone is Locked** | ❌ Screen stays black | ❌ Small notification banner | ✅ **Screen automatically lights up with the order** |
-| **Cell Towers Lose Internet / Data** | ❌ **Completely dead** (cannot send or receive) | ✅ Still arrives (basic cellular text) | ✅ **100% Reliable** (works without internet or mobile data) |
-| **Headcount & Compliance** | ❌ Cannot track who is awake or en route | ❌ No way to verify receipt | ✅ **Soldier taps one button to stop the siren & confirm** |
+| **Phone on Silent or Mute** | Ineffective (Device remains muted) | Ineffective (Standard chime is easily missed) | Emergency siren sounds at full volume |
+| **Phone Screen Locked** | Screen remains dark | Displays standard notification | Screen automatically turns on with order |
+| **Data Outage / Calamity** | Inoperable (Requires mobile internet) | Operable (Cellular airwaves only) | Fully Operable (Zero internet or data needed) |
+| **Headcount Verification** | No verified acknowledgment | No delivery tracking | Single-tap acknowledgment logs compliance |
 
 ---
 
-## 🚀 How It Works (In 3 Simple Steps)
+## How It Works
 
-### Step 1: Officer Dispatches the Alert
-An authorized officer at Headquarters logs into the command website, chooses the target unit (for example, the *1001st CDC* or an entire battalion), types the mobilization order, and clicks **Transmit**.
+### Step 1: Dispatch
+An authorized officer accesses the command portal, selects the target unit (such as a Community Defense Center or battalion), enters the mobilization order, and transmits the broadcast.
 
-### Step 2: Soldier's Phone Wakes Up & Sounds the Siren
-Within seconds, the soldier's phone receives the order. Even if the soldier is asleep with their phone on **Silent**, **Mute**, or **Do Not Disturb**, the phone display immediately turns on and a loud emergency siren sounds.
+### Step 2: Device Activation
+Targeted devices receive the transmission over cellular airwaves. The system bypasses silent, mute, and Do Not Disturb settings, turns on the device display, and sounds an emergency siren.
 
-### Step 3: Soldier Acknowledges & Silences the Alarm
-The soldier sees the official order on their screen and taps **"✓ I RECEIVED THIS ORDER"**. The siren silences immediately, and Headquarters can see that the soldier has acknowledged the call-up.
-
----
-
-## ⭐ Main Features for the Unit
-
-- 🚨 **Guaranteed Wake-Up (Bypasses Silent Mode)**  
-  Eliminates missed alerts caused by muted phones during nighttime emergencies.
-- 📶 **Zero Internet or Mobile Data Required**  
-  Soldiers do not need mobile data, Wi-Fi, or internet load to receive alerts. It works over standard cellular signal.
-- 📱 **Automatic Screen Wake-Up**  
-  Turns on locked screens immediately, showing the official 10RCDG emblem and mobilization order.
-- ✅ **One-Tap Troop Acknowledgment**  
-  Gives commanders a clear headcount of who received the order and who is responding.
-- 🔒 **Official & Protected Against Fake Texts**  
-  The mobile app only sounds the siren for verified broadcasts sent by authorized 10RCDG officers. Random text messages or spam will never trigger the siren.
-- 📋 **Quick Mobilization Enlistment**  
-  During assemblies and training, officers can share a simple registration link with a passcode so troops can join the contact roster in seconds.
-- 📥 **Quick 1-Minute App Setup**  
-  Troops can scan a QR code at headquarters or open a direct link on their phone to install the app with guided setup.
+### Step 3: Acknowledgment
+Personnel review the order on screen and tap **"I RECEIVED THIS ORDER"**. The siren silences immediately, and compliance is logged for headquarters tracking.
 
 ---
 
-## 👥 Who Uses This System?
+## Key Operational Capabilities
 
-- **Commanding Officers & Staff**: To broadcast urgent mobilization orders, weather advisories, and disaster relief call-ups across the region.
-- **Community Defense Centers (CDCs)**: To organize, update, and manage soldier contact rosters by unit and battalion.
-- **Soldiers & Reservists**: To receive guaranteed, life-saving alerts and report their readiness immediately.
+- **Bypass Silent and Mute Settings**: Ensures critical call-ups are heard regardless of device sound profiles.
+- **Zero Internet Requirement**: Operates through standard cellular signals without requiring mobile data or Wi-Fi.
+- **Display Activation**: Illuminates locked displays to present official orders immediately.
+- **Accountability Tracking**: Provides command staff with real-time acknowledgment tallies.
+- **Verified Broadcast Protection**: Filters incoming broadcasts to prevent unauthorized or spam transmissions from triggering alarms.
+- **Rapid Mobilization Enlistment**: Enables rapid contact registration through secure, time-limited campaign codes during muster assemblies.
+- **Field Device Distribution**: Provides direct mobile application installation through an official onboarding portal.
 
 ---
 
-## 💬 Frequently Asked Questions (FAQ)
+## System Users
 
-#### Do soldiers need mobile data, load, or Wi-Fi to receive sirens?
-**No.** The alert travels over regular cellular text message airwaves. As long as the phone has basic cellular signal bars, the siren will sound.
+- **Command Staff**: Dispatches emergency mobilizations and monitors regional troop response tallies.
+- **Community Defense Centers (CDCs)**: Maintains personnel rosters and coordinates localized unit mobilizations.
+- **Reservists and Field Personnel**: Receives prioritized emergency alerts and confirms readiness status.
 
-#### What if a soldier's phone is set to Silent or Do Not Disturb?
-The app is specifically designed for emergencies to override silent and vibrate settings, sounding the alarm at full volume.
+---
 
-#### How does a soldier turn off the siren when it starts ringing?
-The soldier simply taps the green **"✓ I RECEIVED THIS ORDER"** button on their screen. The siren stops instantly.
+## Frequently Asked Questions
 
-#### Can random spam or scam messages trigger the emergency siren?
-**No.** The app strictly inspects incoming messages for official 10RCDG security credentials. Unofficial text messages are treated as ordinary texts and will never set off the alarm.
+#### Do personnel require mobile data or internet to receive alerts?
+No. Alerts transmit across standard cellular airwaves. Basic cellular coverage is sufficient to receive broadcasts.
+
+#### Will the siren sound if a device is set to silent or Do Not Disturb?
+Yes. The system is designed for emergency situations and overrides device volume mutes to ensure audibility.
+
+#### How is the siren silenced upon receipt?
+Personnel tap the acknowledgment button on their screen, which immediately silences the siren and records their confirmation.
+
+#### Can third-party or spam text messages trigger the siren?
+No. The application validates official 10RCDG identifiers before activating emergency routines.
 
 ---
 

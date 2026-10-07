@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Users,
   Search,
@@ -40,6 +40,38 @@ import {
 } from "@/lib/military-ranks";
 import { RankSearchSelect } from "@/components/rank-search-select";
 import { EnlistmentShareModal } from "@/components/enlistment-share-modal";
+
+/**
+ * Highlight matching words/characters with a light-green badge
+ */
+function HighlightMatch({ text, query }: { text: string; query: string }) {
+  const trimmed = query.trim();
+  if (!trimmed || !text) {
+    return <span>{text}</span>;
+  }
+
+  // Escape regex special characters
+  const escapedQuery = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(${escapedQuery})`, "gi");
+  const parts = text.split(regex);
+
+  return (
+    <span>
+      {parts.map((part, index) =>
+        part.toLowerCase() === trimmed.toLowerCase() ? (
+          <mark
+            key={index}
+            className="bg-emerald-200 text-emerald-950 font-extrabold px-1 py-0.5 rounded-sm shadow-2xs"
+          >
+            {part}
+          </mark>
+        ) : (
+          <span key={index}>{part}</span>
+        )
+      )}
+    </span>
+  );
+}
 
 // Duration preview helper for campaign generator
 function getDurationPreview(inputStr: string): {
@@ -271,19 +303,57 @@ export default function PersonnelPage() {
 
   const pendingSubmissions = submissionsList.filter((s) => s.status === "PENDING");
 
-  // Filtered Personnel List
+  // Search Bar Dropdown & Autocomplete State
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchFocused(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const trimmedQuery = searchQuery.trim().toLowerCase();
+
+  // Matched military ranks for instant search dropdown
+  const matchedRankGroups = trimmedQuery
+    ? RANK_GROUPS.map((group) => {
+        const ranks = group.ranks.filter(
+          (r) =>
+            r.code.toLowerCase().includes(trimmedQuery) ||
+            r.name.toLowerCase().includes(trimmedQuery)
+        );
+        return { ...group, ranks };
+      }).filter((g) => g.ranks.length > 0)
+    : [];
+
+  const totalRankMatches = matchedRankGroups.reduce((acc, g) => acc + g.ranks.length, 0);
+
+  // Filtered Personnel List (matches soldier name, rank code, full rank name, unit, or mobile)
   const filteredPersonnel = personnelList.filter((person) => {
+    const q = trimmedQuery;
+    const rankFullName = getRankFullName(person.rank).toLowerCase();
     const matchesSearch =
-      `${person.firstName} ${person.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      person.mobileNumber.includes(searchQuery) ||
-      person.rank.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      person.unit.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      `${person.firstName} ${person.lastName}`.toLowerCase().includes(q) ||
+      person.mobileNumber.includes(q) ||
+      person.rank.toLowerCase().includes(q) ||
+      rankFullName.includes(q) ||
+      person.unit.toLowerCase().includes(q);
 
     const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
     const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
 
     return matchesSearch && matchesGroup && matchesStatus;
   });
+
+  const totalMatches = filteredPersonnel.length + totalRankMatches;
+  const showSearchDropdown = isSearchFocused && trimmedQuery.length > 0;
 
   const handleOpenAddModal = () => {
     setEditingId(null);
@@ -643,15 +713,174 @@ export default function PersonnelPage() {
 
           {/* Search & Filter Bar */}
           <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full md:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, rank, unit, or mobile..."
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all"
-              />
+            <div ref={searchContainerRef} className="relative w-full md:w-96">
+              <div className="relative">
+                <Search
+                  className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                    isSearchFocused ? "text-emerald-600" : "text-slate-400"
+                  }`}
+                />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name, rank, unit, or mobile..."
+                  className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all font-medium"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setIsSearchFocused(false);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-0.5 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
+                    title="Clear Search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Floating Instant Match Dropdown */}
+              {showSearchDropdown && (
+                <div className="absolute z-50 left-0 top-full mt-2 w-full sm:w-[460px] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                  {/* Dropdown Header Bar */}
+                  <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50/90 border-b border-slate-100 text-[11px]">
+                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      Instant String Match
+                    </span>
+                    <span className="font-bold text-slate-700 font-mono text-[10px] bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                      {totalMatches} {totalMatches === 1 ? "match" : "matches"}
+                    </span>
+                  </div>
+
+                  <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 p-2 space-y-2">
+                    {/* Matching Military Ranks */}
+                    {matchedRankGroups.length > 0 && (
+                      <div className="space-y-2">
+                        {matchedRankGroups.map((group) => (
+                          <div key={group.groupName}>
+                            <div className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-50/80 rounded-md mb-1">
+                              {group.groupName}
+                            </div>
+                            <div className="space-y-1">
+                              {group.ranks.map((r) => {
+                                const badge = getRankBadgeStyle(r.code);
+                                return (
+                                  <button
+                                    key={r.code}
+                                    type="button"
+                                    onClick={() => {
+                                      setSearchQuery(r.code);
+                                      setIsSearchFocused(false);
+                                    }}
+                                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-slate-50 transition-colors text-left group cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold border font-mono shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}
+                                      >
+                                        <HighlightMatch text={r.code} query={searchQuery} />
+                                      </span>
+                                      <span className="text-xs font-semibold text-slate-900 truncate">
+                                        <HighlightMatch text={r.name} query={searchQuery} />
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-emerald-700 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                      Filter by Rank →
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Matching Roster Personnel */}
+                    {filteredPersonnel.length > 0 ? (
+                      <div className="pt-2">
+                        <div className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-50/80 rounded-md mb-1.5 flex items-center justify-between">
+                          <span>Roster Personnel ({filteredPersonnel.length})</span>
+                          <span className="text-[9px] font-normal normal-case text-slate-500">Tap to filter</span>
+                        </div>
+                        <div className="space-y-1">
+                          {filteredPersonnel.slice(0, 6).map((person) => {
+                            const badge = getRankBadgeStyle(person.rank);
+                            return (
+                              <button
+                                key={person._id}
+                                type="button"
+                                onClick={() => {
+                                  setSearchQuery(`${person.firstName} ${person.lastName}`);
+                                  setIsSearchFocused(false);
+                                }}
+                                className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl hover:bg-emerald-50/50 hover:border-emerald-200 border border-transparent transition-all text-left cursor-pointer group"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold border font-mono shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}
+                                  >
+                                    {person.rank}
+                                  </span>
+                                  <div className="truncate">
+                                    <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 truncate">
+                                      <HighlightMatch
+                                        text={`${person.firstName} ${person.lastName}`}
+                                        query={searchQuery}
+                                      />
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5">
+                                      <span>
+                                        <HighlightMatch
+                                          text={formatPhMobileDisplay(person.mobileNumber)}
+                                          query={searchQuery}
+                                        />
+                                      </span>
+                                      <span>•</span>
+                                      <span>
+                                        <HighlightMatch text={person.unit} query={searchQuery} />
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
+                                    {person.groupName}
+                                  </span>
+                                  <span
+                                    className={`w-2 h-2 rounded-full ${
+                                      person.status === "ACTIVE" ? "bg-emerald-500" : "bg-slate-300"
+                                    }`}
+                                    title={person.status}
+                                  />
+                                </div>
+                              </button>
+                            );
+                          })}
+                          {filteredPersonnel.length > 6 && (
+                            <div className="text-center py-1 text-[10px] text-slate-400 font-semibold">
+                              +{filteredPersonnel.length - 6} more matching personnel in table below
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : matchedRankGroups.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-slate-400">
+                        <p>No military personnel or ranks matching</p>
+                        <p className="font-bold text-slate-700 mt-1">"{searchQuery}"</p>
+                        <p className="text-[11px] text-slate-400 mt-2">
+                          Try searching by last name, rank code (e.g. BGEN, CPT, PVT), unit, or mobile number.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
@@ -707,28 +936,32 @@ export default function PersonnelPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                    {filteredPersonnel.map((person) => (
+                    {filteredPersonnel.map((person) => {
+                      const badge = getRankBadgeStyle(person.rank);
+                      return (
                       <tr key={person._id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="py-3.5 px-4 sm:px-6 font-bold text-slate-900">
                           <div className="flex items-center gap-2.5">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono border ${getRankBadgeStyle(person.rank)}`}>
-                              {person.rank}
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono border ${badge.bg} ${badge.text} ${badge.border}`}>
+                              <HighlightMatch text={person.rank} query={searchQuery} />
                             </span>
                             <div>
-                              <span>{person.firstName} {person.lastName}</span>
+                              <span>
+                                <HighlightMatch text={`${person.firstName} ${person.lastName}`} query={searchQuery} />
+                              </span>
                               <span className="block text-[10px] font-normal text-slate-400 font-mono">
-                                {getRankFullName(person.rank)}
+                                <HighlightMatch text={getRankFullName(person.rank)} query={searchQuery} />
                               </span>
                             </div>
                           </div>
                         </td>
 
                         <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
-                          {formatPhMobileDisplay(person.mobileNumber)}
+                          <HighlightMatch text={formatPhMobileDisplay(person.mobileNumber)} query={searchQuery} />
                         </td>
 
                         <td className="py-3.5 px-4 font-medium text-slate-600">
-                          {person.unit}
+                          <HighlightMatch text={person.unit} query={searchQuery} />
                         </td>
 
                         <td className="py-3.5 px-4">
@@ -770,7 +1003,8 @@ export default function PersonnelPage() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -32,6 +32,7 @@ import { getPresenceStatus } from "@/lib/presence";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { StatCardSkeleton, TableSkeleton } from "@/components/skeleton";
 
 const ROLES_LIST: { label: string; value: UserRole; description: string }[] = [
   {
@@ -167,6 +168,7 @@ export default function AuthorizedPersonnelPage() {
   const suspendOfficer = useMutation(api.access.suspendOfficer);
   const reactivateOfficer = useMutation(api.access.reactivateOfficer);
 
+  const isLoading = officersData === undefined;
   const officers = officersData || [];
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -399,38 +401,48 @@ export default function AuthorizedPersonnelPage() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Authorized</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-1">{officers.length}</p>
-          </div>
-          <div className="p-3 rounded-xl bg-slate-50 text-slate-700 border border-slate-200">
-            <UserCheck className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Online Now</p>
+        {isLoading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Authorized</p>
+                <p className="text-2xl font-extrabold text-slate-900 mt-1">{officers.length}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 text-slate-700 border border-slate-200">
+                <UserCheck className="w-5 h-5" />
+              </div>
             </div>
-            <p className="text-2xl font-extrabold text-emerald-700 mt-1">{onlineCount}</p>
-          </div>
-          <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <Activity className="w-5 h-5 animate-pulse" />
-          </div>
-        </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Command & S-Staff</p>
-            <p className="text-2xl font-extrabold text-amber-700 mt-1">{commanderCount}</p>
-          </div>
-          <div className="p-3 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
-            <Crown className="w-5 h-5" />
-          </div>
-        </div>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Online Now</p>
+                </div>
+                <p className="text-2xl font-extrabold text-emerald-700 mt-1">{onlineCount}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Activity className="w-5 h-5 animate-pulse" />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Command & S-Staff</p>
+                <p className="text-2xl font-extrabold text-amber-700 mt-1">{commanderCount}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
+                <Crown className="w-5 h-5" />
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Filters & Search */}
@@ -479,19 +491,22 @@ export default function AuthorizedPersonnelPage() {
 
       {/* Authorized Officers Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="py-3.5 px-4 sm:px-6">Officer & Account</th>
-                <th className="py-3.5 px-4">Military Role</th>
-                <th className="py-3.5 px-4">Assigned Unit</th>
-                <th className="py-3.5 px-4">Live Activity</th>
-                <th className="py-3.5 px-4 text-right pr-6">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {filteredOfficers.length === 0 ? (
+        {isLoading ? (
+          <TableSkeleton rows={6} cols={5} />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3.5 px-4 sm:px-6">Officer & Account</th>
+                  <th className="py-3.5 px-4">Military Role</th>
+                  <th className="py-3.5 px-4">Assigned Unit</th>
+                  <th className="py-3.5 px-4">Live Activity</th>
+                  <th className="py-3.5 px-4 text-right pr-6">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                {filteredOfficers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="text-center py-12 text-slate-400">
                     <UserCheck className="w-8 h-8 mx-auto mb-2 opacity-40" />
@@ -620,6 +635,7 @@ export default function AuthorizedPersonnelPage() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* Authorize / Edit Officer Modal */}

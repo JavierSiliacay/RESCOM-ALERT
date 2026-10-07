@@ -15,10 +15,16 @@ import {
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { QuickMessageCard } from "./quick-message-card";
+import { Skeleton, StatCardSkeleton } from "@/components/skeleton";
 
 export default function DashboardPage() {
-  const personnel = useQuery(api.personnel.list) || [];
-  const broadcasts = useQuery(api.broadcasts.list) || [];
+  const personnelData = useQuery(api.personnel.list);
+  const broadcastsData = useQuery(api.broadcasts.list);
+
+  const isLoading = personnelData === undefined || broadcastsData === undefined;
+
+  const personnel = personnelData || [];
+  const broadcasts = broadcastsData || [];
 
   const totalPersonnel = personnel.length;
   const activePersonnel = personnel.filter((p) => p.status === "ACTIVE").length;
@@ -56,38 +62,49 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard
-          label="Total Members"
-          value={totalPersonnel.toString()}
-          sub="Registered Contacts"
-          icon={Users}
-          accentBorder="border-l-emerald-700"
-          iconColor="text-emerald-700 bg-emerald-50 border-emerald-200"
-        />
-        <StatCard
-          label="Mobile Numbers"
-          value={activePersonnel.toString()}
-          sub="Ready Phone Numbers"
-          icon={Smartphone}
-          accentBorder="border-l-blue-600"
-          iconColor="text-blue-700 bg-blue-50 border-blue-200"
-        />
-        <StatCard
-          label="Messages Sent"
-          value={totalBroadcasts.toString()}
-          sub="Broadcast Dispatches"
-          icon={Send}
-          accentBorder="border-l-amber-600"
-          iconColor="text-amber-700 bg-amber-50 border-amber-200"
-        />
-        <StatCard
-          label="Delivery Rate"
-          value={deliveryPctOverall}
-          sub="Network Success Rate"
-          icon={CheckCircle2}
-          accentBorder="border-l-emerald-600"
-          iconColor="text-emerald-700 bg-emerald-50 border-emerald-200"
-        />
+        {isLoading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <StatCard
+              label="Total Members"
+              value={totalPersonnel.toString()}
+              sub="Registered Contacts"
+              icon={Users}
+              accentBorder="border-l-emerald-700"
+              iconColor="text-emerald-700 bg-emerald-50 border-emerald-200"
+            />
+            <StatCard
+              label="Mobile Numbers"
+              value={activePersonnel.toString()}
+              sub="Ready Phone Numbers"
+              icon={Smartphone}
+              accentBorder="border-l-blue-600"
+              iconColor="text-blue-700 bg-blue-50 border-blue-200"
+            />
+            <StatCard
+              label="Messages Sent"
+              value={totalBroadcasts.toString()}
+              sub="Broadcast Dispatches"
+              icon={Send}
+              accentBorder="border-l-amber-600"
+              iconColor="text-amber-700 bg-amber-50 border-amber-200"
+            />
+            <StatCard
+              label="Delivery Rate"
+              value={deliveryPctOverall}
+              sub="Network Success Rate"
+              icon={CheckCircle2}
+              accentBorder="border-l-emerald-600"
+              iconColor="text-emerald-700 bg-emerald-50 border-emerald-200"
+            />
+          </>
+        )}
       </div>
 
       {/* Content Grid */}
@@ -118,7 +135,13 @@ export default function DashboardPage() {
 
             {/* List of Recent Transmissions */}
             <div className="space-y-3">
-              {recentBroadcasts.length === 0 ? (
+              {isLoading ? (
+                <>
+                  <Skeleton className="h-20 w-full rounded-xl" />
+                  <Skeleton className="h-20 w-full rounded-xl" />
+                  <Skeleton className="h-20 w-full rounded-xl" />
+                </>
+              ) : recentBroadcasts.length === 0 ? (
                 <div className="p-6 text-center text-slate-400 text-xs">
                   No transmissions sent yet today.
                 </div>

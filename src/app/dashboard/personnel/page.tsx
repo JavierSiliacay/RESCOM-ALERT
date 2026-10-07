@@ -40,6 +40,12 @@ import {
 } from "@/lib/military-ranks";
 import { RankSearchSelect } from "@/components/rank-search-select";
 import { EnlistmentShareModal } from "@/components/enlistment-share-modal";
+import {
+  Skeleton,
+  StatCardSkeleton,
+  TableSkeleton,
+  CampaignCardSkeleton,
+} from "@/components/skeleton";
 
 /**
  * Highlight matching words/characters with a light-green badge.
@@ -344,6 +350,11 @@ export default function PersonnelPage() {
   // Selected Pending Submissions for Bulk Approval
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Id<"enlistmentSubmissions">[]>([]);
   const [isBulkApproving, setIsBulkApproving] = useState(false);
+
+  const isLoadingPersonnel = personnel === undefined;
+  const isLoadingGroups = groups === undefined;
+  const isLoadingCampaigns = campaigns === undefined;
+  const isLoadingSubmissions = submissions === undefined;
 
   const personnelList = personnel || [];
   const groupsList = groups || [];
@@ -810,35 +821,45 @@ export default function PersonnelPage() {
         <div className="space-y-6 animate-in fade-in duration-150">
           {/* Metrics Row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Registered</p>
-                <p className="text-2xl font-extrabold text-slate-900 mt-1">{personnelList.length}</p>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600">
-                <Users className="w-5 h-5" />
-              </div>
-            </div>
+            {isLoadingPersonnel ? (
+              <>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </>
+            ) : (
+              <>
+                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Registered</p>
+                    <p className="text-2xl font-extrabold text-slate-900 mt-1">{personnelList.length}</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600">
+                    <Users className="w-5 h-5" />
+                  </div>
+                </div>
 
-            <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Broadcast Numbers</p>
-                <p className="text-2xl font-extrabold text-emerald-700 mt-1">{activeCount}</p>
-              </div>
-              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
-                <UserCheck className="w-5 h-5" />
-              </div>
-            </div>
+                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Broadcast Numbers</p>
+                    <p className="text-2xl font-extrabold text-emerald-700 mt-1">{activeCount}</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                </div>
 
-            <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Contact Groups</p>
-                <p className="text-2xl font-extrabold text-amber-700 mt-1">{groupsList.length}</p>
-              </div>
-              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
-                <Shield className="w-5 h-5" />
-              </div>
-            </div>
+                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Contact Groups</p>
+                    <p className="text-2xl font-extrabold text-amber-700 mt-1">{groupsList.length}</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Search & Filter Bar */}
@@ -1002,7 +1023,9 @@ export default function PersonnelPage() {
 
           {/* Personnel Table */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            {filteredPersonnel.length === 0 ? (
+            {isLoadingPersonnel ? (
+              <TableSkeleton rows={8} cols={6} />
+            ) : filteredPersonnel.length === 0 ? (
               <div className="py-16 text-center text-slate-400">
                 <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
                 <p className="text-sm font-semibold text-slate-700">No personnel found</p>
@@ -1116,7 +1139,13 @@ export default function PersonnelPage() {
               </span>
             </div>
 
-            {campaignsList.length === 0 ? (
+            {isLoadingCampaigns ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <CampaignCardSkeleton />
+                <CampaignCardSkeleton />
+                <CampaignCardSkeleton />
+              </div>
+            ) : campaignsList.length === 0 ? (
               <div className="p-8 rounded-2xl bg-white border border-slate-200 text-center space-y-2">
                 <Link2 className="w-8 h-8 mx-auto text-slate-300" />
                 <p className="text-xs font-bold text-slate-700">No Enlistment Links Active</p>
@@ -1271,7 +1300,9 @@ export default function PersonnelPage() {
 
             {/* Submissions Table */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-              {submissionsList.length === 0 ? (
+              {isLoadingSubmissions ? (
+                <TableSkeleton rows={4} cols={5} />
+              ) : submissionsList.length === 0 ? (
                 <div className="py-12 text-center text-slate-400">
                   <UserPlus className="w-8 h-8 mx-auto mb-2 opacity-40" />
                   <p className="text-xs font-bold text-slate-700">No Enlistment Submissions Yet</p>

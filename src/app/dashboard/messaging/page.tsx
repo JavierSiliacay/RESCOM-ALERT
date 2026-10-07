@@ -28,6 +28,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { sanitizePhMobileInput, formatPhMobileDisplay } from "@/lib/sms";
+import { StatCardSkeleton, TableSkeleton } from "@/components/skeleton";
 
 function MessagingContent() {
   const searchParams = useSearchParams();
@@ -49,6 +50,9 @@ function MessagingContent() {
   const removeTemplateMutation = useMutation(api.templates.remove);
   const recordBroadcast = useMutation(api.broadcasts.record);
   const updateBroadcastStatus = useMutation(api.broadcasts.updateStatus);
+
+  const isLoadingOutbox = broadcastsData === undefined;
+  const isLoadingAudit = auditLogsData === undefined;
 
   const groups = groupsData || [];
   const personnel = personnelData || [];
@@ -803,27 +807,39 @@ function MessagingContent() {
       {activeTab === "outbox" && (
         <div className="space-y-6">
           {/* Stat Cards */}
+          {/* Stat Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Dispatches</span>
-              <div className="text-2xl font-black text-slate-900 mt-1">{totalDispatches}</div>
-              <span className="text-[11px] text-emerald-600 font-medium">All broadcast operations</span>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total SMS Sent</span>
-              <div className="text-2xl font-black text-slate-900 mt-1">{totalRecipientsSent.toLocaleString()}</div>
-              <span className="text-[11px] text-emerald-600 font-medium">Target mobile devices</span>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Delivery Rate</span>
-              <div className="text-2xl font-black text-emerald-600 mt-1">{deliveryPercentage}%</div>
-              <span className="text-[11px] text-emerald-600 font-medium">Delivered to network</span>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active SIM Route</span>
-              <div className="text-lg font-black text-slate-800 mt-1 truncate">SIM 1 · TNT (Smart)</div>
-              <span className="text-[11px] text-slate-500 font-mono">Infinix X6711 Gateway</span>
-            </div>
+            {isLoadingOutbox ? (
+              <>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </>
+            ) : (
+              <>
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Dispatches</span>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{totalDispatches}</div>
+                  <span className="text-[11px] text-emerald-600 font-medium">All broadcast operations</span>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total SMS Sent</span>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{totalRecipientsSent.toLocaleString()}</div>
+                  <span className="text-[11px] text-emerald-600 font-medium">Target mobile devices</span>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Delivery Rate</span>
+                  <div className="text-2xl font-black text-emerald-600 mt-1">{deliveryPercentage}%</div>
+                  <span className="text-[11px] text-emerald-600 font-medium">Delivered to network</span>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active SIM Route</span>
+                  <div className="text-lg font-black text-slate-800 mt-1 truncate">SIM 1 · TNT (Smart)</div>
+                  <span className="text-[11px] text-slate-500 font-mono">Infinix X6711 Gateway</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Search & Broadcast History Table */}
@@ -845,7 +861,14 @@ function MessagingContent() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {isLoadingOutbox ? (
+              <TableSkeleton rows={5} cols={5} />
+            ) : filteredMessages.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-xs">
+                No broadcast messages found.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
@@ -917,6 +940,7 @@ function MessagingContent() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         </div>
       )}
@@ -975,8 +999,15 @@ function MessagingContent() {
             </div>
 
             {/* Audit Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            {isLoadingAudit ? (
+              <TableSkeleton rows={6} cols={6} />
+            ) : filteredLogs.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-xs">
+                No audit logs found matching the filter.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                     <th className="py-3 px-4">Timestamp</th>
@@ -1021,6 +1052,7 @@ function MessagingContent() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         </div>
       )}

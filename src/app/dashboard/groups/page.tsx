@@ -17,6 +17,7 @@ import {
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { StatCardSkeleton, GroupCardSkeleton } from "@/components/skeleton";
 
 const COLOR_PRESETS = [
   { label: "Military Green", value: "#15803d" },
@@ -44,6 +45,7 @@ export default function GroupsPage() {
     unit: "10RCDG HQ",
   });
 
+  const isLoading = groupsData === undefined;
   const groups = groupsData || [];
 
   const handleOpenAdd = () => {
@@ -136,40 +138,64 @@ export default function GroupsPage() {
 
       {/* Overview Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Groups</p>
-            <p className="text-2xl font-extrabold text-slate-900 mt-1">{groups.length}</p>
-          </div>
-          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
-            <FolderKanban className="w-5 h-5" />
-          </div>
-        </div>
+        {isLoading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Groups</p>
+                <p className="text-2xl font-extrabold text-slate-900 mt-1">{groups.length}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
+                <FolderKanban className="w-5 h-5" />
+              </div>
+            </div>
 
-        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Grouped Members</p>
-            <p className="text-2xl font-extrabold text-blue-700 mt-1">{totalMembers}</p>
-          </div>
-          <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700">
-            <Users className="w-5 h-5" />
-          </div>
-        </div>
+            <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Grouped Members</p>
+                <p className="text-2xl font-extrabold text-blue-700 mt-1">{totalMembers}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700">
+                <Users className="w-5 h-5" />
+              </div>
+            </div>
 
-        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">SMS Dispatch Ready</p>
-            <p className="text-2xl font-extrabold text-emerald-700 mt-1">100%</p>
-          </div>
-          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
+            <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">SMS Dispatch Ready</p>
+                <p className="text-2xl font-extrabold text-emerald-700 mt-1">100%</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Groups Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
-        {groups.map((group) => (
+        {isLoading ? (
+          <>
+            <GroupCardSkeleton />
+            <GroupCardSkeleton />
+            <GroupCardSkeleton />
+            <GroupCardSkeleton />
+          </>
+        ) : groups.length === 0 ? (
+          <div className="col-span-2 p-12 bg-white rounded-2xl border border-slate-200 text-center text-slate-400">
+            <FolderKanban className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            <p className="text-sm font-semibold text-slate-700">No contact groups created yet</p>
+            <p className="text-xs text-slate-400 mt-1">Click "Create New Group" to organize your roster.</p>
+          </div>
+        ) : (
+          groups.map((group) => (
           <div
             key={group._id}
             className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
@@ -238,7 +264,8 @@ export default function GroupsPage() {
               </Link>
             </div>
           </div>
-        ))}
+        ))
+        )}
       </div>
 
       {/* Create / Edit Group Modal */}

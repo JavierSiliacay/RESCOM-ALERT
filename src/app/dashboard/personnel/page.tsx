@@ -320,21 +320,7 @@ export default function PersonnelPage() {
 
   const trimmedQuery = searchQuery.trim().toLowerCase();
 
-  // Matched military ranks for instant search dropdown
-  const matchedRankGroups = trimmedQuery
-    ? RANK_GROUPS.map((group) => {
-        const ranks = group.ranks.filter(
-          (r) =>
-            r.code.toLowerCase().includes(trimmedQuery) ||
-            r.name.toLowerCase().includes(trimmedQuery)
-        );
-        return { ...group, ranks };
-      }).filter((g) => g.ranks.length > 0)
-    : [];
-
-  const totalRankMatches = matchedRankGroups.reduce((acc, g) => acc + g.ranks.length, 0);
-
-  // Filtered Personnel List (matches soldier name, rank code, full rank name, unit, or mobile)
+  // Filtered Personnel List (matches stored soldier name, mobile, rank, unit, or group)
   const filteredPersonnel = personnelList.filter((person) => {
     const q = trimmedQuery;
     const rankFullName = getRankFullName(person.rank).toLowerCase();
@@ -344,7 +330,8 @@ export default function PersonnelPage() {
       person.mobileNumber.includes(q) ||
       person.rank.toLowerCase().includes(q) ||
       rankFullName.includes(q) ||
-      person.unit.toLowerCase().includes(q);
+      person.unit.toLowerCase().includes(q) ||
+      (person.groupName && person.groupName.toLowerCase().includes(q));
 
     const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
     const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
@@ -352,7 +339,7 @@ export default function PersonnelPage() {
     return matchesSearch && matchesGroup && matchesStatus;
   });
 
-  const totalMatches = filteredPersonnel.length + totalRankMatches;
+  const totalMatches = filteredPersonnel.length;
   const showSearchDropdown = isSearchFocused && trimmedQuery.length > 0;
 
   const handleOpenAddModal = () => {
@@ -758,58 +745,15 @@ export default function PersonnelPage() {
                   </div>
 
                   <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 p-2 space-y-2">
-                    {/* Matching Military Ranks */}
-                    {matchedRankGroups.length > 0 && (
-                      <div className="space-y-2">
-                        {matchedRankGroups.map((group) => (
-                          <div key={group.groupName}>
-                            <div className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-50/80 rounded-md mb-1">
-                              {group.groupName}
-                            </div>
-                            <div className="space-y-1">
-                              {group.ranks.map((r) => {
-                                const badge = getRankBadgeStyle(r.code);
-                                return (
-                                  <button
-                                    key={r.code}
-                                    type="button"
-                                    onClick={() => {
-                                      setSearchQuery(r.code);
-                                      setIsSearchFocused(false);
-                                    }}
-                                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-slate-50 transition-colors text-left group cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <span
-                                        className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold border font-mono shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}
-                                      >
-                                        <HighlightMatch text={r.code} query={searchQuery} />
-                                      </span>
-                                      <span className="text-xs font-semibold text-slate-900 truncate">
-                                        <HighlightMatch text={r.name} query={searchQuery} />
-                                      </span>
-                                    </div>
-                                    <span className="text-[10px] font-bold text-emerald-700 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                      Filter by Rank →
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Matching Roster Personnel */}
+                    {/* Matching Stored Roster Personnel */}
                     {filteredPersonnel.length > 0 ? (
-                      <div className="pt-2">
+                      <div>
                         <div className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-50/80 rounded-md mb-1.5 flex items-center justify-between">
-                          <span>Roster Personnel ({filteredPersonnel.length})</span>
+                          <span>STORED MEMBERS ({filteredPersonnel.length})</span>
                           <span className="text-[9px] font-normal normal-case text-slate-500">Tap to filter</span>
                         </div>
                         <div className="space-y-1">
-                          {filteredPersonnel.slice(0, 6).map((person) => {
+                          {filteredPersonnel.slice(0, 8).map((person) => {
                             const badge = getRankBadgeStyle(person.rank);
                             return (
                               <button
@@ -825,7 +769,7 @@ export default function PersonnelPage() {
                                   <span
                                     className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold border font-mono shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}
                                   >
-                                    {person.rank}
+                                    <HighlightMatch text={person.rank} query={searchQuery} />
                                   </span>
                                   <div className="truncate">
                                     <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 truncate">
@@ -862,22 +806,22 @@ export default function PersonnelPage() {
                               </button>
                             );
                           })}
-                          {filteredPersonnel.length > 6 && (
+                          {filteredPersonnel.length > 8 && (
                             <div className="text-center py-1 text-[10px] text-slate-400 font-semibold">
-                              +{filteredPersonnel.length - 6} more matching personnel in table below
+                              +{filteredPersonnel.length - 8} more matching members in table below
                             </div>
                           )}
                         </div>
                       </div>
-                    ) : matchedRankGroups.length === 0 ? (
+                    ) : (
                       <div className="py-8 text-center text-xs text-slate-400">
-                        <p>No military personnel or ranks matching</p>
+                        <p>No registered members found matching</p>
                         <p className="font-bold text-slate-700 mt-1">"{searchQuery}"</p>
                         <p className="text-[11px] text-slate-400 mt-2">
-                          Try searching by last name, rank code (e.g. BGEN, CPT, PVT), unit, or mobile number.
+                          Try searching by member name, mobile number, unit, or assigned group.
                         </p>
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               )}

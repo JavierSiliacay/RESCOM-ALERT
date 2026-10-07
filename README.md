@@ -8,7 +8,7 @@
   ### Emergency Mass Siren & Rapid Mobilization System
 
   **10th Regional Community Defense Group (10RCDG)**  
-  *Reserve Command, Philippine Army — Camp General Manuel T Yan Sr, Tuboran, Mawab, Davao de Oro*
+  *Reserve Command, Philippine Army*
 
 </div>
 
@@ -20,12 +20,14 @@
 
 It allows military commanders and operations officers to send urgent call-ups and disaster warnings that **sound a loud emergency siren on soldiers' mobile phones and turn on their screens—even if their phones are locked, muted, or have no internet.**
 
-```
-   [ Headquarters ]                      [ Cellular Airwaves ]                    [ Soldier's Phone ]
- Commander sends alert   ───(Normal Text)───>   Smart / Globe   ───(Airwaves)───>   LOUD SIREN SOUNDS!
-  from computer screen                                                              Screen turns on locked
-                                                                                    (No Internet Needed)
-```
+<div align="center">
+
+| 🖥️ 1. DISPATCH | ➔ | 📡 2. TRANSMIT | ➔ | 🚨 3. SIREN WAKE | ➔ | ✅ 4. COMPLIANCE |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| <img src="public/icons_diagram/icon_web.png" width="68" height="68" alt="Command Web Portal" /><br/>**Command Web Portal**<br/><sub>Officer transmits emergency order to target battalions</sub> | ➔ | <img src="public/icons_diagram/icon_tower.png" width="68" height="68" alt="Cellular Airwaves" /><br/>**Cellular Airwaves**<br/><sub>Smart / Globe / DITO text<br/>**(Zero internet / load needed)**</sub> | ➔ | <img src="public/icons_diagram/icon_phone.png" width="68" height="68" alt="Soldier Phone Siren" /><br/>**Soldier's Phone**<br/><sub>**LOUD SIREN SOUNDS**<br/>Screen wakes up even on silent</sub> | ➔ | <img src="public/icons_diagram/icon_check.png" width="68" height="68" alt="Troop Acknowledgment" /><br/>**Troop Headcount**<br/><sub>Soldier taps button to stop siren & confirm readiness</sub> |
+
+</div>
+
 
 ---
 
@@ -100,6 +102,5 @@ The soldier simply taps the green **"✓ I RECEIVED THIS ORDER"** button on thei
 
 <div align="center">
   <sub>Official Emergency Mass Notification System</sub><br/>
-  <strong>10th Regional Community Defense Group (10RCDG), Reserve Command, Philippine Army</strong><br/>
-  <sub>Camp General Manuel T Yan Sr, Tuboran, Mawab, Davao de Oro</sub>
+  <strong>10th Regional Community Defense Group (10RCDG), Reserve Command, Philippine Army</strong>
 </div>

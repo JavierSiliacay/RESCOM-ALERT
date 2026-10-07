@@ -56,9 +56,11 @@ export default function PublicEnlistmentPage() {
   const groupsList = groups || [];
 
   const submitEnlistment = useMutation(api.enlistment.submitEnlistment);
+  const validatePasscode = useMutation(api.enlistment.validatePasscode);
 
   // Flow State
   const [passcode, setPasscode] = useState("");
+  const [isValidatingPasscode, setIsValidatingPasscode] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -130,11 +132,30 @@ export default function PublicEnlistmentPage() {
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasscodeError(null);
-    if (!passcode.trim()) {
+    const cleanPasscode = passcode.trim();
+    if (!cleanPasscode) {
       setPasscodeError("Please enter the unit security passcode.");
       return;
     }
-    setIsUnlocked(true);
+
+    setIsValidatingPasscode(true);
+    try {
+      const res = await validatePasscode({
+        campaignCode,
+        passcode: cleanPasscode,
+      });
+
+      if (!res.valid) {
+        setPasscodeError(res.message || "Incorrect unit security passcode. Entry denied.");
+        return;
+      }
+
+      setIsUnlocked(true);
+    } catch (err: any) {
+      setPasscodeError("Unable to verify unit passcode. Please try again.");
+    } finally {
+      setIsValidatingPasscode(false);
+    }
   };
 
   const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -440,7 +461,10 @@ export default function PublicEnlistmentPage() {
                     required
                     placeholder="Enter Passcode (e.g. 10RCDG-RESCOM)"
                     value={passcode}
-                    onChange={(e) => setPasscode(e.target.value.toUpperCase())}
+                    onChange={(e) => {
+                      setPasscode(e.target.value.toUpperCase());
+                      if (passcodeError) setPasscodeError(null);
+                    }}
                     className="w-full pl-3.5 pr-10 py-3 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono text-sm font-bold tracking-wider placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
                   />
                   <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
@@ -455,10 +479,20 @@ export default function PublicEnlistmentPage() {
 
               <button
                 type="submit"
-                className="w-full py-3 bg-emerald-800 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
+                disabled={isValidatingPasscode}
+                className="w-full py-3 bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-400 active:scale-[0.99] text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
               >
-                <span>Unlock Enlistment Form</span>
-                <ArrowRight className="w-4 h-4" />
+                {isValidatingPasscode ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    <span>Verifying Unit Key...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Unlock Enlistment Form</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
 

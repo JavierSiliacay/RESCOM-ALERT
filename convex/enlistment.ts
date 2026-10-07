@@ -121,7 +121,7 @@ export const getCampaignPublic = query({
   },
 });
 
-// 4. Verify Passcode (Public check)
+// 4. Verify Passcode (Public check query)
 export const verifyPasscode = query({
   args: {
     campaignCode: v.string(),
@@ -143,7 +143,34 @@ export const verifyPasscode = query({
     const isMatch = campaign.passcode.trim().toUpperCase() === args.passcode.trim().toUpperCase();
     return {
       valid: isMatch,
-      message: isMatch ? "Passcode accepted." : "Incorrect unit passcode. Please check with your Adjutant.",
+      message: isMatch ? "Passcode accepted." : "Incorrect unit security passcode. Entry denied.",
+    };
+  },
+});
+
+// 4b. Validate Passcode Mutation (for immediate upfront unlock verification)
+export const validatePasscode = mutation({
+  args: {
+    campaignCode: v.string(),
+    passcode: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const cleanCode = args.campaignCode.toLowerCase().trim();
+    const allCampaigns = await ctx.db.query("enlistmentCampaigns").collect();
+    const campaign = allCampaigns.find((c) => c.campaignCode.toLowerCase() === cleanCode);
+
+    if (!campaign) {
+      return { valid: false, message: "Enlistment campaign not found." };
+    }
+
+    if (Date.now() >= campaign.expiresAt || campaign.status === "CLOSED") {
+      return { valid: false, message: "This enlistment window has already closed." };
+    }
+
+    const isMatch = campaign.passcode.trim().toUpperCase() === args.passcode.trim().toUpperCase();
+    return {
+      valid: isMatch,
+      message: isMatch ? "Passcode accepted." : "Incorrect unit security passcode. Entry denied.",
     };
   },
 });

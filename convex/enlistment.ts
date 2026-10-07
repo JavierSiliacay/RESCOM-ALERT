@@ -261,16 +261,26 @@ export const approveSubmission = mutation({
   args: {
     submissionId: v.id("enlistmentSubmissions"),
     reviewerEmail: v.string(),
+    reviewerName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const sub = await ctx.db.get(args.submissionId);
     if (!sub) throw new Error("Submission not found.");
 
+    const approverName = args.reviewerName || args.reviewerEmail || "Authorized Officer";
+    const updateTimestamp = new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Manila",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
     // Update submission status
     await ctx.db.patch(args.submissionId, {
       status: "APPROVED",
       reviewedAt: new Date().toISOString(),
-      reviewedBy: args.reviewerEmail,
+      reviewedBy: approverName,
     });
 
     // Check if soldier already exists in personnel roster
@@ -288,6 +298,8 @@ export const approveSubmission = mutation({
         groupId: sub.groupId,
         status: "ACTIVE",
         email: sub.email || existing.email,
+        updatedBy: approverName,
+        updatedAt: updateTimestamp,
       });
     } else {
       // Insert new personnel
@@ -301,9 +313,21 @@ export const approveSubmission = mutation({
         groupName: sub.groupName,
         status: "ACTIVE",
         email: sub.email,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date().toISOString().split("T")[0],
+        createdBy: approverName,
       });
     }
+
+    // Record audit log
+    await ctx.db.insert("auditLogs", {
+      userName: approverName,
+      userRole: "ADMIN",
+      category: "PERSONNEL",
+      action: "APPROVE_ENLISTMENT",
+      details: `Approved enlistment self-registration for ${sub.rank} ${sub.firstName} ${sub.lastName} (${sub.mobileNumber}) into ${sub.groupName}`,
+      ipAddress: "127.0.0.1",
+      timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+    });
 
     return { success: true };
   },
@@ -314,8 +338,17 @@ export const bulkApproveSubmissions = mutation({
   args: {
     submissionIds: v.array(v.id("enlistmentSubmissions")),
     reviewerEmail: v.string(),
+    reviewerName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const approverName = args.reviewerName || args.reviewerEmail || "Authorized Officer";
+    const updateTimestamp = new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Manila",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     const allPersonnel = await ctx.db.query("personnel").collect();
     const nowStr = new Date().toISOString();
     let approvedCount = 0;
@@ -327,7 +360,7 @@ export const bulkApproveSubmissions = mutation({
       await ctx.db.patch(subId, {
         status: "APPROVED",
         reviewedAt: nowStr,
-        reviewedBy: args.reviewerEmail,
+        reviewedBy: approverName,
       });
 
       const existing = allPersonnel.find((p) => p.mobileNumber === sub.mobileNumber);
@@ -341,6 +374,8 @@ export const bulkApproveSubmissions = mutation({
           groupId: sub.groupId,
           status: "ACTIVE",
           email: sub.email || existing.email,
+          updatedBy: approverName,
+          updatedAt: updateTimestamp,
         });
       } else {
         await ctx.db.insert("personnel", {
@@ -353,10 +388,23 @@ export const bulkApproveSubmissions = mutation({
           groupName: sub.groupName,
           status: "ACTIVE",
           email: sub.email,
-          createdAt: nowStr,
+          createdAt: nowStr.split("T")[0],
+          createdBy: approverName,
         });
       }
       approvedCount++;
+    }
+
+    if (approvedCount > 0) {
+      await ctx.db.insert("auditLogs", {
+        userName: approverName,
+        userRole: "ADMIN",
+        category: "PERSONNEL",
+        action: "BULK_APPROVE_ENLISTMENT",
+        details: `Bulk approved ${approvedCount} enlistment submission(s) into active directory`,
+        ipAddress: "127.0.0.1",
+        timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+      });
     }
 
     return { success: true, approvedCount };
@@ -368,12 +416,14 @@ export const rejectSubmission = mutation({
   args: {
     submissionId: v.id("enlistmentSubmissions"),
     reviewerEmail: v.string(),
+    reviewerName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const reviewer = args.reviewerName || args.reviewerEmail || "Authorized Officer";
     await ctx.db.patch(args.submissionId, {
       status: "REJECTED",
       reviewedAt: new Date().toISOString(),
-      reviewedBy: args.reviewerEmail,
+      reviewedBy: reviewer,
     });
     return { success: true };
   },

@@ -635,7 +635,7 @@ export default function PersonnelPage() {
         groupId: campaignFormData.groupId || undefined,
         groupName,
         durationStr,
-        createdBy: "Command",
+        createdBy: currentOfficer.displayName,
       });
 
       setIsCampaignModalOpen(false);
@@ -670,7 +670,8 @@ export default function PersonnelPage() {
       try {
         await bulkApproveSubmissions({
           submissionIds: idsToApprove,
-          reviewerEmail: "Command S3",
+          reviewerEmail: currentOfficer.email || "command@10rcdg.mil.ph",
+          reviewerName: currentOfficer.displayName,
         });
         setSelectedSubmissionIds([]);
       } catch (err: any) {
@@ -685,7 +686,8 @@ export default function PersonnelPage() {
     try {
       await approveSubmission({
         submissionId: id,
-        reviewerEmail: "Command S3",
+        reviewerEmail: currentOfficer.email || "command@10rcdg.mil.ph",
+        reviewerName: currentOfficer.displayName,
       });
     } catch (err: any) {
       alert(err?.message || "Failed to approve submission");
@@ -697,7 +699,8 @@ export default function PersonnelPage() {
       try {
         await rejectSubmission({
           submissionId: id,
-          reviewerEmail: "Command S3",
+          reviewerEmail: currentOfficer.email || "command@10rcdg.mil.ph",
+          reviewerName: currentOfficer.displayName,
         });
       } catch (err: any) {
         alert(err?.message || "Failed to reject submission");
@@ -1428,6 +1431,11 @@ export default function PersonnelPage() {
                               >
                                 {sub.status}
                               </span>
+                              {sub.status === "APPROVED" && sub.reviewedBy && (
+                                <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                                  Approved by: <strong className="text-slate-700 font-semibold">{sub.reviewedBy}</strong>
+                                </div>
+                              )}
                             </td>
 
                             <td className="py-3 px-4 text-right pr-6">

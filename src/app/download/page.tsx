@@ -60,7 +60,7 @@ export default function SoldierDownloadPage() {
 
   const apkUrl =
     process.env.NEXT_PUBLIC_SOLDIER_APK_URL ||
-    "/downloads/rescom-alert.apk";
+    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/latest/download/rescom-alert.apk";
 
   useEffect(() => {
     // 1. Persistent Device ID (Deduplication)
@@ -104,6 +104,8 @@ export default function SoldierDownloadPage() {
       const downloadAnchor = document.createElement("a");
       downloadAnchor.href = apkUrl;
       downloadAnchor.setAttribute("download", "rescom-alert.apk");
+      downloadAnchor.target = "_blank";
+      downloadAnchor.rel = "noopener noreferrer";
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       document.body.removeChild(downloadAnchor);

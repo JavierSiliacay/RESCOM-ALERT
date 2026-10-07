@@ -44,7 +44,7 @@ export default function MobileAppPage() {
 
   const apkDownloadUrl =
     process.env.NEXT_PUBLIC_SOLDIER_APK_URL ||
-    "/downloads/rescom-alert.apk";
+    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/latest/download/rescom-alert.apk";
 
   const handleCopyLink = () => {
     const urlToCopy = downloadPortalUrl || `${window.location.origin}/download`;

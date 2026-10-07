@@ -41,14 +41,9 @@ const ROLES_LIST: { label: string; value: UserRole; description: string }[] = [
     description: "Full operational authority, mass broadcast, and roster oversight",
   },
   {
-    label: "Deputy Commander / Admin",
+    label: "Admin",
     value: "ADMIN",
-    description: "Executive control, broadcast authorization, and roster admin",
-  },
-  {
-    label: "Operations Officer (S3 / Duty)",
-    value: "OPERATOR",
-    description: "Authorized to compose and dispatch urgent mass SMS alerts",
+    description: "Executive control, broadcast authorization, and roster management",
   },
   {
     label: "Viewer",
@@ -200,7 +195,7 @@ export default function AuthorizedPersonnelPage() {
     name: "",
     email: "",
     rank: "CPT",
-    role: "OPERATOR" as UserRole,
+    role: "ADMIN" as UserRole,
     unit: "10RCDG HQ",
     status: "ACTIVE" as UserStatus,
   });
@@ -211,7 +206,7 @@ export default function AuthorizedPersonnelPage() {
       name: "",
       email: "",
       rank: "CPT",
-      role: "OPERATOR",
+      role: "ADMIN",
       unit: "10RCDG HQ",
       status: "ACTIVE",
     });
@@ -470,9 +465,8 @@ export default function AuthorizedPersonnelPage() {
           >
             <option value="ALL">All Roles</option>
             <option value="DEVELOPER">⚡ System Developer</option>
-            <option value="COMMANDER">Commander</option>
-            <option value="ADMIN">Deputy Commander / Admin</option>
-            <option value="OPERATOR">Operations Officer (S3)</option>
+            <option value="COMMANDER">Group Commander</option>
+            <option value="ADMIN">Admin</option>
             <option value="VIEWER">Viewer</option>
           </select>
 
@@ -563,13 +557,9 @@ export default function AuthorizedPersonnelPage() {
                             <Crown className="w-3 h-3 text-amber-600 shrink-0" />
                             COMMANDER
                           </span>
-                        ) : officer.role === "ADMIN" ? (
+                        ) : officer.role === "ADMIN" || officer.role === "OPERATOR" ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 font-mono">
-                            DEPUTY / ADMIN
-                          </span>
-                        ) : officer.role === "OPERATOR" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
-                            OPERATIONS (S3)
+                            ADMIN
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">

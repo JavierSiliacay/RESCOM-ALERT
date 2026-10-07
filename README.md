@@ -14,7 +14,7 @@
 
 ---
 
-## 🎯 Overview
+## 📌 Overview
 
 **RESCOM ALERT** is an official emergency communication system built for the **10th Regional Community Defense Group (10RCDG)**.
 

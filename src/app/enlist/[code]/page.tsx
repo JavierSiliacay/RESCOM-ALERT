@@ -67,6 +67,11 @@ export default function PublicEnlistmentPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
 
+  // Rate Limiting & Lockout State (5 failed attempts -> 3 minutes lockout)
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
+
   // Form State
   const [formData, setFormData] = useState({
     rank: "PVT",
@@ -79,6 +84,66 @@ export default function PublicEnlistmentPage() {
   });
 
   const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  // Restore failed attempts and active lockout from localStorage
+  useEffect(() => {
+    if (!campaignCode) return;
+    const lockKey = `rescom_lockout_${campaignCode.toLowerCase()}`;
+    const failKey = `rescom_failed_${campaignCode.toLowerCase()}`;
+
+    try {
+      const storedLock = localStorage.getItem(lockKey);
+      const storedFail = localStorage.getItem(failKey);
+
+      if (storedFail) {
+        setFailedAttempts(parseInt(storedFail, 10) || 0);
+      }
+
+      if (storedLock) {
+        const lockTime = parseInt(storedLock, 10);
+        if (lockTime > Date.now()) {
+          setLockoutUntil(lockTime);
+          setLockoutSecondsLeft(Math.ceil((lockTime - Date.now()) / 1000));
+        } else {
+          localStorage.removeItem(lockKey);
+          localStorage.removeItem(failKey);
+          setFailedAttempts(0);
+          setLockoutUntil(null);
+          setLockoutSecondsLeft(0);
+        }
+      }
+    } catch {
+      // Ignore storage errors in private browsing
+    }
+  }, [campaignCode]);
+
+  // Lockout Countdown Ticker
+  useEffect(() => {
+    if (!lockoutUntil) {
+      setLockoutSecondsLeft(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const remainingMs = lockoutUntil - Date.now();
+      if (remainingMs <= 0) {
+        setLockoutUntil(null);
+        setLockoutSecondsLeft(0);
+        setFailedAttempts(0);
+        setPasscodeError(null);
+        if (campaignCode) {
+          try {
+            localStorage.removeItem(`rescom_lockout_${campaignCode.toLowerCase()}`);
+            localStorage.removeItem(`rescom_failed_${campaignCode.toLowerCase()}`);
+          } catch {}
+        }
+      } else {
+        setLockoutSecondsLeft(Math.ceil(remainingMs / 1000));
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lockoutUntil, campaignCode]);
 
   // Pre-fill group & unit when campaign loads
   useEffect(() => {
@@ -129,8 +194,12 @@ export default function PublicEnlistmentPage() {
     return () => clearInterval(interval);
   }, [campaign]);
 
+  const isLockedOut = lockoutSecondsLeft > 0;
+
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLockedOut) return;
+
     setPasscodeError(null);
     const cleanPasscode = passcode.trim();
     if (!cleanPasscode) {
@@ -146,9 +215,39 @@ export default function PublicEnlistmentPage() {
       });
 
       if (!res.valid) {
-        setPasscodeError(res.message || "Incorrect unit security passcode. Entry denied.");
+        const nextFailed = failedAttempts + 1;
+        setFailedAttempts(nextFailed);
+
+        if (nextFailed >= 5) {
+          const lockDuration = 3 * 60 * 1000; // 3 minutes
+          const lockTime = Date.now() + lockDuration;
+          setLockoutUntil(lockTime);
+          setLockoutSecondsLeft(180);
+          try {
+            localStorage.setItem(`rescom_lockout_${campaignCode.toLowerCase()}`, String(lockTime));
+            localStorage.setItem(`rescom_failed_${campaignCode.toLowerCase()}`, String(nextFailed));
+          } catch {}
+          setPasscodeError("Maximum attempts exceeded (5/5). Input field locked for 3 minutes.");
+        } else {
+          try {
+            localStorage.setItem(`rescom_failed_${campaignCode.toLowerCase()}`, String(nextFailed));
+          } catch {}
+          const remaining = 5 - nextFailed;
+          setPasscodeError(
+            `Incorrect unit security passcode. (${remaining} attempt${remaining === 1 ? "" : "s"} left)`
+          );
+        }
         return;
       }
+
+      // Success: Clear rate limit counters and unlock form
+      setFailedAttempts(0);
+      setLockoutUntil(null);
+      setLockoutSecondsLeft(0);
+      try {
+        localStorage.removeItem(`rescom_lockout_${campaignCode.toLowerCase()}`);
+        localStorage.removeItem(`rescom_failed_${campaignCode.toLowerCase()}`);
+      } catch {}
 
       setIsUnlocked(true);
     } catch (err: any) {
@@ -451,25 +550,59 @@ export default function PublicEnlistmentPage() {
 
             {/* Passcode Form */}
             <form onSubmit={handleUnlock} className="space-y-3.5">
+              {isLockedOut && (
+                <div className="p-3.5 bg-red-50 border border-red-300 rounded-xl text-xs text-red-800 flex items-center justify-between shadow-xs animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-red-600 shrink-0" />
+                    <div>
+                      <span className="font-bold block">Security Lockdown Active</span>
+                      <span className="text-[11px] text-red-600">5 failed attempts. Please wait before retrying.</span>
+                    </div>
+                  </div>
+                  <span className="font-mono font-bold text-red-900 bg-red-100 px-2.5 py-1 rounded-lg border border-red-200 text-xs shrink-0">
+                    {Math.floor(lockoutSecondsLeft / 60)}:
+                    {String(lockoutSecondsLeft % 60).padStart(2, "0")}
+                  </span>
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Unit Security Passcode
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Unit Security Passcode</span>
+                  {!isLockedOut && failedAttempts > 0 && (
+                    <span className="text-[10px] font-mono text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                      {5 - failedAttempts} {5 - failedAttempts === 1 ? "attempt" : "attempts"} left
+                    </span>
+                  )}
                 </label>
                 <div className="relative">
                   <input
                     type="text"
                     required
-                    placeholder="Enter Passcode (e.g. 10RCDG-RESCOM)"
+                    disabled={isLockedOut}
+                    placeholder={
+                      isLockedOut
+                        ? `Locked for security (${Math.floor(lockoutSecondsLeft / 60)}:${String(lockoutSecondsLeft % 60).padStart(2, "0")})...`
+                        : "Enter Passcode (e.g. 10RCDG-RESCOM)"
+                    }
                     value={passcode}
                     onChange={(e) => {
                       setPasscode(e.target.value.toUpperCase());
                       if (passcodeError) setPasscodeError(null);
                     }}
-                    className="w-full pl-3.5 pr-10 py-3 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono text-sm font-bold tracking-wider placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
+                    className={`w-full pl-3.5 pr-10 py-3 rounded-xl font-mono text-sm font-bold tracking-wider shadow-2xs transition-all ${
+                      isLockedOut
+                        ? "bg-slate-100 border border-red-300 text-slate-400 cursor-not-allowed select-none opacity-80"
+                        : "bg-slate-50 border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                    }`}
                   />
-                  <Lock className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                  <Lock
+                    className={`w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 ${
+                      isLockedOut ? "text-red-500" : "text-slate-400"
+                    }`}
+                  />
                 </div>
-                {passcodeError && (
+                {passcodeError && !isLockedOut && (
                   <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1 font-medium">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>{passcodeError}</span>
@@ -479,10 +612,22 @@ export default function PublicEnlistmentPage() {
 
               <button
                 type="submit"
-                disabled={isValidatingPasscode}
-                className="w-full py-3 bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-400 active:scale-[0.99] text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
+                disabled={isLockedOut || isValidatingPasscode}
+                className={`w-full py-3 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 uppercase tracking-wider ${
+                  isLockedOut
+                    ? "bg-slate-400 cursor-not-allowed shadow-none"
+                    : "bg-emerald-800 hover:bg-emerald-700 active:scale-[0.99] cursor-pointer"
+                }`}
               >
-                {isValidatingPasscode ? (
+                {isLockedOut ? (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>
+                      Locked ({Math.floor(lockoutSecondsLeft / 60)}:
+                      {String(lockoutSecondsLeft % 60).padStart(2, "0")})
+                    </span>
+                  </>
+                ) : isValidatingPasscode ? (
                   <>
                     <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                     <span>Verifying Unit Key...</span>

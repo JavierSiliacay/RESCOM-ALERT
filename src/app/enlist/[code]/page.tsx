@@ -74,8 +74,6 @@ export default function PublicEnlistmentPage() {
     groupId: "",
     groupName: "All 10RCDG Personnel",
     unit: "",
-    serialNumber: "",
-    email: "",
   });
 
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -174,8 +172,6 @@ export default function PublicEnlistmentPage() {
         unit: formData.unit.trim() || (campaign?.targetUnit || "10RCDG HQ"),
         groupId: formData.groupId || undefined,
         groupName: formData.groupName || "All 10RCDG Personnel",
-        email: formData.email.trim() || undefined,
-        serialNumber: formData.serialNumber.trim() || undefined,
       });
       setIsSubmitted(true);
     } catch (err: any) {
@@ -608,33 +604,7 @@ export default function PublicEnlistmentPage() {
                 </div>
               </div>
 
-              {/* Military ID & Email Address */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Military ID / AFPSN <span className="text-slate-400 text-[10px]">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 123456-PA"
-                    value={formData.serialNumber}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, serialNumber: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-mono font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Email Address <span className="text-slate-400 text-[10px]">(Optional)</span>
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="soldier@gmail.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs"
-                  />
-                </div>
-              </div>
+
 
               {submissionError && (
                 <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">

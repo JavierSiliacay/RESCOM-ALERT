@@ -67,7 +67,7 @@ export default function SoldierDownloadPage() {
 
   const apkUrl =
     process.env.NEXT_PUBLIC_SOLDIER_APK_URL ||
-    "https://drive.google.com/file/d/1iZXxFqzFDSs5wWG79xH8PnybZWC2tKrX/view?usp=sharing";
+    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/tag/v1.0.1";
 
   useEffect(() => {
     // 1. Persistent Device ID (Deduplication)

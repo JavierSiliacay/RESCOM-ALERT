@@ -17,7 +17,6 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.telephony.SmsManager
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -110,23 +109,8 @@ class AlertActivity : Activity() {
 
     private fun handleAcknowledge() {
         stopSirenAndVibration()
-
-        // Send silent SMS response if sender number is available
-        try {
-            if (senderNumber.isNotBlank() && senderNumber != "10RCDG Command") {
-                val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    getSystemService(SmsManager::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    SmsManager.getDefault()
-                }
-                smsManager.sendTextMessage(senderNumber, null, "ACK - 10RCDG TROOP MOBILIZING", null, null)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        Toast.makeText(this, "Acknowledge Logged. Stand by for muster instructions.", Toast.LENGTH_LONG).show()
+        val toastMsg = if (senderNumber == "[SYSTEM TEST]") "Siren Test Completed." else "Order Acknowledged."
+        Toast.makeText(this, toastMsg, Toast.LENGTH_SHORT).show()
         finish()
     }
 

@@ -61,6 +61,18 @@ export const alertBridgeService = {
   },
 
   /**
+   * Deletes a single alert at index
+   */
+  deleteAlert: async (index: number): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return false;
+    try {
+      return await AlertBridge.deleteAlert(index);
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /**
    * Directly opens manufacturer / Android battery exemption settings
    */
   requestBatteryExemption: async (): Promise<boolean> => {

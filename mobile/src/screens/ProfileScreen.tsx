@@ -146,19 +146,54 @@ export const ProfileScreen: React.FC = () => {
         ))}
       </View>
 
-      {/* Help */}
-      <View style={[styles.card, { marginTop: 14 }]}>
-        <Text style={styles.cardTitle}>Need help?</Text>
-        <Text style={styles.help}>
-          If the siren does not ring during a test, contact your CDC Adjutant or 10RCDG S3 Operations.
-        </Text>
+      {/* Help & Troubleshooting */}
+      <View style={[styles.card, styles.helpCard]}>
+        <Text style={styles.cardTitle}>Need Help or Siren Not Ringing?</Text>
+
+        <View style={styles.helpSection}>
+          <Text style={styles.helpSubtitle}>1. Common Phone Fixes</Text>
+          <Text style={styles.helpBullet}>
+            • Ensure <Text style={styles.helpBold}>Alarm volume</Text> is turned up (sirens use Alarm volume, not media volume).
+          </Text>
+          <Text style={styles.helpBullet}>
+            • For Xiaomi / Oppo / Vivo: enable <Text style={styles.helpBold}>"Autostart"</Text> in phone settings so the siren wakes up in background.
+          </Text>
+          <Text style={styles.helpBullet}>
+            • Android 13+: In App Info (⋮), tap <Text style={styles.helpBold}>"Allow restricted settings"</Text> if SMS permission is greyed out.
+          </Text>
+        </View>
+
+        <View style={styles.helpSection}>
+          <Text style={styles.helpSubtitle}>2. Changed Your SIM / Phone Number?</Text>
+          <Text style={styles.helpText}>
+            Alerts are tied to your registered roster mobile number in the portal. Notify the in-charge portal administrator immediately to update your record.
+          </Text>
+        </View>
+
+        <View style={styles.helpSection}>
+          <Text style={styles.helpSubtitle}>3. Technical Support & Inquiries</Text>
+          <Text style={styles.helpText}>
+            Contact the in-charge personnel of the portal, your system administrator, or message the official 10RCDG unit page:
+          </Text>
+
+          <TouchableOpacity
+            style={styles.fbBtn}
+            onPress={() => Linking.openURL("https://www.facebook.com/profile.php?id=61586365277137")}
+            activeOpacity={0.85}
+          >
+            <View style={styles.fbBadge}>
+              <Text style={styles.fbBadgeText}>f</Text>
+            </View>
+            <Text style={styles.fbBtnText}>10RCDG RESCOM Facebook Page</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <TouchableOpacity style={styles.clearBtn} onPress={handleClear} activeOpacity={0.8}>
         <Text style={styles.clearText}>Clear saved alerts on this phone</Text>
       </TouchableOpacity>
 
-      <Text style={styles.footer}>RESCOM ALERT · Version 1.0.1 · 10RCDG RESCOM, PA</Text>
+      <Text style={styles.footer}>RESCOM ALERT · Version 1.0.2 · 10RCDG RESCOM, PA</Text>
     </ScrollView>
   );
 };
@@ -179,7 +214,16 @@ const styles = StyleSheet.create({
 
   card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: 16, paddingVertical: 4, ...shadow },
   cardTitle: { fontSize: 15, fontWeight: "800", color: colors.text, marginTop: 12 },
-  help: { fontSize: 13, color: colors.textMuted, lineHeight: 19, marginTop: 4, marginBottom: 14 },
+  helpCard: { marginTop: 14, paddingVertical: 14 },
+  helpSection: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSoft },
+  helpSubtitle: { fontSize: 13, fontWeight: "800", color: colors.primary, marginBottom: 4 },
+  helpBullet: { fontSize: 12, color: colors.textMuted, lineHeight: 18, marginTop: 3 },
+  helpBold: { fontWeight: "700", color: colors.text },
+  helpText: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
+  fbBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10, backgroundColor: "#1877F2", borderRadius: radius.md, paddingVertical: 11, paddingHorizontal: 14 },
+  fbBadge: { width: 20, height: 20, borderRadius: 10, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  fbBadgeText: { color: "#1877F2", fontWeight: "900", fontSize: 14, marginTop: -2 },
+  fbBtnText: { color: "#fff", fontSize: 13, fontWeight: "800", letterSpacing: 0.3 },
 
   step: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
   stepIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", borderWidth: 1 },

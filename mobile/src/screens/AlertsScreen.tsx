@@ -12,7 +12,19 @@ import { alertBridgeService, RawAlertItem } from "../services/alertBridge";
 import { TacticalAlert } from "../types";
 import { colors, radius, shadow } from "../theme";
 
-const levelOf = (msg: string): TacticalAlert["level"] => {
+const isTestAlert = (sender: string, msg: string): boolean => {
+  const s = sender.toUpperCase();
+  const m = msg.toUpperCase();
+  return (
+    s.includes("TEST") ||
+    m.includes("TEST SIREN") ||
+    m.includes("SIREN TEST") ||
+    m.includes("TEST ALARM")
+  );
+};
+
+const levelOf = (sender: string, msg: string): TacticalAlert["level"] => {
+  if (isTestAlert(sender, msg)) return "TEST";
   const m = msg.toUpperCase();
   if (m.includes("RED ALERT")) return "RED";
   if (m.includes("STANDDOWN") || m.includes("STAND DOWN")) return "INFO";
@@ -23,6 +35,7 @@ const LEVEL_STYLE = {
   RED: { label: "RED ALERT · REPORT NOW", bg: colors.redSoft, border: colors.redBorder, fg: colors.red, bar: colors.red },
   YELLOW: { label: "ALERT · GET READY", bg: colors.amberSoft, border: colors.amberBorder, fg: colors.amberDark, bar: colors.amber },
   INFO: { label: "STAND DOWN · ALL CLEAR", bg: colors.primarySoft, border: colors.primaryBorder, fg: colors.primary, bar: colors.primary },
+  TEST: { label: "DIAGNOSTIC TEST · SYSTEM OK", bg: "#f1f5f9", border: "#cbd5e1", fg: "#475569", bar: "#94a3b8" },
 };
 
 const nowHHMM = () => {
@@ -39,14 +52,19 @@ export const AlertsScreen: React.FC = () => {
     try {
       const history: RawAlertItem[] = await alertBridgeService.getSavedAlertHistory();
       setAlerts(
-        (history || []).map((item, i) => ({
-          id: `alert-${i}-${item.timestamp}`,
-          timestamp: item.timestamp,
-          sender: item.sender,
-          message: item.message,
-          level: levelOf(item.message),
-          isAcknowledged: false,
-        })),
+        (history || []).map((item, i) => {
+          const isTest = isTestAlert(item.sender, item.message);
+          return {
+            id: `alert-${i}-${item.timestamp}`,
+            originalIndex: i,
+            timestamp: item.timestamp,
+            sender: item.sender,
+            message: item.message,
+            level: levelOf(item.sender, item.message),
+            isAcknowledged: isTest ? true : false,
+            acknowledgedAt: isTest ? "Verified" : undefined,
+          };
+        }),
       );
     } finally {
       setRefreshing(false);
@@ -59,13 +77,39 @@ export const AlertsScreen: React.FC = () => {
 
   const handleTest = async () => {
     const ok = await alertBridgeService.testSirenAlarm();
-    if (!ok) Alert.alert("Siren Test", "Could not start the test siren on this device.");
+    if (!ok) {
+      Alert.alert("Siren Test", "Could not start the test siren on this device.");
+    } else {
+      // Refresh list shortly after test activity finishes
+      setTimeout(loadAlerts, 1000);
+    }
   };
 
   const handleAck = (id: string) =>
     setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, isAcknowledged: true, acknowledgedAt: nowHHMM() } : a)));
 
-  const pending = alerts.filter((a) => !a.isAcknowledged).length;
+  const handleDelete = (alert: TacticalAlert) => {
+    const isTest = alert.level === "TEST";
+    const title = isTest ? "Delete Test Log?" : "Delete Received Order?";
+    const msg = isTest
+      ? "Do you want to delete this test siren record from your phone?"
+      : "Are you sure you want to delete this order from your phone's history?";
+
+    Alert.alert(title, msg, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await alertBridgeService.deleteAlert(alert.originalIndex);
+          loadAlerts();
+        },
+      },
+    ]);
+  };
+
+  // Only real, unacknowledged tactical alerts count towards "Waiting for you"
+  const pending = alerts.filter((a) => !a.isAcknowledged && a.level !== "TEST").length;
 
   return (
     <ScrollView
@@ -124,6 +168,7 @@ export const AlertsScreen: React.FC = () => {
       ) : (
         alerts.map((a) => {
           const s = LEVEL_STYLE[a.level];
+          const isTest = a.level === "TEST";
           return (
             <View key={a.id} style={[styles.alertCard, { borderColor: a.isAcknowledged ? colors.border : s.border }]}>
               <View style={[styles.alertBar, { backgroundColor: s.bar }]} />
@@ -132,12 +177,25 @@ export const AlertsScreen: React.FC = () => {
                   <View style={[styles.levelPill, { backgroundColor: s.bg, borderColor: s.border }]}>
                     <Text style={[styles.levelText, { color: s.fg }]}>{s.label}</Text>
                   </View>
-                  <Text style={styles.time}>{a.timestamp}</Text>
+                  <View style={styles.alertTopRight}>
+                    <Text style={styles.time}>{a.timestamp}</Text>
+                    <TouchableOpacity
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      onPress={() => handleDelete(a)}
+                      style={styles.deleteBtn}
+                    >
+                      <Text style={styles.deleteText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <Text style={styles.from}>From: {a.sender}</Text>
                 <Text style={styles.msg}>{a.message}</Text>
 
-                {a.isAcknowledged ? (
+                {isTest ? (
+                  <View style={styles.testBadge}>
+                    <Text style={styles.testBadgeText}>✓ Test Log · Siren Sound & Display Verified</Text>
+                  </View>
+                ) : a.isAcknowledged ? (
                   <View style={styles.ackDone}>
                     <Text style={styles.ackDoneText}>Received at {a.acknowledgedAt}</Text>
                   </View>
@@ -191,11 +249,17 @@ const styles = StyleSheet.create({
   alertBar: { width: 5 },
   alertBody: { flex: 1, padding: 14 },
   alertTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  alertTopRight: { flexDirection: "row", alignItems: "center", gap: 10 },
   levelPill: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 1 },
   levelText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
   time: { fontSize: 12, color: colors.textMuted, fontWeight: "600" },
+  deleteBtn: { padding: 4, borderRadius: 4, backgroundColor: "#f1f5f9" },
+  deleteText: { fontSize: 11, fontWeight: "800", color: "#64748b" },
   from: { fontSize: 12, color: colors.textMuted, fontWeight: "600", marginTop: 10 },
   msg: { fontSize: 15, color: colors.text, lineHeight: 22, marginTop: 4 },
   ackDone: { marginTop: 14, alignSelf: "flex-start", backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primaryBorder, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   ackDoneText: { fontSize: 12, fontWeight: "700", color: colors.primary },
+  testBadge: { marginTop: 12, alignSelf: "flex-start", backgroundColor: "#f1f5f9", borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  testBadgeText: { fontSize: 12, fontWeight: "700", color: "#475569" },
 });
+

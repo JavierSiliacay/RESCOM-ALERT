@@ -76,6 +76,26 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun deleteAlert(index: Double, promise: Promise) {
+        try {
+            val targetIndex = index.toInt()
+            val prefs = reactContext.getSharedPreferences("10RCDG_ALERTS", Context.MODE_PRIVATE)
+            val history = prefs.getString("ALERT_HISTORY", "") ?: ""
+            if (history.isNotBlank()) {
+                val lines = history.split("\n").filter { it.isNotBlank() }.toMutableList()
+                if (targetIndex in 0 until lines.size) {
+                    lines.removeAt(targetIndex)
+                    val newHistory = lines.joinToString("\n")
+                    prefs.edit().putString("ALERT_HISTORY", newHistory).apply()
+                }
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("DELETE_ALERT_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
     fun requestBatteryOptimization(promise: Promise) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

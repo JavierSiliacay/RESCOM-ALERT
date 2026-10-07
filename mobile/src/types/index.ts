@@ -18,10 +18,11 @@ export type ReadinessState = "READY" | "STANDBY" | "UNAVAILABLE";
 
 export interface TacticalAlert {
   id: string;
+  originalIndex: number;
   timestamp: string;
   sender: string;
   message: string;
-  level: "RED" | "YELLOW" | "INFO";
+  level: "RED" | "YELLOW" | "INFO" | "TEST";
   isAcknowledged: boolean;
   acknowledgedAt?: string;
 }

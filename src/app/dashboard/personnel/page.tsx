@@ -56,18 +56,43 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
   if (tokens.length === 0) return <span>{text}</span>;
 
   // Build pattern for tokens: if numeric or phone-like, allow optional spaces or hyphens between digits
-  const tokenPatterns = tokens.map((token) => {
+  const tokenPatterns: string[] = [];
+
+  for (const token of tokens) {
     if (/^[+\d\-()]+$/.test(token)) {
       const digitsOnly = token.replace(/\D/g, "");
       if (digitsOnly.length > 0) {
-        return digitsOnly
+        // Standard digit pattern with flexible spacing
+        const standardPattern = digitsOnly
           .split("")
           .map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
           .join("[\\s\\-_]*");
+        tokenPatterns.push(standardPattern);
+
+        // PH Mobile number normalization: cross-match 09... and +639... formats
+        let coreDigits = "";
+        if (digitsOnly.startsWith("639") && digitsOnly.length >= 4) {
+          coreDigits = digitsOnly.slice(2); // starts with 9
+        } else if (digitsOnly.startsWith("09") && digitsOnly.length >= 3) {
+          coreDigits = digitsOnly.slice(1); // starts with 9
+        } else if (digitsOnly.startsWith("9") && digitsOnly.length >= 3) {
+          coreDigits = digitsOnly;
+        }
+
+        if (coreDigits) {
+          const corePattern = coreDigits
+            .split("")
+            .map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+            .join("[\\s\\-_]*");
+          // Match with optional (+63 or 0) prefix or just the core digits
+          tokenPatterns.push(`(?:(?:\\+?63|0)[\\s\\-_]*)?${corePattern}`);
+          tokenPatterns.push(corePattern);
+        }
       }
+    } else {
+      tokenPatterns.push(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     }
-    return token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  });
+  }
 
   try {
     const fullPattern = `(${tokenPatterns.join("|")})`;
@@ -363,7 +388,17 @@ export default function PersonnelPage() {
     const formattedMobile = formatPhMobileDisplay(person.mobileNumber).toLowerCase();
     const formattedDigits = formattedMobile.replace(/\D/g, "");
 
-    // Cross-match local (09...) and international (639...) formats
+    // Cross-match local (09...) and international (639...) formats & core national digits
+    const getPhCoreDigits = (str: string) => {
+      const d = str.replace(/\D/g, "");
+      if (d.startsWith("639")) return d.slice(2);
+      if (d.startsWith("09")) return d.slice(1);
+      return d;
+    };
+
+    const storedCore = getPhCoreDigits(mobileDigits);
+    const queryCore = getPhCoreDigits(qDigits);
+
     const localMobileDigits = mobileDigits.startsWith("63")
       ? "0" + mobileDigits.slice(2)
       : mobileDigits;
@@ -379,7 +414,8 @@ export default function PersonnelPage() {
         mobileDigits.includes(qDigits) ||
         formattedDigits.includes(qDigits) ||
         localMobileDigits.includes(qDigits) ||
-        intlMobileDigits.includes(qDigits)
+        intlMobileDigits.includes(qDigits) ||
+        (queryCore.length >= 2 && storedCore.includes(queryCore))
       ));
 
     // 2. Name, Rank, Unit & Group (space-insensitive and multi-word token matching)
@@ -398,6 +434,8 @@ export default function PersonnelPage() {
     const words = trimmedQuery.split(/\s+/).filter(Boolean);
     const matchesAllTokens = words.length > 0 && words.every((w) => {
       const wClean = w.replace(/[\s\-_+()]/g, "");
+      const wDigits = w.replace(/\D/g, "");
+      const wCore = getPhCoreDigits(wDigits);
       return (
         fullName.includes(w) ||
         cleanFullName.includes(wClean) ||
@@ -405,7 +443,13 @@ export default function PersonnelPage() {
         rankFullName.includes(w) ||
         unit.includes(w) ||
         groupName.includes(w) ||
-        cleanMobile.includes(wClean)
+        cleanMobile.includes(wClean) ||
+        (wDigits.length > 0 && (
+          mobileDigits.includes(wDigits) ||
+          localMobileDigits.includes(wDigits) ||
+          intlMobileDigits.includes(wDigits) ||
+          (wCore.length >= 2 && storedCore.includes(wCore))
+        ))
       );
     });
 

@@ -372,7 +372,7 @@ export default function PublicEnlistmentPage() {
               <a
                 href={
                   process.env.NEXT_PUBLIC_SOLDIER_APK_URL ||
-                  "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/tag/v1.0.1"
+                  "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/latest/download/rescom-alert.apk"
                 }
                 target="_blank"
                 rel="noopener noreferrer"

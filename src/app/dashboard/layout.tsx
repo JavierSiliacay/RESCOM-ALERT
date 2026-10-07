@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { DashboardNav } from "./dashboard-nav";
+import { OfficerProvider } from "@/components/officer-context";
 
 export default async function DashboardLayout({
   children,
@@ -24,15 +25,30 @@ export default async function DashboardLayout({
   const userImage = session.user.image || "";
   const userRank = (session.user as any).rank || "Staff Officer";
 
+  const displayName =
+    userRank && userRank !== "Staff Officer" && userRank !== "Personnel Officer"
+      ? `${userRank} ${userName}`
+      : userName;
+
+  const officer = {
+    name: userName,
+    email: userEmail,
+    rank: userRank,
+    role: userRole,
+    displayName,
+  };
+
   return (
-    <DashboardNav
-      userName={userName}
-      userEmail={userEmail}
-      userImage={userImage}
-      userRole={userRole}
-      userRank={userRank}
-    >
-      {children}
-    </DashboardNav>
+    <OfficerProvider officer={officer}>
+      <DashboardNav
+        userName={userName}
+        userEmail={userEmail}
+        userImage={userImage}
+        userRole={userRole}
+        userRank={userRank}
+      >
+        {children}
+      </DashboardNav>
+    </OfficerProvider>
   );
 }

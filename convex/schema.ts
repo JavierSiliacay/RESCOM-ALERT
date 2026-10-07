@@ -14,6 +14,9 @@ export default defineSchema({
     status: v.union(v.literal("ACTIVE"), v.literal("INACTIVE")),
     email: v.optional(v.string()),
     createdAt: v.string(),
+    createdBy: v.optional(v.string()), // Officer name who registered the personnel
+    updatedAt: v.optional(v.string()), // Timestamp of last edit
+    updatedBy: v.optional(v.string()), // Officer name who last modified details
   })
     .index("by_mobileNumber", ["mobileNumber"])
     .index("by_groupName", ["groupName"])

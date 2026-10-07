@@ -46,6 +46,7 @@ import {
   TableSkeleton,
   CampaignCardSkeleton,
 } from "@/components/skeleton";
+import { useCurrentOfficer } from "@/components/officer-context";
 
 /**
  * Highlight matching words/characters with a light-green badge.
@@ -281,6 +282,7 @@ function CampaignLiveTimer({
 }
 
 export default function PersonnelPage() {
+  const currentOfficer = useCurrentOfficer();
   const personnel = useQuery(api.personnel.list);
   const groups = useQuery(api.groups.list);
   const campaigns = useQuery(api.enlistment.listCampaigns);
@@ -555,6 +557,7 @@ export default function PersonnelPage() {
           groupName,
           unit: formData.unit.trim(),
           email: formData.email.trim() || undefined,
+          updatedBy: currentOfficer.displayName,
         });
       } else {
         await createPersonnel({
@@ -566,6 +569,7 @@ export default function PersonnelPage() {
           groupName,
           unit: formData.unit.trim(),
           email: formData.email.trim() || undefined,
+          createdBy: currentOfficer.displayName,
         });
       }
       setIsAddModalOpen(false);
@@ -952,6 +956,12 @@ export default function PersonnelPage() {
                                       <span>
                                         <HighlightMatch text={person.unit} query={searchQuery} />
                                       </span>
+                                      <span>•</span>
+                                      <span className="text-slate-400">
+                                        {(person as any).updatedBy
+                                          ? `Last edited by: ${(person as any).updatedBy}`
+                                          : `Added by: ${(person as any).createdBy || "Command"}`}
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
@@ -1061,6 +1071,20 @@ export default function PersonnelPage() {
                               <span className="block text-[10px] font-normal text-slate-400 font-mono">
                                 <HighlightMatch text={getRankFullName(person.rank)} query={searchQuery} />
                               </span>
+                              {(person as any).updatedBy ? (
+                                <span className="block text-[10px] text-slate-500 font-medium mt-0.5">
+                                  Last edited by: <strong className="text-slate-700 font-semibold">{(person as any).updatedBy}</strong>
+                                  {(person as any).updatedAt ? <span className="text-slate-400 font-mono font-normal"> · {(person as any).updatedAt}</span> : null}
+                                </span>
+                              ) : (person as any).createdBy ? (
+                                <span className="block text-[10px] text-slate-500 font-medium mt-0.5">
+                                  Added by: <strong className="text-slate-700 font-semibold">{(person as any).createdBy}</strong>
+                                </span>
+                              ) : (
+                                <span className="block text-[10px] text-slate-400 mt-0.5">
+                                  Added by: <span className="text-slate-500 font-medium">Command</span>
+                                </span>
+                              )}
                             </div>
                           </div>
                         </td>

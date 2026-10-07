@@ -666,7 +666,7 @@ export default function AuthorizedPersonnelPage() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Maj. Alfred Agbong"
+                    placeholder="e.g. Maj. Juan Dela Cruz"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white font-medium"

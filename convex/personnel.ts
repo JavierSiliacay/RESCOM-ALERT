@@ -20,17 +20,28 @@ export const create = mutation({
     groupName: v.string(),
     unit: v.string(),
     email: v.optional(v.string()),
+    createdBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const creatorName = args.createdBy || "Authorized Officer";
+
     const id = await ctx.db.insert("personnel", {
-      ...args,
+      firstName: args.firstName,
+      lastName: args.lastName,
+      rank: args.rank,
+      mobileNumber: args.mobileNumber,
+      groupId: args.groupId,
+      groupName: args.groupName,
+      unit: args.unit,
+      email: args.email,
       status: "ACTIVE",
       createdAt: new Date().toISOString().split("T")[0],
+      createdBy: creatorName,
     });
 
     // Record audit log
     await ctx.db.insert("auditLogs", {
-      userName: "Authorized Officer",
+      userName: creatorName,
       userRole: "ADMIN",
       category: "PERSONNEL",
       action: "ADD_PERSONNEL",
@@ -55,11 +66,21 @@ export const update = mutation({
     groupName: v.string(),
     unit: v.string(),
     email: v.optional(v.string()),
+    updatedBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, ...data } = args;
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Personnel record not found");
+
+    const editorName = data.updatedBy || "Authorized Officer";
+    const updateTimestamp = new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Manila",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
     await ctx.db.patch(id, {
       firstName: data.firstName,
@@ -70,11 +91,13 @@ export const update = mutation({
       groupName: data.groupName,
       unit: data.unit,
       email: data.email || "",
+      updatedBy: editorName,
+      updatedAt: updateTimestamp,
     });
 
     // Record audit log
     await ctx.db.insert("auditLogs", {
-      userName: "Authorized Officer",
+      userName: editorName,
       userRole: "ADMIN",
       category: "PERSONNEL",
       action: "UPDATE_PERSONNEL",

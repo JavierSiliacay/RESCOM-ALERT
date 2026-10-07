@@ -6,8 +6,10 @@ import { Send, CheckCircle2, AlertCircle, Loader2, Users, Smartphone, X } from "
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { sanitizePhMobileInput } from "@/lib/sms";
+import { useCurrentOfficer } from "@/components/officer-context";
 
 export function QuickMessageCard() {
+  const currentOfficer = useCurrentOfficer();
   const groupsData = useQuery(api.groups.list);
   const personnelData = useQuery(api.personnel.list);
   const templatesData = useQuery(api.templates.list);
@@ -130,9 +132,9 @@ export function QuickMessageCard() {
         await recordBroadcast({
           title: "10RCDG ALERT",
           content: message,
-          senderName: "Duty Officer",
-          senderEmail: "admin@10rcdg.mil.ph",
-          senderRank: "CPT",
+          senderName: currentOfficer.displayName,
+          senderEmail: currentOfficer.email || undefined,
+          senderRank: currentOfficer.rank || undefined,
           targetGroupNames: recipientMode === "GROUP" ? [selectedGroup] : ["Direct SMS"],
           recipients: numbersToSend,
           totalRecipients: numbersToSend.length,

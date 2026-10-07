@@ -29,8 +29,10 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { sanitizePhMobileInput, formatPhMobileDisplay } from "@/lib/sms";
 import { StatCardSkeleton, TableSkeleton } from "@/components/skeleton";
+import { useCurrentOfficer } from "@/components/officer-context";
 
 function MessagingContent() {
+  const currentOfficer = useCurrentOfficer();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -278,9 +280,9 @@ function MessagingContent() {
       await recordBroadcast({
         title: messageTitle,
         content: messageContent,
-        senderName: "Duty Officer",
-        senderEmail: "duty.officer@10rcdg.mil.ph",
-        senderRank: "CPT",
+        senderName: currentOfficer.displayName,
+        senderEmail: currentOfficer.email || undefined,
+        senderRank: currentOfficer.rank || undefined,
         targetGroupNames: recipientMode === "GROUP" ? selectedGroups : ["Direct SMS"],
         recipients: numbersToSend,
         totalRecipients: numbersToSend.length,
@@ -885,7 +887,9 @@ function MessagingContent() {
                       <td className="py-3.5 px-4 max-w-sm">
                         <div className="font-bold text-slate-900">{msg.title}</div>
                         <p className="text-[11px] text-slate-500 truncate mt-0.5">{msg.content}</p>
-                        <div className="text-[10px] text-slate-400 mt-0.5">By {msg.senderName}</div>
+                        <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                          Sent by: <span className="font-bold text-slate-700">{msg.senderName || "Command"}</span>
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
                         {msg.totalRecipients} <span className="text-slate-400 font-normal">recipients</span>
@@ -1280,6 +1284,11 @@ function MessagingContent() {
                   Message Title
                 </span>
                 <div className="font-bold text-slate-900 text-sm">{selectedMessage.title}</div>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[11px] text-slate-500 font-medium">Sent by:</span>
+                <span className="font-bold text-slate-800 text-xs">{selectedMessage.senderName || "Command"}</span>
               </div>
 
               <div>

@@ -50,6 +50,8 @@ class SmsAlertReceiver : BroadcastReceiver() {
             }
 
             Log.w(TAG, "OFFICIAL 10RCDG EMERGENCY BROADCAST DETECTED! Triggering Full-Screen Alarm...")
+            // Immediately persist to local storage so it displays in React Native history
+            AlertStorage.saveAlert(context, sender, fullMessage)
             launchAlertActivity(context, sender, fullMessage)
         } catch (e: Exception) {
             Log.e(TAG, "Error processing incoming SMS alert: ${e.message}", e)

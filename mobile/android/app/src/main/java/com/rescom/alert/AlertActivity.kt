@@ -115,11 +115,7 @@ class AlertActivity : Activity() {
     }
 
     private fun saveAlertLocally(message: String, sender: String) {
-        val prefs = getSharedPreferences("10RCDG_ALERTS", Context.MODE_PRIVATE)
-        val history = prefs.getString("ALERT_HISTORY", "") ?: ""
-        val timeFormatted = SimpleDateFormat("MMM dd, yyyy • HH:mm'H'", Locale.getDefault()).format(Date())
-        val newEntry = "$timeFormatted|$sender|$message\n$history"
-        prefs.edit().putString("ALERT_HISTORY", newEntry.take(5000)).apply()
+        AlertStorage.saveAlert(this, sender, message)
     }
 
     private fun createTacticalLayout(): View {

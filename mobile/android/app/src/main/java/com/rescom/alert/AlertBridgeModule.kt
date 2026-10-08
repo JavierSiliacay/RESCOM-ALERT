@@ -40,23 +40,17 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun getAlertHistory(promise: Promise) {
         try {
-            val prefs = reactContext.getSharedPreferences("10RCDG_ALERTS", Context.MODE_PRIVATE)
-            val history = prefs.getString("ALERT_HISTORY", "") ?: ""
+            val jsonArray = AlertStorage.getAlerts(reactContext)
             val alertList = Arguments.createArray()
 
-            if (history.isNotBlank()) {
-                val lines = history.split("\n").filter { it.isNotBlank() }
-                for (line in lines) {
-                    val parts = line.split("|")
-                    if (parts.size >= 3) {
-                        val alertMap = Arguments.createMap().apply {
-                            putString("timestamp", parts[0])
-                            putString("sender", parts[1])
-                            putString("message", parts.subList(2, parts.size).joinToString("|"))
-                        }
-                        alertList.pushMap(alertMap)
-                    }
+            for (i in 0 until jsonArray.length()) {
+                val item = jsonArray.getJSONObject(i)
+                val alertMap = Arguments.createMap().apply {
+                    putString("timestamp", item.optString("timestamp"))
+                    putString("sender", item.optString("sender"))
+                    putString("message", item.optString("message"))
                 }
+                alertList.pushMap(alertMap)
             }
             promise.resolve(alertList)
         } catch (e: Exception) {
@@ -67,8 +61,7 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun clearAlertHistory(promise: Promise) {
         try {
-            val prefs = reactContext.getSharedPreferences("10RCDG_ALERTS", Context.MODE_PRIVATE)
-            prefs.edit().clear().apply()
+            AlertStorage.clearHistory(reactContext)
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("CLEAR_HISTORY_FAILED", e.message, e)
@@ -78,18 +71,8 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun deleteAlert(index: Double, promise: Promise) {
         try {
-            val targetIndex = index.toInt()
-            val prefs = reactContext.getSharedPreferences("10RCDG_ALERTS", Context.MODE_PRIVATE)
-            val history = prefs.getString("ALERT_HISTORY", "") ?: ""
-            if (history.isNotBlank()) {
-                val lines = history.split("\n").filter { it.isNotBlank() }.toMutableList()
-                if (targetIndex in 0 until lines.size) {
-                    lines.removeAt(targetIndex)
-                    val newHistory = lines.joinToString("\n")
-                    prefs.edit().putString("ALERT_HISTORY", newHistory).apply()
-                }
-            }
-            promise.resolve(true)
+            val ok = AlertStorage.deleteAlert(reactContext, index.toInt())
+            promise.resolve(ok)
         } catch (e: Exception) {
             promise.reject("DELETE_ALERT_FAILED", e.message, e)
         }

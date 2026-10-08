@@ -15,8 +15,12 @@ export const proxy = auth((req) => {
   const isDownloadPage = req.nextUrl.pathname.startsWith("/download");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
   const isApi = req.nextUrl.pathname.startsWith("/api");
+  const isPublicFile =
+    req.nextUrl.pathname === "/robots.txt" ||
+    req.nextUrl.pathname === "/sitemap.xml" ||
+    req.nextUrl.pathname.startsWith("/sitemap");
 
-  if (isAuthApi || isEnlistPage || isDownloadPage) {
+  if (isAuthApi || isEnlistPage || isDownloadPage || isPublicFile) {
     return NextResponse.next();
   }
 

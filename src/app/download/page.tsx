@@ -444,9 +444,19 @@ export default function SoldierDownloadPage() {
       </main>
 
       {/* Footer */}
-      <footer className="py-6 border-t border-slate-200 text-center text-xs text-slate-400 space-y-1">
-        <div>10RCDG Reserve Community Defense Group, RESCOM, Philippine Army</div>
-        <div>Confidential Troop Mobilization System · v1.0.3</div>
+      <footer className="py-6 border-t border-slate-200 text-center text-xs text-slate-500 space-y-1">
+        <div>© {new Date().getFullYear()} 10th RCDG, Reserve Command, Philippine Army.</div>
+        <div className="text-[11px] text-slate-400">
+          Confidential Troop Mobilization System · Developed by{" "}
+          <a
+            href="https://javiersiliacay.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-emerald-800 hover:text-emerald-950 underline underline-offset-2 transition-colors"
+          >
+            Javier Siliacay
+          </a>
+        </div>
       </footer>
     </div>
   );

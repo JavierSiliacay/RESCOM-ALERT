@@ -182,7 +182,7 @@ export default function SoldierDownloadPage() {
                 Release Package
               </div>
               <div className="text-lg font-extrabold text-slate-900">
-                RESCOM ALERT v1.0.2
+                RESCOM ALERT v1.0.3
               </div>
             </div>
             <div className="text-right">
@@ -446,7 +446,7 @@ export default function SoldierDownloadPage() {
       {/* Footer */}
       <footer className="py-6 border-t border-slate-200 text-center text-xs text-slate-400 space-y-1">
         <div>10RCDG Reserve Community Defense Group, RESCOM, Philippine Army</div>
-        <div>Confidential Troop Mobilization System · v1.0.2</div>
+        <div>Confidential Troop Mobilization System · v1.0.3</div>
       </footer>
     </div>
   );

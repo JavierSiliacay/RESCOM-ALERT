@@ -14,6 +14,7 @@ import {
   XCircle,
   X,
   UserCheck,
+  UserX,
   Link2,
   Share2,
   QrCode,
@@ -315,6 +316,10 @@ export default function PersonnelPage() {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Status Toggle Confirmation Modal State
+  const [statusConfirmTarget, setStatusConfirmTarget] = useState<(typeof personnelList)[number] | null>(null);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -590,11 +595,23 @@ export default function PersonnelPage() {
     }
   };
 
-  const handleToggleStatus = async (id: Id<"personnel">) => {
+  const handleInitiateToggleStatus = (person: (typeof personnelList)[number]) => {
+    setStatusConfirmTarget(person);
+  };
+
+  const handleConfirmToggleStatus = async () => {
+    if (!statusConfirmTarget) return;
+    setIsTogglingStatus(true);
     try {
-      await togglePersonnelStatus({ id });
+      await togglePersonnelStatus({
+        id: statusConfirmTarget._id,
+        updatedBy: currentOfficer.displayName,
+      });
+      setStatusConfirmTarget(null);
     } catch (err: any) {
-      alert(err?.message || "Failed to toggle status");
+      alert(err?.message || "Failed to update member status");
+    } finally {
+      setIsTogglingStatus(false);
     }
   };
 
@@ -899,7 +916,7 @@ export default function PersonnelPage() {
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
-              </div>
+              </div>  
 
               {/* Floating Instant Match Dropdown */}
               {showSearchDropdown && (
@@ -1108,12 +1125,14 @@ export default function PersonnelPage() {
 
                         <td className="py-3.5 px-4">
                           <button
-                            onClick={() => handleToggleStatus(person._id)}
+                            type="button"
+                            onClick={() => handleInitiateToggleStatus(person)}
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
                               person.status === "ACTIVE"
                                 ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
                                 : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
                             }`}
+                            title={`Click to change status to ${person.status === "ACTIVE" ? "Inactive" : "Active"}`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${person.status === "ACTIVE" ? "bg-emerald-600" : "bg-slate-400"}`} />
                             {person.status}
@@ -1854,6 +1873,171 @@ export default function PersonnelPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Status Toggle Confirmation Modal */}
+      {statusConfirmTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                    statusConfirmTarget.status === "ACTIVE"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  }`}
+                >
+                  {statusConfirmTarget.status === "ACTIVE" ? (
+                    <UserX className="w-5 h-5" />
+                  ) : (
+                    <UserCheck className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {statusConfirmTarget.status === "ACTIVE"
+                      ? "Set Member to Inactive?"
+                      : "Reactivate Member to Active?"}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {statusConfirmTarget.status === "ACTIVE"
+                      ? "Exclude troop from SMS broadcasts"
+                      : "Restore troop to emergency broadcasts"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusConfirmTarget(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 text-xs">
+              {/* Member Card Summary */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold font-mono border ${getRankBadgeStyle(
+                        statusConfirmTarget.rank
+                      )}`}
+                    >
+                      {statusConfirmTarget.rank}
+                    </span>
+                    <span className="font-bold text-slate-900 text-sm">
+                      {statusConfirmTarget.firstName} {statusConfirmTarget.lastName}
+                    </span>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      statusConfirmTarget.status === "ACTIVE"
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        : "bg-slate-100 text-slate-600 border-slate-200"
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        statusConfirmTarget.status === "ACTIVE"
+                          ? "bg-emerald-600"
+                          : "bg-slate-400"
+                      }`}
+                    />
+                    Current: {statusConfirmTarget.status}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-slate-200/80 font-mono">
+                  <div>
+                    <span className="text-slate-400 text-[10px] block font-sans">Mobile:</span>
+                    <span className="font-bold text-slate-800">
+                      {formatPhMobileDisplay(statusConfirmTarget.mobileNumber)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-[10px] block font-sans">Unit / Station:</span>
+                    <span className="font-medium text-slate-700 truncate block">
+                      {statusConfirmTarget.unit}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Warning / Explanation Notice */}
+              {statusConfirmTarget.status === "ACTIVE" ? (
+                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-xs text-amber-950">
+                    <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Emergency Alert Exclusion Notice</span>
+                  </div>
+                  <p className="text-[11px] text-amber-900 leading-relaxed font-semibold">
+                    Are you sure you want to set this member to Inactive?
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    This troop will be immediately excluded from incoming unit SMS broadcasts, red alerts, and mobilization orders. Their record remains saved on file and can be reactivated anytime.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-900 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-xs text-emerald-950">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span>Restore Emergency Broadcasts</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-900 leading-relaxed font-semibold">
+                    Are you sure you want to restore this member to Active?
+                  </p>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    This member will immediately start receiving all unit SMS alerts and mobilization broadcasts for <strong>{statusConfirmTarget.groupName}</strong>.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isTogglingStatus}
+                onClick={() => setStatusConfirmTarget(null)}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                {statusConfirmTarget.status === "ACTIVE" ? "Keep Active" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                disabled={isTogglingStatus}
+                onClick={handleConfirmToggleStatus}
+                className={`px-4 py-2 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
+                  statusConfirmTarget.status === "ACTIVE"
+                    ? "bg-amber-700 hover:bg-amber-600 active:scale-95"
+                    : "bg-emerald-800 hover:bg-emerald-700 active:scale-95"
+                }`}
+              >
+                {isTogglingStatus ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Updating...</span>
+                  </>
+                ) : statusConfirmTarget.status === "ACTIVE" ? (
+                  <>
+                    <UserX className="w-3.5 h-3.5" />
+                    <span>Set to Inactive</span>
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Reactivate Member</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

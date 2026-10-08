@@ -112,13 +112,39 @@ export const update = mutation({
 export const toggleStatus = mutation({
   args: {
     id: v.id("personnel"),
+    updatedBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const person = await ctx.db.get(args.id);
     if (!person) throw new Error("Personnel not found");
 
     const newStatus = person.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-    await ctx.db.patch(args.id, { status: newStatus });
+    const officerName = args.updatedBy || "Authorized Officer";
+    const updateTimestamp = new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Manila",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    await ctx.db.patch(args.id, {
+      status: newStatus,
+      updatedBy: officerName,
+      updatedAt: updateTimestamp,
+    });
+
+    // Record audit log
+    await ctx.db.insert("auditLogs", {
+      userName: officerName,
+      userRole: "ADMIN",
+      category: "PERSONNEL",
+      action: newStatus === "ACTIVE" ? "ACTIVATE_PERSONNEL" : "DEACTIVATE_PERSONNEL",
+      details: `Changed status of ${person.rank} ${person.firstName} ${person.lastName} (${person.mobileNumber}) to ${newStatus}`,
+      ipAddress: "127.0.0.1",
+      timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+    });
+
     return newStatus;
   },
 });

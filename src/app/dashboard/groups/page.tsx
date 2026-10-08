@@ -13,11 +13,16 @@ import {
   CheckCircle2,
   X,
   Layers,
+  Search,
+  Phone,
+  Eye,
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { StatCardSkeleton, GroupCardSkeleton } from "@/components/skeleton";
+import { getRankBadgeStyle } from "@/lib/military-ranks";
+import { formatPhMobileDisplay } from "@/lib/sms";
 
 const COLOR_PRESETS = [
   { label: "Military Green", value: "#15803d" },
@@ -30,6 +35,7 @@ const COLOR_PRESETS = [
 
 export default function GroupsPage() {
   const groupsData = useQuery(api.groups.list);
+  const personnelData = useQuery(api.personnel.list);
   const createGroup = useMutation(api.groups.create);
   const updateGroup = useMutation(api.groups.update);
   const removeGroup = useMutation(api.groups.remove);
@@ -37,6 +43,10 @@ export default function GroupsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<Id<"contactGroups"> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Group Roster Inspection Modal State
+  const [selectedGroupRoster, setSelectedGroupRoster] = useState<(typeof groups)[number] | null>(null);
+  const [rosterSearch, setRosterSearch] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -47,6 +57,7 @@ export default function GroupsPage() {
 
   const isLoading = groupsData === undefined;
   const groups = groupsData || [];
+  const personnelList = personnelData || [];
 
   const handleOpenAdd = () => {
     setEditingGroupId(null);
@@ -215,7 +226,14 @@ export default function GroupsPage() {
                     style={{ backgroundColor: group.color }}
                   />
                   <div>
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                    <h3
+                      onClick={() => {
+                        setSelectedGroupRoster(group);
+                        setRosterSearch("");
+                      }}
+                      className="text-base sm:text-lg font-bold text-slate-900 leading-snug hover:text-emerald-800 cursor-pointer transition-colors"
+                      title="Click to view assigned troops"
+                    >
                       {group.name}
                     </h3>
                     <p className="text-[11px] font-mono text-slate-400 font-medium">
@@ -228,14 +246,14 @@ export default function GroupsPage() {
                   <button
                     onClick={() => handleOpenEdit(group)}
                     title="Edit Group"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => handleDelete(group._id)}
                     title="Delete Group"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -250,10 +268,22 @@ export default function GroupsPage() {
 
             {/* Footer Row */}
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                <Users className="w-4 h-4 text-slate-400" />
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedGroupRoster(group);
+                  setRosterSearch("");
+                }}
+                className="flex items-center gap-2 px-2.5 py-1.5 -ml-2 rounded-xl text-xs font-bold text-slate-700 hover:text-emerald-950 hover:bg-slate-100 transition-all cursor-pointer group/roster"
+                title="Click to view assigned troops in this group"
+              >
+                <Users className="w-4 h-4 text-slate-400 group-hover/roster:text-emerald-700 transition-colors" />
                 <span>{group.memberCount} Personnel</span>
-              </div>
+                <span className="text-[10px] text-emerald-800 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 opacity-90 group-hover/roster:opacity-100 flex items-center gap-1">
+                  <Eye className="w-3 h-3" />
+                  <span>View Roster</span>
+                </span>
+              </button>
 
               <Link
                 href={`/dashboard/messaging?tab=send&group=${encodeURIComponent(group.name)}`}
@@ -373,6 +403,210 @@ export default function GroupsPage() {
           </div>
         </div>
       )}
+
+      {/* Group Members Roster Modal */}
+      {selectedGroupRoster && (() => {
+        const assignedMembers = personnelList.filter(
+          (p) => p.groupId === selectedGroupRoster._id || p.groupName === selectedGroupRoster.name
+        );
+        const activeCount = assignedMembers.filter((p) => p.status === "ACTIVE").length;
+        const inactiveCount = assignedMembers.filter((p) => p.status === "INACTIVE").length;
+
+        const q = rosterSearch.toLowerCase().trim();
+        const filteredMembers = assignedMembers.filter((p) => {
+          if (!q) return true;
+          return (
+            p.firstName.toLowerCase().includes(q) ||
+            p.lastName.toLowerCase().includes(q) ||
+            p.rank.toLowerCase().includes(q) ||
+            p.mobileNumber.toLowerCase().includes(q) ||
+            p.unit.toLowerCase().includes(q)
+          );
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150">
+              {/* Top Accent Stripe */}
+              <div
+                className="h-1.5 w-full shrink-0"
+                style={{ backgroundColor: selectedGroupRoster.color }}
+              />
+
+              {/* Modal Header */}
+              <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50/70 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs border border-white"
+                    style={{ backgroundColor: `${selectedGroupRoster.color}20`, color: selectedGroupRoster.color }}
+                  >
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-extrabold text-slate-900 text-base sm:text-lg">
+                        {selectedGroupRoster.name}
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-mono font-bold">
+                        {selectedGroupRoster.unit}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-xs">
+                      <span className="font-bold text-slate-700">
+                        {assignedMembers.length} Total {assignedMembers.length === 1 ? "Troop" : "Troops"}
+                      </span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.2 rounded-full border border-emerald-200">
+                        {activeCount} Active for SMS
+                      </span>
+                      {inactiveCount > 0 && (
+                        <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.2 rounded-full border border-slate-200">
+                          {inactiveCount} Inactive
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedGroupRoster(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Search & Filter Bar */}
+              <div className="p-3.5 sm:p-4 border-b border-slate-100 bg-white shrink-0">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={rosterSearch}
+                    onChange={(e) => setRosterSearch(e.target.value)}
+                    placeholder="Search troop by name, rank, or mobile in this group..."
+                    className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white font-medium shadow-2xs"
+                  />
+                  {rosterSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setRosterSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Members List Container */}
+              <div className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-2.5">
+                {assignedMembers.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 space-y-3">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">No Troops Assigned Yet</p>
+                      <p className="text-xs text-slate-500 mt-0.5 max-w-sm mx-auto">
+                        There are currently no personnel assigned to <strong>{selectedGroupRoster.name}</strong>.
+                      </p>
+                    </div>
+                    <Link
+                      href="/dashboard/personnel"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs"
+                    >
+                      <span>Assign Troops in Personnel Directory</span>
+                    </Link>
+                  </div>
+                ) : filteredMembers.length === 0 ? (
+                  <div className="py-10 text-center text-slate-400 text-xs">
+                    <p>No troops found matching &quot;<strong>{rosterSearch}</strong>&quot; in this group.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    {filteredMembers.map((member) => (
+                      <div
+                        key={member._id}
+                        className="p-3 sm:px-4 sm:py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors text-xs"
+                      >
+                        {/* Left: Soldier & Rank */}
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold font-mono border shrink-0 ${getRankBadgeStyle(
+                              member.rank
+                            )}`}
+                          >
+                            {member.rank}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-900 text-xs truncate">
+                              {member.firstName} {member.lastName}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-medium truncate">
+                              {member.unit}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right: Mobile Number & Status */}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="font-mono font-bold text-slate-800 text-xs sm:text-[13px] flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-400 hidden sm:inline" />
+                            <span>{formatPhMobileDisplay(member.mobileNumber)}</span>
+                          </div>
+
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              member.status === "ACTIVE"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "bg-slate-100 text-slate-500 border-slate-200"
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                member.status === "ACTIVE" ? "bg-emerald-600" : "bg-slate-400"
+                              }`}
+                            />
+                            <span>{member.status}</span>
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-5 sm:px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
+                <div className="text-xs text-slate-500 font-medium">
+                  Showing <strong className="text-slate-800">{filteredMembers.length}</strong> of{" "}
+                  <strong className="text-slate-800">{assignedMembers.length}</strong> members
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroupRoster(null)}
+                    className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+
+                  <Link
+                    href={`/dashboard/messaging?tab=send&group=${encodeURIComponent(selectedGroupRoster.name)}`}
+                    className="px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Alert</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

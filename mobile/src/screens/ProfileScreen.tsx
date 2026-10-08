@@ -69,8 +69,8 @@ export const ProfileScreen: React.FC = () => {
 
   const isOverlayOk =
     typeof Platform.Version === "number" && Platform.Version >= 34
-      ? Boolean(perms.canFullScreen)
-      : Boolean(perms.canDrawOverlays || perms.canFullScreen);
+      ? Boolean(perms.canDrawOverlays && perms.canFullScreen)
+      : Boolean(perms.canDrawOverlays);
   const allGood = perms.hasSmsPermission && perms.isBatteryIgnored && isOverlayOk;
   const steps = [
     {
@@ -91,8 +91,8 @@ export const ProfileScreen: React.FC = () => {
     },
     {
       key: "overlay",
-      title: "Full-screen alarm takeover",
-      desc: "Allows the siren to pop up over the lock screen like an alarm clock.",
+      title: "Display over apps & lock screen",
+      desc: "Allows the siren to pop up over your screen even while scrolling other apps.",
       ok: isOverlayOk,
       action: () => alertBridgeService.requestOverlayPermission(),
       actionLabel: "ENABLE",
@@ -193,7 +193,7 @@ export const ProfileScreen: React.FC = () => {
         <Text style={styles.clearText}>Clear saved alerts on this phone</Text>
       </TouchableOpacity>
 
-      <Text style={styles.footer}>RESCOM ALERT · Version 1.0.2 · 10RCDG RESCOM, PA</Text>
+      <Text style={styles.footer}>RESCOM ALERT · Version 1.0.4 · 10RCDG RESCOM, PA</Text>
     </ScrollView>
   );
 };

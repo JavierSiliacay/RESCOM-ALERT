@@ -1,5 +1,6 @@
 package com.rescom.alert
 
+import android.app.ActivityOptions
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -139,7 +140,14 @@ class SmsAlertReceiver : BroadcastReceiver() {
 
         // 7. Direct startActivity attempt (instant popup if screen is already on or OEM permits it)
         try {
-            context.startActivity(alertIntent)
+            if (Build.VERSION.SDK_INT >= 34) {
+                val options = ActivityOptions.makeBasic().apply {
+                    pendingIntentBackgroundActivityStartMode = ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                }
+                context.startActivity(alertIntent, options.toBundle())
+            } else {
+                context.startActivity(alertIntent)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Direct startActivity blocked by background restriction, fullScreenIntent/AlarmClock will handle it: ${e.message}")
         }

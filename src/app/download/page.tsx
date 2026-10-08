@@ -107,15 +107,8 @@ export default function SoldierDownloadPage() {
       setIsRecording(false);
       setDownloadStarted(true);
 
-      // Trigger APK download
-      const downloadAnchor = document.createElement("a");
-      downloadAnchor.href = apkUrl;
-      downloadAnchor.setAttribute("download", "rescom-alert.apk");
-      downloadAnchor.target = "_blank";
-      downloadAnchor.rel = "noopener noreferrer";
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      document.body.removeChild(downloadAnchor);
+      // Trigger APK download cleanly without spawning zombie blank tabs
+      window.location.href = apkUrl;
     }
   };
 
@@ -182,7 +175,7 @@ export default function SoldierDownloadPage() {
                 Release Package
               </div>
               <div className="text-lg font-extrabold text-slate-900">
-                RESCOM ALERT v1.0.3
+                RESCOM ALERT v1.0.4
               </div>
             </div>
             <div className="text-right">
@@ -216,11 +209,16 @@ export default function SoldierDownloadPage() {
             </button>
 
             {downloadStarted ? (
-              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5 animate-in fade-in duration-200">
-                <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                <span>
-                  <strong>Download started!</strong> Open your phone notifications or Downloads folder to install.
-                </span>
+              <div className="space-y-2 animate-in fade-in duration-200">
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>
+                    <strong>Download started!</strong> Open your phone notifications or Downloads folder to install.
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-[11px] leading-relaxed">
+                  <strong>Tip:</strong> If download shows 100% and pauses while your phone performs security scanning, open your phone&apos;s <strong>My Files</strong> &gt; <strong>Downloads</strong> folder to tap and install immediately.
+                </div>
               </div>
             ) : (
               <p className="text-center text-[11px] text-slate-500">

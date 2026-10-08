@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  AppState,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -73,6 +74,15 @@ export const AlertsScreen: React.FC = () => {
 
   useEffect(() => {
     loadAlerts();
+    // Auto-silence alarm if active when opening the app
+    alertBridgeService.stopAlarm();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        loadAlerts();
+        alertBridgeService.stopAlarm();
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const handleTest = async () => {

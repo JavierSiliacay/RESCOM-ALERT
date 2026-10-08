@@ -97,6 +97,30 @@ export const alertBridgeService = {
   },
 
   /**
+   * Silences and stops any currently sounding siren alarm
+   */
+  stopAlarm: async (): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return false;
+    try {
+      return await AlertBridge.stopAlarm();
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /**
+   * Checks whether the siren alarm is actively playing
+   */
+  isAlarmActive: async (): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return false;
+    try {
+      return await AlertBridge.isAlarmActive();
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /**
    * Checks current permission states
    */
   checkSystemPermissions: async (): Promise<PermissionStatus> => {

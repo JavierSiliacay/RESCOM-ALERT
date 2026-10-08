@@ -98,17 +98,38 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun stopAlarm(promise: Promise) {
+        try {
+            TacticalAlarmManager.stop()
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("STOP_ALARM_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun isAlarmActive(promise: Promise) {
+        try {
+            promise.resolve(TacticalAlarmManager.isAlarmActive())
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    @ReactMethod
     fun requestOverlayPermission(promise: Promise) {
         try {
-            if (Build.VERSION.SDK_INT >= 34) {
-                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+            // Priority 1: "Display over other apps" (SYSTEM_ALERT_WINDOW) - required to break through while scrolling
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(reactContext)) {
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
                     data = Uri.parse("package:${reactContext.packageName}")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 reactContext.startActivity(intent)
                 promise.resolve(true)
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(reactContext)) {
-                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+            } else if (Build.VERSION.SDK_INT >= 34) {
+                // Priority 2: Android 14+ Full-screen intent permission
+                val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
                     data = Uri.parse("package:${reactContext.packageName}")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
@@ -159,17 +180,11 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
                 }
             }
 
-            val overlayOrFullScreenOk = if (Build.VERSION.SDK_INT >= 34) {
-                canFullScreen
-            } else {
-                canDrawOverlays || canFullScreen
-            }
-
             map.putBoolean("hasSmsPermission", hasSms)
             map.putBoolean("isBatteryIgnored", isBatteryIgnored)
             map.putBoolean("canDrawOverlays", canDrawOverlays)
             map.putBoolean("canFullScreen", canFullScreen)
-            map.putBoolean("isFullyArmed", hasSms && isBatteryIgnored && overlayOrFullScreenOk)
+            map.putBoolean("isFullyArmed", hasSms && isBatteryIgnored && canDrawOverlays && canFullScreen)
             promise.resolve(map)
         } catch (e: Exception) {
             promise.reject("CHECK_PERMISSIONS_FAILED", e.message, e)

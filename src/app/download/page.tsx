@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Download,
   Shield,
@@ -20,7 +21,14 @@ import {
   HelpCircle,
   ShieldCheck,
   Settings,
+  QrCode,
+  Camera,
+  Maximize2,
+  Copy,
+  Check,
+  X,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 
@@ -85,7 +93,30 @@ export default function SoldierDownloadPage() {
     // 3. Detect In-App Browsers (Messenger, Instagram, FB, Viber)
     const inApp = /FBAN|FBAV|Instagram|Messenger|Viber|Line/i.test(ua);
     setIsInAppBrowser(inApp);
+
+    // 4. Resolve Portal URL for QR Code
+    if (typeof window !== "undefined") {
+      setPortalUrl(window.location.origin + "/download");
+    }
   }, []);
+
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [qrTarget, setQrTarget] = useState<"portal" | "direct">("portal");
+  const [portalUrl, setPortalUrl] = useState<string>("");
+
+  const activeQrValue =
+    qrTarget === "direct" ? apkUrl : portalUrl || "https://rescom-alert.com/download";
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(activeQrValue);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      // Clipboard fallback
+    }
+  };
 
   const handleDownload = async () => {
     if (isRecording) return;
@@ -203,7 +234,7 @@ export default function SoldierDownloadPage() {
               ) : (
                 <>
                   <Download className="w-5 h-5" />
-                  <span>DOWNLOAD SOLDIER APP</span>
+                  <span>DOWNLOAD RESCOM ALERT APP</span>
                 </>
               )}
             </button>
@@ -252,6 +283,106 @@ export default function SoldierDownloadPage() {
           )}
         </div>
 
+        {/* Instant QR Code Scanner Box (Presentation & Quick Troop Sideload) */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase tracking-wider mb-1">
+                <Camera className="w-3 h-3 text-emerald-700" />
+                <span>Instant Troop QR Scanner</span>
+              </div>
+              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+                <QrCode className="w-4 h-4 text-emerald-700" />
+                <span>Scan with Your Phone Camera</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Point your phone camera to download directly — zero typing required.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowQrModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0"
+              title="Enlarge for Projector Presentation"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Projector View</span>
+            </button>
+          </div>
+
+          {/* QR Display Frame */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-5 p-4 bg-slate-50 border border-slate-200/80 rounded-2xl">
+            <div className="p-3 bg-white rounded-xl shadow-xs border border-slate-200 shrink-0">
+              <QRCodeSVG
+                value={activeQrValue}
+                size={160}
+                level="H"
+                includeMargin={false}
+              />
+            </div>
+
+            <div className="space-y-3 text-center sm:text-left">
+              <div className="space-y-1">
+                <div className="text-xs font-bold text-slate-900 flex items-center justify-center sm:justify-start gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                  <span>Ready for Live Presentation</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed max-w-xs">
+                  Soldiers in the briefing hall or muster formation can open their camera app and point it at this QR code.
+                </p>
+              </div>
+
+              {/* Target Switcher */}
+              <div className="flex items-center justify-center sm:justify-start gap-1 p-0.5 bg-slate-200/70 rounded-lg max-w-fit mx-auto sm:mx-0">
+                <button
+                  type="button"
+                  onClick={() => setQrTarget("portal")}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                    qrTarget === "portal"
+                      ? "bg-white text-emerald-800 shadow-2xs font-extrabold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Download Page
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQrTarget("direct")}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                    qrTarget === "direct"
+                      ? "bg-white text-emerald-800 shadow-2xs font-extrabold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Direct APK File
+                </button>
+              </div>
+
+              {/* Copy URL Button */}
+              <div>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700 font-bold">Link Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Copy Download URL</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* 3-Step Troop Sideload Instructions */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
@@ -291,6 +422,32 @@ export default function SoldierDownloadPage() {
             </div>
           </div>
         </div>
+
+        {/* 14-Step Visual Guide Callout Banner */}
+        <Link
+          href="/download/guide"
+          className="group block p-4 bg-gradient-to-r from-emerald-800 to-emerald-950 text-white rounded-2xl shadow-xs hover:shadow-md transition-all border border-emerald-700/60"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/20 group-hover:scale-105 transition-transform">
+                <Smartphone className="w-5 h-5 text-emerald-300" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm font-extrabold flex items-center gap-1.5">
+                  <span>Complete 14-Step Visual Guide</span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-400 text-slate-950 uppercase">
+                    Screenshots
+                  </span>
+                </div>
+                <div className="text-[11px] text-emerald-200/90 mt-0.5">
+                  Sundin ang hakbang-hakbang na gabay kung hinarang ng Play Protect.
+                </div>
+              </div>
+            </div>
+            <ArrowRight className="w-5 h-5 text-emerald-300 shrink-0 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
 
         {/* Android Troubleshooting & Setup Guide Accordion */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
@@ -456,6 +613,92 @@ export default function SoldierDownloadPage() {
           </a>
         </div>
       </footer>
+
+      {/* Fullscreen / Projector Presentation Modal */}
+      {showQrModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setShowQrModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 text-center space-y-5 animate-in zoom-in-95 duration-200 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowQrModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer"
+              title="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Insignia & Military Header */}
+            <div className="flex items-center justify-center gap-2.5">
+              <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-white p-0.5">
+                <Image
+                  src="/rescom-pa-seal.png"
+                  alt="PA Seal"
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-white p-0.5">
+                <Image
+                  src="/rescom-emblem.jpg"
+                  alt="10RCDG Emblem"
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 inline-block mb-1.5">
+                10RCDG TROOP MOBILIZATION
+              </div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                SCAN TO DOWNLOAD APP
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                Open phone camera or QR scanner. Point at the code below to download immediately.
+              </p>
+            </div>
+
+            {/* Giant QR for Projector */}
+            <div className="p-4 bg-white rounded-2xl shadow-md border-2 border-slate-200 inline-block mx-auto">
+              <QRCodeSVG
+                value={activeQrValue}
+                size={230}
+                level="H"
+                includeMargin={false}
+              />
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
+              <div className="font-bold text-slate-900 flex items-center justify-center gap-1.5">
+                <Radio className="w-3.5 h-3.5 text-emerald-700" />
+                <span>100% Offline GSM Siren · No Internet Needed</span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Compatible with all Android phones (Android 7.0 to 15+)
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowQrModal(false)}
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer"
+            >
+              Close Presentation View
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

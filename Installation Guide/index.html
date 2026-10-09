@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RESCOM ALERT — Soldier Mobile App Installation Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #064e3b;
+      --primary-light: #ecfdf5;
+      --primary-border: #a7f3d0;
+      --accent: #059669;
+      --dark: #0f172a;
+      --muted: #475569;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --amber: #d97706;
+      --amber-light: #fffbeb;
+      --amber-border: #fde68a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      line-height: 1.6;
+      padding: 24px 16px 64px;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px 24px;
+      text-align: center;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+
+    .badge-unit {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      background: #064e3b;
+      color: #ecfdf5;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      margin-bottom: 12px;
+    }
+
+    .header h1 {
+      font-size: 26px;
+      font-weight: 900;
+      color: #064e3b;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* Warning Notice */
+    .alert-box {
+      background: var(--amber-light);
+      border: 1px solid var(--amber-border);
+      border-left: 5px solid var(--amber);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 32px;
+      font-size: 13px;
+      color: #78350f;
+      line-height: 1.55;
+    }
+
+    .alert-box strong {
+      color: #92400e;
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    /* Section Headers */
+    .phase-divider {
+      margin: 36px 0 20px;
+      padding: 12px 18px;
+      background: #064e3b;
+      color: #ffffff;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .phase-divider h2 {
+      font-size: 15px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .phase-badge {
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(255,255,255,0.2);
+      padding: 3px 10px;
+      border-radius: 9999px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Step Card */
+    .step-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 24px;
+      align-items: center;
+    }
+
+    @media (max-width: 720px) {
+      .step-card {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: #064e3b;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 800;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+
+    .step-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--dark);
+      margin-bottom: 8px;
+    }
+
+    .step-desc {
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.6;
+    }
+
+    .step-desc ul {
+      margin-left: 18px;
+      margin-top: 8px;
+    }
+
+    .step-desc li {
+      margin-bottom: 6px;
+    }
+
+    .tag-action {
+      display: inline-block;
+      background: #dcfce7;
+      color: #14532d;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 12px;
+      border: 1px solid #86efac;
+    }
+
+    .tag-note {
+      display: block;
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #f1f5f9;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #475569;
+    }
+
+    .step-image-wrap {
+      text-align: center;
+    }
+
+    .step-image {
+      max-width: 100%;
+      height: auto;
+      max-height: 380px;
+      border-radius: 12px;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+      transition: transform 0.2s;
+    }
+
+    .step-image:hover {
+      transform: scale(1.02);
+    }
+
+    /* Completion Box */
+    .success-box {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+      margin: 32px 0;
+    }
+
+    .success-box h3 {
+      font-size: 18px;
+      font-weight: 900;
+      color: #064e3b;
+      margin-bottom: 8px;
+    }
+
+    .success-box p {
+      font-size: 13px;
+      color: #047857;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* Print styles */
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      .step-card {
+        page-break-inside: avoid;
+        border: 1px solid #ccc;
+        box-shadow: none;
+      }
+      .phase-divider {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <header class="header">
+    <div class="badge-unit">10RCDG · RESERVE COMMAND · PHILIPPINE ARMY</div>
+    <h1>RESCOM ALERT INSTALLATION MANUAL</h1>
+    <p>Official Mobile Application Sideload &amp; Permission Configuration Guide for Troops</p>
+  </header>
+
+  <!-- Warning Box -->
+  <div class="alert-box">
+    <strong>⚠️ Important Troop Notice (Basahin Bago Mag-install):</strong>
+    Ang <strong>RESCOM ALERT</strong> ay isang opisyal na military mobilization tool ng 10RCDG. Dahil ito ay may kakayahang magbasa ng emergency broadcast SMS kahit walang internet (100% Offline GSM Siren), haharangin ito ng Google Play Protect kapag walang lumalabas na <em>"Install anyway"</em> button. Sundin ang 14 na hakbang sa ibaba upang matagumpay na ma-install at ma-activate ang siren ng inyong cellphone.
+  </div>
+
+  <!-- PHASE 1 -->
+  <div class="phase-divider">
+    <h2>Phase 1: Google Play Protect Bypass &amp; APK Installation</h2>
+    <span class="phase-badge">STEPS 1 TO 7</span>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">1</div>
+      <h3 class="step-title">Open Downloaded APK</h3>
+      <div class="step-desc">
+        Pumunta sa inyong <strong>Downloads</strong> folder at pindutin ang file na <strong>rescom-alert.apk</strong>.
+        <ul>
+          <li>Sa <em>"Open with"</em> pop-up, piliin ang <span class="tag-action">Package installer</span>.</li>
+          <li>Pindutin ang <span class="tag-action">Just once</span> o <em>Always</em>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step1.jpg" alt="Step 1 - Package Installer" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">2</div>
+      <h3 class="step-title">Confirm App Installation</h3>
+      <div class="step-desc">
+        Lalabas ang installation prompt ng inyong Android system:
+        <ul>
+          <li><em>"RESCOM ALERT — Do you want to install this app?"</em></li>
+          <li>Pindutin ang <span class="tag-action">Install</span>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step2.jpg" alt="Step 2 - Install Prompt" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">3</div>
+      <h3 class="step-title">Play Protect Block Warning</h3>
+      <div class="step-desc">
+        Dahil may direct SMS capabilities ang military tool, haharangin ito ng Google Play Protect gamit ang babala:
+        <div class="tag-note">
+          "Google Play Protect — App blocked to protect your device"
+        </div>
+        <ul>
+          <li>Kung walang lumabas na <em>"Install anyway"</em>, pindutin ang <span class="tag-action">Got it</span>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step3.jpg" alt="Step 3 - Play Protect Block" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">4</div>
+      <h3 class="step-title">Open Google Play Store App</h3>
+      <div class="step-desc">
+        Pumunta sa home screen o app list ng inyong telepono at buksan ang <strong>Google Play Store</strong>.
+        <ul>
+          <li>Pindutin ang inyong <strong>Profile Picture / Account Icon</strong> sa kanang itaas (top-right).</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step4.jpg" alt="Step 4 - Google Play Profile" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">5</div>
+      <h3 class="step-title">Select Play Protect</h3>
+      <div class="step-desc">
+        Sa bubukas na account menu:
+        <ul>
+          <li>Hanapin at pindutin ang <span class="tag-action">Play Protect</span> (may shield icon).</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step5.jpg" alt="Step 5 - Play Protect Menu" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 6 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">6</div>
+      <h3 class="step-title">Open Play Protect Settings</h3>
+      <div class="step-desc">
+        Sa Play Protect status screen:
+        <ul>
+          <li>Pindutin ang <strong>Gear icon (⚙️)</strong> sa kanang itaas (top-right).</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step6.jpg" alt="Step 6 - Settings Gear" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 7 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">7</div>
+      <h3 class="step-title">Turn Off App Scanning &amp; Re-Install</h3>
+      <div class="step-desc">
+        Sa ilalim ng <em>General</em>:
+        <ul>
+          <li>I-toggle patayin ang <span class="tag-action">Scan apps with Play Protect</span>.</li>
+          <li>Pindutin ang <strong>"Turn off"</strong> sa confirmation dialog.</li>
+        </ul>
+        <div class="tag-note">
+          <strong>⚡ MAG-INSTALL NA:</strong> Bumalik sa inyong <strong>Downloads</strong> folder, pindutin muli ang <strong>rescom-alert.apk</strong> at i-tap ang <strong>Install</strong>. Magtutuloy na ang pag-install!
+        </div>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step7.jpg" alt="Step 7 - Turn Off Scanning" class="step-image">
+    </div>
+  </div>
+
+  <!-- PHASE 2 -->
+  <div class="phase-divider">
+    <h2>Phase 2: In-App Emergency Siren Permissions</h2>
+    <span class="phase-badge">STEPS 8 TO 14</span>
+  </div>
+
+  <!-- Step 8 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">8</div>
+      <h3 class="step-title">Allow Text Messages (SMS)</h3>
+      <div class="step-desc">
+        Buksan ang <strong>RESCOM ALERT</strong> app. Kusa itong pupunta sa <strong>Phone Setup</strong>.
+        <ul>
+          <li>Sa tapat ng <em>"Read text messages"</em>, pindutin ang <span class="tag-action">ALLOW</span>.</li>
+          <li>Sa lalabas na Android permission popup, pindutin ang <strong>"Allow"</strong>.</li>
+        </ul>
+        <div class="tag-note">
+          Kailangan ito upang mabasa ng app ang alert broadcast mula sa Headquarters nang hindi kailangan ng internet.
+        </div>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step8.jpg" alt="Step 8 - Allow SMS" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 9 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">9</div>
+      <h3 class="step-title">Fix Background Execution</h3>
+      <div class="step-desc">
+        Berde na ang unang step.
+        <ul>
+          <li>Sa ilalim ng <em>"Keep running in background"</em>, pindutin ang <span class="tag-action">FIX NOW</span>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step9.jpg" alt="Step 9 - Fix Background" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 10 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">10</div>
+      <h3 class="step-title">Allow Background Running Dialog</h3>
+      <div class="step-desc">
+        Lalabas ang system battery optimization prompt:
+        <div class="tag-note">
+          "Let app always run in background? Allowing RESCOM ALERT to always run in the background may reduce battery life."
+        </div>
+        <ul>
+          <li>Pindutin ang <span class="tag-action">Allow</span>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step10.jpg" alt="Step 10 - Allow Background" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 11 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">11</div>
+      <h3 class="step-title">Enable Display Over Apps</h3>
+      <div class="step-desc">
+        Berde na ang pangalawang step.
+        <ul>
+          <li>Sa tapat ng <em>"Display over apps &amp; lock screen"</em>, pindutin ang <span class="tag-action">ENABLE</span>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step11.jpg" alt="Step 11 - Enable Display" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 12 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">12</div>
+      <h3 class="step-title">Turn On Display Over Apps in Settings</h3>
+      <div class="step-desc">
+        Sa binuksang Android Settings page ng <em>"Display Over Other Apps"</em>:
+        <ul>
+          <li>Hanapin sa listahan ang <strong>RESCOM ALERT</strong>.</li>
+          <li>I-on ang toggle switch sa tapat nito.</li>
+          <li>Pindutin ang <strong>Back button</strong> ng cellphone para bumalik sa RESCOM ALERT.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step12.jpg" alt="Step 12 - Toggle Display Over Apps" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 13 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">13</div>
+      <h3 class="step-title">Enable Full Screen Notifications</h3>
+      <div class="step-desc">
+        Pagkabalik sa RESCOM ALERT:
+        <ul>
+          <li>Pindutin muli ang <span class="tag-action">ENABLE</span> sa tapat ng <em>"Display over apps &amp; lock screen"</em>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step13.jpg" alt="Step 13 - Enable Full Screen Notification" class="step-image">
+    </div>
+  </div>
+
+  <!-- Step 14 -->
+  <div class="step-card">
+    <div class="step-content">
+      <div class="step-number">14</div>
+      <h3 class="step-title">Toggle Full Screen Notification Switch</h3>
+      <div class="step-desc">
+        Sa Android system page ng <em>"Show full screen notifications"</em>:
+        <ul>
+          <li>I-on ang toggle switch: <br><strong>"Allow app to show full screen notifications when the device is locked"</strong>.</li>
+          <li>Pindutin ang <strong>Back button</strong> upang bumalik sa app.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-image-wrap">
+      <img src="./Step14.jpg" alt="Step 14 - Lock Screen Notification Toggle" class="step-image">
+    </div>
+  </div>
+
+  <!-- Success Verification -->
+  <div class="success-box">
+    <h3>🟢 ALL SYSTEMS ARMED &amp; OPERATIONAL</h3>
+    <p>
+      Kapag natapos ang 14 steps, makikita sa itaas ng app ang <strong>"Siren protection is ON"</strong> at <strong>"NO INTERNET NEEDED"</strong>. Handa na ang inyong telepono na mag-trigger ng malakas na alarma kahit naka-silent o naka-lock!
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

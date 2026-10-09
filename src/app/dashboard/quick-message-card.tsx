@@ -2,32 +2,34 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Send, CheckCircle2, AlertCircle, Loader2, Users, Smartphone, X } from "lucide-react";
+import { Send, CheckCircle2, AlertCircle, Loader2, Users, Smartphone, X, ArrowRight, UserCheck } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { sanitizePhMobileInput } from "@/lib/sms";
 import { useCurrentOfficer } from "@/components/officer-context";
+import { PersonnelRecipientCombobox, RecipientChip } from "@/components/personnel-recipient-combobox";
 
 export function QuickMessageCard() {
   const currentOfficer = useCurrentOfficer();
+  const { isViewer, guardAction } = currentOfficer;
   const groupsData = useQuery(api.groups.list);
   const personnelData = useQuery(api.personnel.list);
   const templatesData = useQuery(api.templates.list);
   const recordBroadcast = useMutation(api.broadcasts.record);
 
-  // Mode: "GROUP" (Simple Contact Group) vs "MANUAL" (TextBee Direct Numbers)
+  // Mode: "GROUP" (Simple Contact Group) vs "MANUAL" (Search Personnel / Direct Numbers)
   const [recipientMode, setRecipientMode] = useState<"GROUP" | "MANUAL">("GROUP");
 
   // Group Mode State
   const [selectedGroup, setSelectedGroup] = useState<string>("ALL");
 
-  // Manual Mode State (TextBee Style)
-  const [manualNumbers, setManualNumbers] = useState<string[]>([]);
-  const [numberInputValue, setNumberInputValue] = useState("");
+  // Personnel / Direct Mode State
+  const [manualRecipients, setManualRecipients] = useState<RecipientChip[]>([]);
 
   const [message, setMessage] = useState("");
+  const [selectedTemplateTitle, setSelectedTemplateTitle] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [lastSentCount, setLastSentCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
   const groups = groupsData || [];
@@ -45,67 +47,29 @@ export function QuickMessageCard() {
         .filter((p) => p.groupName === selectedGroup || p.groupId === selectedGroup)
         .map((p) => p.mobileNumber);
     }
-    return manualNumbers;
+    return manualRecipients.map((r) => r.number);
   };
 
   const activeRecipientCount = getActiveNumbers().length;
 
-  const handleApplyTemplate = (text: string) => {
-    setMessage(text);
+  const handleApplyTemplate = (tpl: (typeof templates)[number]) => {
+    setMessage(tpl.text);
+    setSelectedTemplateTitle(tpl.title);
     setError(null);
-  };
-
-  // Manual Tag Management (TextBee Style)
-  const addManualNumbers = (rawText: string) => {
-    const rawTokens = rawText.split(/[\r\n,;\s]+/);
-    const toAdd: string[] = [];
-
-    for (const token of rawTokens) {
-      const clean = token.trim();
-      if (!clean) continue;
-      const sanitized = sanitizePhMobileInput(clean);
-      if (sanitized && !manualNumbers.includes(sanitized) && !toAdd.includes(sanitized)) {
-        toAdd.push(sanitized);
-      }
-    }
-
-    if (toAdd.length > 0) {
-      setManualNumbers((prev) => [...prev, ...toAdd]);
-    }
-  };
-
-  const removeManualNumber = (indexToRemove: number) => {
-    setManualNumbers((prev) => prev.filter((_, idx) => idx !== indexToRemove));
-  };
-
-  const handleKeyDownManual = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === "," || e.key === " ") {
-      e.preventDefault();
-      if (numberInputValue.trim()) {
-        addManualNumbers(numberInputValue);
-        setNumberInputValue("");
-      }
-    } else if (e.key === "Backspace" && !numberInputValue && manualNumbers.length > 0) {
-      setManualNumbers((prev) => prev.slice(0, -1));
-    }
-  };
-
-  const handlePasteManual = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData("text");
-    if (pasted) {
-      addManualNumbers(pasted);
-      setNumberInputValue("");
-    }
   };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isViewer) {
+      guardAction("transmit text message broadcast");
+      return;
+    }
+
     const numbersToSend = getActiveNumbers();
 
     if (!message.trim() || numbersToSend.length === 0) {
       if (numbersToSend.length === 0 && recipientMode === "MANUAL") {
-        setError("Please enter at least one recipient phone number.");
+        setError("Please select at least one soldier or enter a phone number.");
       }
       return;
     }
@@ -114,6 +78,8 @@ export function QuickMessageCard() {
     setError(null);
     setSuccess(false);
 
+    const broadcastTitle = selectedTemplateTitle || "NO SMS TEMPLATE";
+
     try {
       const res = await fetch("/api/sms/send", {
         method: "POST",
@@ -121,40 +87,55 @@ export function QuickMessageCard() {
         body: JSON.stringify({
           recipients: numbersToSend,
           message: message,
-          title: "10RCDG ALERT",
+          title: broadcastTitle,
         }),
       });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // Record to Convex DB
-        await recordBroadcast({
-          title: "10RCDG ALERT",
-          content: message,
-          senderName: currentOfficer.displayName,
-          senderEmail: currentOfficer.email || undefined,
-          senderRank: currentOfficer.rank || undefined,
-          targetGroupNames: recipientMode === "GROUP" ? [selectedGroup] : ["Direct SMS"],
-          recipients: numbersToSend,
-          totalRecipients: numbersToSend.length,
-          deliveredCount: numbersToSend.length,
-          failedCount: 0,
-          status: "DELIVERED",
-          simSubscriptionId: 1,
-        });
-
+        // SMS successfully dispatched to carrier network
+        setLastSentCount(numbersToSend.length);
         setSuccess(true);
         setMessage("");
+        setSelectedTemplateTitle(null);
         if (recipientMode === "MANUAL") {
-          setManualNumbers([]);
+          setManualRecipients([]);
         }
-        setTimeout(() => setSuccess(false), 5000);
+        setTimeout(() => setSuccess(false), 9000);
+
+        // Record history to Convex DB in background
+        try {
+          await recordBroadcast({
+            title: broadcastTitle,
+            content: message,
+            senderName: currentOfficer.displayName || "Duty Officer",
+            senderEmail: currentOfficer.email || undefined,
+            senderRank: currentOfficer.rank || undefined,
+            targetGroupNames: recipientMode === "GROUP" ? [selectedGroup] : ["Direct SMS"],
+            recipients: numbersToSend,
+            totalRecipients: numbersToSend.length,
+            deliveredCount: numbersToSend.length,
+            failedCount: 0,
+            status: "DELIVERED",
+            simSubscriptionId: 1,
+            gatewayBatchId: data.messageId || data.smsBatchId || undefined,
+            recipientStatuses: numbersToSend.map((num) => ({
+              number: num,
+              status: "sent",
+              sentAt: new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Manila" }),
+            })),
+          });
+        } catch (dbErr) {
+          console.error("Warning: Failed to save broadcast history to Convex database:", dbErr);
+        }
       } else {
-        setError(data.error || "Failed to send text message.");
+        setError(data.error || "Failed to send text message via SMS gateway.");
       }
-    } catch {
-      setError("Cannot reach SMS gateway. Check internet connection.");
+    } catch (err: unknown) {
+      console.error("Network or gateway dispatch error:", err);
+      const errMsg = err instanceof Error ? err.message : "Cannot reach SMS gateway. Check internet connection.";
+      setError(errMsg);
     } finally {
       setIsSending(false);
     }
@@ -173,9 +154,44 @@ export function QuickMessageCard() {
       </div>
 
       {success && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-medium flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>Message successfully sent to {activeRecipientCount} recipients!</span>
+        <div className="p-4 bg-emerald-50/95 border border-emerald-300 rounded-2xl shadow-xs space-y-3 animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs relative">
+                <span className="absolute inset-0 rounded-xl bg-emerald-400 animate-ping opacity-30" />
+                <CheckCircle2 className="w-5 h-5 text-white relative z-10" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wide flex items-center gap-1.5">
+                  <span>Broadcast Dispatched Successfully</span>
+                </h4>
+                <p className="text-xs text-emerald-800 font-medium mt-0.5">
+                  Sent to {lastSentCount} {lastSentCount === 1 ? "recipient" : "recipients"} via 10RCDG GSM Gateway.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccess(false)}
+              className="text-emerald-700 hover:text-emerald-950 p-1 rounded-lg hover:bg-emerald-100/60 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-emerald-200/70">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold text-emerald-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Highlighted green in Outbox
+            </span>
+            <Link
+              href="/dashboard/messaging?tab=outbox"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs transition-all hover:translate-x-0.5 cursor-pointer"
+            >
+              <span>View the Sent SMS</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
       )}
 
@@ -215,8 +231,8 @@ export function QuickMessageCard() {
                     : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                <Smartphone className="w-3.5 h-3.5" />
-                Manual Numbers
+                <UserCheck className="w-3.5 h-3.5" />
+                Direct Personnel
               </button>
             </div>
           </div>
@@ -237,49 +253,13 @@ export function QuickMessageCard() {
             </select>
           )}
 
-          {/* Option B: TextBee Style Manual Recipient Input */}
+          {/* Option B: Autocomplete Personnel Combobox + Direct Numbers */}
           {recipientMode === "MANUAL" && (
-            <div className="space-y-1.5">
-              <div className="p-2.5 bg-slate-50 border border-slate-200 focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-700/20 rounded-xl transition-all flex flex-wrap items-center gap-1.5 min-h-[46px]">
-                {manualNumbers.map((num, idx) => (
-                  <span
-                    key={`${num}-${idx}`}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-200/90 text-slate-800 text-xs font-mono font-medium rounded-full"
-                  >
-                    <span>{num}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeManualNumber(idx)}
-                      className="w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-slate-400 text-slate-500 hover:text-slate-900 cursor-pointer"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </span>
-                ))}
-
-                <input
-                  type="text"
-                  value={numberInputValue}
-                  onChange={(e) => setNumberInputValue(e.target.value)}
-                  onKeyDown={handleKeyDownManual}
-                  onPaste={handlePasteManual}
-                  placeholder={manualNumbers.length === 0 ? "Type mobile number (e.g. 09171234567) & press Enter" : "Add another number"}
-                  className="flex-1 min-w-[170px] bg-transparent text-xs text-slate-900 font-mono placeholder:text-slate-400 focus:outline-none py-1"
-                />
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-400">
-                <span>Press Enter or comma to add. Paste a list to add several at once.</span>
-                {manualNumbers.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setManualNumbers([])}
-                    className="text-red-600 hover:underline font-bold cursor-pointer"
-                  >
-                    Clear All
-                  </button>
-                )}
-              </div>
-            </div>
+            <PersonnelRecipientCombobox
+              recipients={manualRecipients}
+              onChange={setManualRecipients}
+              personnel={personnel}
+            />
           )}
         </div>
 
@@ -300,7 +280,7 @@ export function QuickMessageCard() {
                     {idx > 0 && <span className="text-slate-300 mr-1.5">•</span>}
                     <button
                       type="button"
-                      onClick={() => handleApplyTemplate(tpl.text)}
+                      onClick={() => handleApplyTemplate(tpl)}
                       className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 hover:underline cursor-pointer"
                       title={tpl.title}
                     >
@@ -324,7 +304,10 @@ export function QuickMessageCard() {
           <textarea
             rows={4}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => {
+              setMessage(e.target.value);
+              if (!e.target.value.trim()) setSelectedTemplateTitle(null);
+            }}
             placeholder="Type your message here or click a template above..."
             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700 focus:bg-white resize-none leading-relaxed transition-all font-mono"
           />

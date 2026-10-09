@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { assertCallerAuthorized } from "./access";
 
 // List all personnel
 export const list = query({
@@ -21,8 +22,10 @@ export const create = mutation({
     unit: v.string(),
     email: v.optional(v.string()),
     createdBy: v.optional(v.string()),
+    createdByEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.createdByEmail, "create personnel");
     const creatorName = args.createdBy || "Authorized Officer";
 
     const id = await ctx.db.insert("personnel", {
@@ -67,8 +70,10 @@ export const update = mutation({
     unit: v.string(),
     email: v.optional(v.string()),
     updatedBy: v.optional(v.string()),
+    updatedByEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.updatedByEmail, "update personnel");
     const { id, ...data } = args;
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Personnel record not found");
@@ -113,8 +118,10 @@ export const toggleStatus = mutation({
   args: {
     id: v.id("personnel"),
     updatedBy: v.optional(v.string()),
+    updatedByEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.updatedByEmail, "toggle personnel status");
     const person = await ctx.db.get(args.id);
     if (!person) throw new Error("Personnel not found");
 
@@ -153,8 +160,10 @@ export const toggleStatus = mutation({
 export const remove = mutation({
   args: {
     id: v.id("personnel"),
+    officerEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.officerEmail, "remove personnel");
     const person = await ctx.db.get(args.id);
     if (person) {
       await ctx.db.insert("auditLogs", {

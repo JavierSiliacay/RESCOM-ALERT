@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { assertCallerAuthorized } from "./access";
 
 // List recent broadcast transmissions
 export const list = query({
@@ -25,8 +26,19 @@ export const record = mutation({
     status: v.union(v.literal("DELIVERED"), v.literal("SENDING"), v.literal("FAILED")),
     simSubscriptionId: v.optional(v.number()),
     gatewayBatchId: v.optional(v.string()),
+    recipientStatuses: v.optional(
+      v.array(
+        v.object({
+          number: v.string(),
+          status: v.string(),
+          sentAt: v.optional(v.string()),
+          error: v.optional(v.string()),
+        })
+      )
+    ),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.senderEmail, "record SMS broadcast");
     const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" });
     const id = await ctx.db.insert("broadcasts", {
       ...args,
@@ -40,7 +52,7 @@ export const record = mutation({
       userRole: "COMMANDER",
       category: "BROADCAST",
       action: "TRANSMIT_SMS",
-      details: `Dispatched broadcast [${args.title}] to ${args.totalRecipients} recipients via SIM ${args.simSubscriptionId || 1}`,
+      details: `Dispatched broadcast [${args.title}] to ${args.totalRecipients} recipients via SIM ${args.simSubscriptionId || 1}${args.gatewayBatchId ? ` [Batch: ${args.gatewayBatchId}]` : ""}`,
       ipAddress: "127.0.0.1",
       timestamp,
     });
@@ -62,3 +74,29 @@ export const updateStatus = mutation({
     await ctx.db.patch(id, data);
   },
 });
+
+// Update verified batch telemetry and individual recipient statuses from gateway
+export const updateBatchDetails = mutation({
+  args: {
+    id: v.id("broadcasts"),
+    deliveredCount: v.number(),
+    failedCount: v.number(),
+    status: v.union(v.literal("DELIVERED"), v.literal("SENDING"), v.literal("FAILED")),
+    gatewayBatchId: v.optional(v.string()),
+    recipientStatuses: v.optional(
+      v.array(
+        v.object({
+          number: v.string(),
+          status: v.string(),
+          sentAt: v.optional(v.string()),
+          error: v.optional(v.string()),
+        })
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...data } = args;
+    await ctx.db.patch(id, data);
+  },
+});
+

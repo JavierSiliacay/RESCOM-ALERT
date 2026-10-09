@@ -26,6 +26,7 @@ import {
   Code2,
   Smartphone,
 } from "lucide-react";
+import { useCurrentOfficer } from "@/components/officer-context";
 
 export function DashboardNav({
   userEmail,
@@ -42,13 +43,18 @@ export function DashboardNav({
   userRank?: string;
   children: React.ReactNode;
 }) {
+  const currentOfficer = useCurrentOfficer();
+  const effectiveRole = currentOfficer.role || userRole;
+  const effectiveRank = currentOfficer.rank || userRank;
+  const effectiveName = currentOfficer.name || userName;
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const pathname = usePathname();
 
   const isDeveloper =
-    userRole === "DEVELOPER" ||
+    effectiveRole === "DEVELOPER" ||
     (userEmail && userEmail.toLowerCase().trim() === "siliacay.javier@gmail.com");
 
   const navItems = [
@@ -299,14 +305,18 @@ export function DashboardNav({
               Connected as
             </span>
           </div>
-          {userRole === "DEVELOPER" ? (
+          {effectiveRole === "DEVELOPER" ? (
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 bg-purple-100 px-2 py-0.5 rounded border border-purple-300 shadow-2xs font-mono flex items-center gap-1.5">
               <Code2 className="w-3.5 h-3.5 text-purple-700 shrink-0" />
               <span>DEVELOPER</span>
             </span>
+          ) : effectiveRole === "VIEWER" ? (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-300 shadow-2xs font-mono flex items-center gap-1">
+              <span>VIEWER (READ-ONLY)</span>
+            </span>
           ) : (
             <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300 shadow-2xs font-mono">
-              {userRole || "COMMANDER"}
+              {effectiveRole || "COMMANDER"}
             </span>
           )}
         </div>
@@ -367,14 +377,14 @@ export function DashboardNav({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1">
                 <p className="text-xs font-bold text-slate-900 truncate">
-                  {userName}
+                  {effectiveName}
                 </p>
-                {userRole === "COMMANDER" && (
+                {effectiveRole === "COMMANDER" && (
                   <Crown className="w-3 h-3 text-amber-600 shrink-0" />
                 )}
               </div>
               <p className="text-[11px] text-slate-500 truncate">
-                {userRank || "Personnel Officer"}
+                {effectiveRank || "Personnel Officer"}
               </p>
             </div>
 
@@ -442,9 +452,9 @@ export function DashboardNav({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="text-xs font-bold text-slate-900 truncate">
-                      {userName}
+                      {effectiveName}
                     </p>
-                    {userRole === "COMMANDER" && (
+                    {effectiveRole === "COMMANDER" && (
                       <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">
                         COMMANDER
                       </span>

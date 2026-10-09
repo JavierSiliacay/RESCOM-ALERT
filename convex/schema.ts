@@ -55,8 +55,20 @@ export default defineSchema({
     status: v.union(v.literal("DELIVERED"), v.literal("SENDING"), v.literal("FAILED")),
     simSubscriptionId: v.optional(v.number()), // 1 for SIM 1, 2 for SIM 2
     gatewayBatchId: v.optional(v.string()),
+    recipientStatuses: v.optional(
+      v.array(
+        v.object({
+          number: v.string(),
+          status: v.string(),
+          sentAt: v.optional(v.string()),
+          error: v.optional(v.string()),
+        })
+      )
+    ),
     sentAt: v.string(),
-  }).index("by_sentAt", ["sentAt"]),
+  })
+    .index("by_sentAt", ["sentAt"])
+    .index("by_gatewayBatchId", ["gatewayBatchId"]),
 
   // Audit Logs (Security, Authentication, Operations)
   auditLogs: defineTable({

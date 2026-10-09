@@ -11,11 +11,13 @@ import {
   ExternalLink,
   ChevronRight,
   Radio,
+  Bookmark,
 } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { QuickMessageCard } from "./quick-message-card";
 import { Skeleton, StatCardSkeleton } from "@/components/skeleton";
+import { formatBroadcastTitle } from "@/lib/sms";
 
 export default function DashboardPage() {
   const personnelData = useQuery(api.personnel.list);
@@ -150,15 +152,23 @@ export default function DashboardPage() {
                   const deliveryPct = msg.totalRecipients > 0
                     ? Math.round((msg.deliveredCount / msg.totalRecipients) * 100)
                     : 100;
+                  const { title: displayTitle, isTemplate } = formatBroadcastTitle(msg.title);
                   return (
                     <div
                       key={msg._id}
                       className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-slate-100/80 transition-all space-y-1.5"
                     >
                       <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-bold text-slate-900 truncate pr-2">
-                          {msg.title}
-                        </h3>
+                        {isTemplate ? (
+                          <h3 className="text-xs font-bold text-slate-900 truncate pr-2 flex items-center gap-1.5">
+                            <Bookmark className="w-3 h-3 text-emerald-700 shrink-0" />
+                            <span>{displayTitle}</span>
+                          </h3>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase font-mono bg-slate-100 text-slate-500 border border-slate-200">
+                            NO SMS TEMPLATE
+                          </span>
+                        )}
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 font-mono">
                           {deliveryPct}% Delivered
                         </span>

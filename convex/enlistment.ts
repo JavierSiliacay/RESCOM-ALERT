@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import { calculateSuspensionExpiry } from "./access";
+import { calculateSuspensionExpiry, assertCallerAuthorized } from "./access";
 
 // Helper to generate a clean, readable campaign slug code (e.g. "1001-muster-8N2K")
 function generateCampaignCode(title: string): string {
@@ -24,8 +24,10 @@ export const createCampaign = mutation({
     groupName: v.string(),
     durationStr: v.string(),
     createdBy: v.string(),
+    createdByEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.createdByEmail, "create enlistment campaign");
     const cleanPasscode = args.passcode.trim().toUpperCase();
     if (!cleanPasscode) {
       throw new Error("A secure unit passcode is required.");
@@ -291,6 +293,7 @@ export const approveSubmission = mutation({
     reviewerName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.reviewerEmail, "approve enlistment submission");
     const sub = await ctx.db.get(args.submissionId);
     if (!sub) throw new Error("Submission not found.");
 
@@ -368,6 +371,7 @@ export const bulkApproveSubmissions = mutation({
     reviewerName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.reviewerEmail, "bulk approve enlistment submissions");
     const approverName = args.reviewerName || args.reviewerEmail || "Authorized Officer";
     const updateTimestamp = new Date().toLocaleString("en-US", {
       timeZone: "Asia/Manila",
@@ -446,6 +450,7 @@ export const rejectSubmission = mutation({
     reviewerName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.reviewerEmail, "reject enlistment submission");
     const reviewer = args.reviewerName || args.reviewerEmail || "Authorized Officer";
     await ctx.db.patch(args.submissionId, {
       status: "REJECTED",
@@ -458,8 +463,12 @@ export const rejectSubmission = mutation({
 
 // 10. Close / Invalidate Campaign Early
 export const closeCampaign = mutation({
-  args: { campaignId: v.id("enlistmentCampaigns") },
+  args: {
+    campaignId: v.id("enlistmentCampaigns"),
+    officerEmail: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.officerEmail, "close enlistment campaign");
     await ctx.db.patch(args.campaignId, {
       status: "CLOSED",
     });
@@ -469,8 +478,12 @@ export const closeCampaign = mutation({
 
 // 11. Delete Campaign
 export const removeCampaign = mutation({
-  args: { campaignId: v.id("enlistmentCampaigns") },
+  args: {
+    campaignId: v.id("enlistmentCampaigns"),
+    officerEmail: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.officerEmail, "delete enlistment campaign");
     const subs = await ctx.db
       .query("enlistmentSubmissions")
       .withIndex("by_campaignId", (q) => q.eq("campaignId", args.campaignId))

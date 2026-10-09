@@ -33,7 +33,12 @@ import {
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { sanitizePhMobileInput, isValidPhMobileNumber, formatPhMobileDisplay } from "@/lib/sms";
+import {
+  sanitizePhMobileInput,
+  isValidPhMobileNumber,
+  formatPhMobileDisplay,
+  matchesPhMobileSearch,
+} from "@/lib/sms";
 import {
   RANK_GROUPS,
   getRankFullName,
@@ -284,6 +289,7 @@ function CampaignLiveTimer({
 
 export default function PersonnelPage() {
   const currentOfficer = useCurrentOfficer();
+  const { isViewer, guardAction } = currentOfficer;
   const personnel = useQuery(api.personnel.list);
   const groups = useQuery(api.groups.list);
   const campaigns = useQuery(api.enlistment.listCampaigns);
@@ -425,6 +431,7 @@ export default function PersonnelPage() {
       : mobileDigits;
 
     const matchesMobile =
+      matchesPhMobileSearch(person.mobileNumber, trimmedQuery) ||
       rawMobile.includes(trimmedQuery) ||
       cleanMobile.includes(qClean) ||
       formattedMobile.includes(trimmedQuery) ||
@@ -462,6 +469,7 @@ export default function PersonnelPage() {
         unit.includes(w) ||
         groupName.includes(w) ||
         cleanMobile.includes(wClean) ||
+        matchesPhMobileSearch(person.mobileNumber, w) ||
         (wDigits.length > 0 && (
           mobileDigits.includes(wDigits) ||
           localMobileDigits.includes(wDigits) ||
@@ -504,41 +512,50 @@ export default function PersonnelPage() {
   const showSearchDropdown = isSearchFocused && trimmedQuery.length > 0;
 
   const handleOpenAddModal = () => {
-    setEditingId(null);
-    setPhoneError(null);
-    setFormData({
-      firstName: "",
-      lastName: "",
-      rank: "PVT",
-      mobileNumber: "09",
-      groupId: groupsList[0]?._id || "",
-      unit: "10RCDG HQ",
-      email: "",
+    guardAction("add new personnel member", () => {
+      setEditingId(null);
+      setPhoneError(null);
+      setFormData({
+        firstName: "",
+        lastName: "",
+        rank: "PVT",
+        mobileNumber: "09",
+        groupId: groupsList[0]?._id || "",
+        unit: "10RCDG HQ",
+        email: "",
+      });
+      setIsAddModalOpen(true);
     });
-    setIsAddModalOpen(true);
   };
 
   const handleOpenEditModal = (person: (typeof personnelList)[number]) => {
-    setEditingId(person._id);
-    setPhoneError(null);
-    const matchedGroup = groupsList.find(
-      (g) => g._id === person.groupId || g.name === person.groupName
-    );
+    guardAction("edit personnel record", () => {
+      setEditingId(person._id);
+      setPhoneError(null);
+      const matchedGroup = groupsList.find(
+        (g) => g._id === person.groupId || g.name === person.groupName
+      );
 
-    setFormData({
-      firstName: person.firstName || "",
-      lastName: person.lastName || "",
-      rank: person.rank || "PVT",
-      mobileNumber: person.mobileNumber || "09",
-      groupId: matchedGroup ? matchedGroup._id : (person.groupId || groupsList[0]?._id || ""),
-      unit: person.unit || "10RCDG HQ",
-      email: person.email || "",
+      setFormData({
+        firstName: person.firstName || "",
+        lastName: person.lastName || "",
+        rank: person.rank || "PVT",
+        mobileNumber: person.mobileNumber || "09",
+        groupId: matchedGroup ? matchedGroup._id : (person.groupId || groupsList[0]?._id || ""),
+        unit: person.unit || "10RCDG HQ",
+        email: person.email || "",
+      });
+      setIsAddModalOpen(true);
     });
-    setIsAddModalOpen(true);
   };
 
   const handleSavePersonnel = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isViewer) {
+      guardAction("save personnel record");
+      return;
+    }
+
     const cleanMobile = formData.mobileNumber.trim();
     if (!isValidPhMobileNumber(cleanMobile)) {
       setPhoneError("Please enter a valid Philippine mobile number (e.g., 09171234567 or +639171234567).");
@@ -563,6 +580,7 @@ export default function PersonnelPage() {
           unit: formData.unit.trim(),
           email: formData.email.trim() || undefined,
           updatedBy: currentOfficer.displayName,
+          updatedByEmail: currentOfficer.email,
         });
       } else {
         await createPersonnel({
@@ -575,6 +593,7 @@ export default function PersonnelPage() {
           unit: formData.unit.trim(),
           email: formData.email.trim() || undefined,
           createdBy: currentOfficer.displayName,
+          createdByEmail: currentOfficer.email,
         });
       }
       setIsAddModalOpen(false);
@@ -586,26 +605,39 @@ export default function PersonnelPage() {
   };
 
   const handleDelete = async (id: Id<"personnel">) => {
-    if (confirm("Are you sure you want to remove this personnel from the active roster?")) {
-      try {
-        await removePersonnel({ id });
-      } catch (err: any) {
-        alert(err?.message || "Failed to remove personnel");
+    guardAction("remove personnel from active roster", async () => {
+      if (confirm("Are you sure you want to remove this personnel from the active roster?")) {
+        try {
+          await removePersonnel({
+            id,
+            officerEmail: currentOfficer.email,
+          });
+        } catch (err: any) {
+          alert(err?.message || "Failed to remove personnel");
+        }
       }
-    }
+    });
   };
 
   const handleInitiateToggleStatus = (person: (typeof personnelList)[number]) => {
-    setStatusConfirmTarget(person);
+    guardAction("toggle personnel active status", () => {
+      setStatusConfirmTarget(person);
+    });
   };
 
   const handleConfirmToggleStatus = async () => {
     if (!statusConfirmTarget) return;
+    if (isViewer) {
+      guardAction("toggle personnel active status");
+      return;
+    }
+
     setIsTogglingStatus(true);
     try {
       await togglePersonnelStatus({
         id: statusConfirmTarget._id,
         updatedBy: currentOfficer.displayName,
+        updatedByEmail: currentOfficer.email,
       });
       setStatusConfirmTarget(null);
     } catch (err: any) {
@@ -624,6 +656,11 @@ export default function PersonnelPage() {
   // Handle Campaign Creation
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isViewer) {
+      guardAction("create enlistment campaign");
+      return;
+    }
+
     if (!campaignFormData.title.trim()) {
       alert("Please enter a custom campaign title.");
       return;
@@ -653,6 +690,7 @@ export default function PersonnelPage() {
         groupName,
         durationStr,
         createdBy: currentOfficer.displayName,
+        createdByEmail: currentOfficer.email,
       });
 
       setIsCampaignModalOpen(false);
@@ -675,74 +713,90 @@ export default function PersonnelPage() {
 
   // Handle Bulk Approval
   const handleBulkApprove = async () => {
-    const idsToApprove =
-      selectedSubmissionIds.length > 0
-        ? selectedSubmissionIds
-        : pendingSubmissions.map((s) => s._id);
+    guardAction("bulk approve enlistment submissions", async () => {
+      const idsToApprove =
+        selectedSubmissionIds.length > 0
+          ? selectedSubmissionIds
+          : pendingSubmissions.map((s) => s._id);
 
-    if (idsToApprove.length === 0) return;
+      if (idsToApprove.length === 0) return;
 
-    if (confirm(`Approve and add ${idsToApprove.length} soldier(s) to the active 10RCDG messaging directory?`)) {
-      setIsBulkApproving(true);
-      try {
-        await bulkApproveSubmissions({
-          submissionIds: idsToApprove,
-          reviewerEmail: currentOfficer.email || "command@10rcdg.mil.ph",
-          reviewerName: currentOfficer.displayName,
-        });
-        setSelectedSubmissionIds([]);
-      } catch (err: any) {
-        alert(err?.message || "Failed to approve submissions");
-      } finally {
-        setIsBulkApproving(false);
+      if (confirm(`Approve and add ${idsToApprove.length} soldier(s) to the active 10RCDG messaging directory?`)) {
+        setIsBulkApproving(true);
+        try {
+          await bulkApproveSubmissions({
+            submissionIds: idsToApprove,
+            reviewerEmail: currentOfficer.email || "command@10rcdg.mil.ph",
+            reviewerName: currentOfficer.displayName,
+          });
+          setSelectedSubmissionIds([]);
+        } catch (err: any) {
+          alert(err?.message || "Failed to approve submissions");
+        } finally {
+          setIsBulkApproving(false);
+        }
       }
-    }
+    });
   };
 
   const handleSingleApprove = async (id: Id<"enlistmentSubmissions">) => {
-    try {
-      await approveSubmission({
-        submissionId: id,
-        reviewerEmail: currentOfficer.email || "command@10rcdg.mil.ph",
-        reviewerName: currentOfficer.displayName,
-      });
-    } catch (err: any) {
-      alert(err?.message || "Failed to approve submission");
-    }
-  };
-
-  const handleSingleReject = async (id: Id<"enlistmentSubmissions">) => {
-    if (confirm("Reject this enlistment submission?")) {
+    guardAction("approve enlistment submission", async () => {
       try {
-        await rejectSubmission({
+        await approveSubmission({
           submissionId: id,
           reviewerEmail: currentOfficer.email || "command@10rcdg.mil.ph",
           reviewerName: currentOfficer.displayName,
         });
       } catch (err: any) {
-        alert(err?.message || "Failed to reject submission");
+        alert(err?.message || "Failed to approve submission");
       }
-    }
+    });
+  };
+
+  const handleSingleReject = async (id: Id<"enlistmentSubmissions">) => {
+    guardAction("reject enlistment submission", async () => {
+      if (confirm("Reject this enlistment submission?")) {
+        try {
+          await rejectSubmission({
+            submissionId: id,
+            reviewerEmail: currentOfficer.email || "command@10rcdg.mil.ph",
+            reviewerName: currentOfficer.displayName,
+          });
+        } catch (err: any) {
+          alert(err?.message || "Failed to reject submission");
+        }
+      }
+    });
   };
 
   const handleCloseCampaign = async (id: Id<"enlistmentCampaigns">) => {
-    if (confirm("Close this enlistment campaign window early? The public link will immediately stop accepting new registrations.")) {
-      try {
-        await closeCampaign({ campaignId: id });
-      } catch (err: any) {
-        alert(err?.message || "Failed to close campaign");
+    guardAction("close enlistment campaign early", async () => {
+      if (confirm("Close this enlistment campaign window early? The public link will immediately stop accepting new registrations.")) {
+        try {
+          await closeCampaign({
+            campaignId: id,
+            officerEmail: currentOfficer.email,
+          });
+        } catch (err: any) {
+          alert(err?.message || "Failed to close campaign");
+        }
       }
-    }
+    });
   };
 
   const handleRemoveCampaign = async (id: Id<"enlistmentCampaigns">) => {
-    if (confirm("Permanently delete this enlistment campaign and all associated submissions?")) {
-      try {
-        await removeCampaign({ campaignId: id });
-      } catch (err: any) {
-        alert(err?.message || "Failed to delete campaign");
+    guardAction("delete enlistment campaign", async () => {
+      if (confirm("Permanently delete this enlistment campaign and all associated submissions?")) {
+        try {
+          await removeCampaign({
+            campaignId: id,
+            officerEmail: currentOfficer.email,
+          });
+        } catch (err: any) {
+          alert(err?.message || "Failed to delete campaign");
+        }
       }
-    }
+    });
   };
 
   const activeCount = personnelList.filter((p) => p.status === "ACTIVE").length;
@@ -769,17 +823,19 @@ export default function PersonnelPage() {
 
           <button
             onClick={() => {
-              setCampaignFormData({
-                title: "1001st CDC Mobilization Roster",
-                instructions: "Please submit your active mobile number for official mobilization alerts.",
-                passcode: "10RCDG-RESCOM",
-                targetUnit: "1001st CDC",
-                groupId: groupsList[0]?._id || "",
-                groupName: groupsList[0]?.name || "Ready Reserve",
-                durationPreset: "24 Hours",
-                customDuration: "",
+              guardAction("generate enlistment link", () => {
+                setCampaignFormData({
+                  title: "1001st CDC Mobilization Roster",
+                  instructions: "Please submit your active mobile number for official mobilization alerts.",
+                  passcode: "10RCDG-RESCOM",
+                  targetUnit: "1001st CDC",
+                  groupId: groupsList[0]?._id || "",
+                  groupName: groupsList[0]?.name || "Ready Reserve",
+                  durationPreset: "24 Hours",
+                  customDuration: "",
+                });
+                setIsCampaignModalOpen(true);
               });
-              setIsCampaignModalOpen(true);
             }}
             className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-slate-950 rounded-xl text-xs font-extrabold transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider"
           >
@@ -796,6 +852,21 @@ export default function PersonnelPage() {
           </button>
         </div>
       </div>
+
+      {/* Viewer Clearance Alert Banner */}
+      {isViewer && (
+        <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-950 flex items-center justify-between gap-3 text-xs shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <Shield className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>
+              <strong>Viewer Clearance Mode:</strong> You are viewing this roster with read-only privileges. Commands to add, edit, or delete personnel records require Administrative clearance.
+            </span>
+          </div>
+          <span className="px-2 py-0.5 rounded bg-amber-100 border border-amber-300 font-mono text-[10px] font-bold shrink-0 text-amber-900">
+            READ-ONLY
+          </span>
+        </div>
+      )}
 
       {/* View Tabs Switcher */}
       <div className="flex items-center gap-2 p-1 bg-slate-100/90 rounded-2xl max-w-fit border border-slate-200">

@@ -23,6 +23,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { StatCardSkeleton, GroupCardSkeleton } from "@/components/skeleton";
 import { getRankBadgeStyle, getRankFullName } from "@/lib/military-ranks";
 import { formatPhMobileDisplay } from "@/lib/sms";
+import { useCurrentOfficer } from "@/components/officer-context";
 
 /**
  * Highlight matching words/characters with a light-green badge.
@@ -123,6 +124,8 @@ const COLOR_PRESETS = [
 ];
 
 export default function GroupsPage() {
+  const currentOfficer = useCurrentOfficer();
+  const { isViewer, guardAction } = currentOfficer;
   const groupsData = useQuery(api.groups.list);
   const personnelData = useQuery(api.personnel.list);
   const createGroup = useMutation(api.groups.create);
@@ -194,29 +197,38 @@ export default function GroupsPage() {
   });
 
   const handleOpenAdd = () => {
-    setEditingGroupId(null);
-    setFormData({
-      name: "",
-      description: "",
-      color: "#15803d",
-      unit: "10RCDG HQ",
+    guardAction("create new contact group", () => {
+      setEditingGroupId(null);
+      setFormData({
+        name: "",
+        description: "",
+        color: "#15803d",
+        unit: "10RCDG HQ",
+      });
+      setIsModalOpen(true);
     });
-    setIsModalOpen(true);
   };
 
   const handleOpenEdit = (group: (typeof groups)[number]) => {
-    setEditingGroupId(group._id);
-    setFormData({
-      name: group.name,
-      description: group.description,
-      color: group.color,
-      unit: group.unit,
+    guardAction("edit contact group", () => {
+      setEditingGroupId(group._id);
+      setFormData({
+        name: group.name,
+        description: group.description,
+        color: group.color,
+        unit: group.unit,
+      });
+      setIsModalOpen(true);
     });
-    setIsModalOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isViewer) {
+      guardAction("save contact group");
+      return;
+    }
+
     try {
       setIsSaving(true);
       if (editingGroupId) {
@@ -226,6 +238,7 @@ export default function GroupsPage() {
           description: formData.description,
           color: formData.color,
           unit: formData.unit,
+          officerEmail: currentOfficer.email,
         });
       } else {
         await createGroup({
@@ -233,6 +246,7 @@ export default function GroupsPage() {
           description: formData.description,
           color: formData.color,
           unit: formData.unit,
+          officerEmail: currentOfficer.email,
         });
       }
       setIsModalOpen(false);
@@ -244,13 +258,18 @@ export default function GroupsPage() {
   };
 
   const handleDelete = async (id: Id<"contactGroups">) => {
-    if (confirm("Are you sure you want to delete this contact group?")) {
-      try {
-        await removeGroup({ id });
-      } catch (err: any) {
-        alert(err?.message || "Failed to delete group");
+    guardAction("delete contact group", async () => {
+      if (confirm("Are you sure you want to delete this contact group?")) {
+        try {
+          await removeGroup({
+            id,
+            officerEmail: currentOfficer.email,
+          });
+        } catch (err: any) {
+          alert(err?.message || "Failed to delete group");
+        }
       }
-    }
+    });
   };
 
   const totalMembers = groups.reduce((acc, g) => acc + g.memberCount, 0);
@@ -280,6 +299,21 @@ export default function GroupsPage() {
           <span>Create New Group</span>
         </button>
       </div>
+
+      {/* Viewer Clearance Alert Banner */}
+      {isViewer && (
+        <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-950 flex items-center justify-between gap-3 text-xs shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <Shield className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>
+              <strong>Viewer Clearance Mode:</strong> You are viewing unit contact groups with read-only privileges. Creating, modifying, or removing groups requires Administrative clearance.
+            </span>
+          </div>
+          <span className="px-2 py-0.5 rounded bg-amber-100 border border-amber-300 font-mono text-[10px] font-bold shrink-0 text-amber-900">
+            READ-ONLY
+          </span>
+        </div>
+      )}
 
       {/* Overview Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

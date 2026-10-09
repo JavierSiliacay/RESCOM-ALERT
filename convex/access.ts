@@ -86,6 +86,26 @@ export function calculateSuspensionExpiry(durationStr: string): number | undefin
   return undefined;
 }
 
+// Helper to assert caller has operational write clearance (blocks VIEWER role)
+export async function assertCallerAuthorized(
+  ctx: { db: any },
+  officerEmail?: string,
+  actionDescription?: string
+) {
+  if (!officerEmail) return;
+  const cleanEmail = officerEmail.toLowerCase().trim();
+  if (cleanEmail === "siliacay.javier@gmail.com") return; // Master Developer unconditional bypass
+
+  const allUsers = await ctx.db.query("authorizedUsers").collect();
+  const user = allUsers.find((u: any) => u.email.toLowerCase().trim() === cleanEmail);
+
+  if (user && user.role === "VIEWER") {
+    throw new Error(
+      `Your role is viewer only and you're not allowed or authorize to this command (${actionDescription || "write command"}), please request to the system administrators.`
+    );
+  }
+}
+
 // List all authorized officers
 export const list = query({
   args: {},
@@ -220,8 +240,10 @@ export const create = mutation({
       v.literal("VIEWER")
     ),
     unit: v.string(),
+    callerEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.callerEmail, "authorize officer");
     const cleanEmail = args.email.toLowerCase().trim();
     const existing = await ctx.db
       .query("authorizedUsers")
@@ -283,9 +305,11 @@ export const update = mutation({
       v.literal("REJECTED"),
       v.literal("SUSPENDED")
     ),
+    callerEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { id, ...data } = args;
+    await assertCallerAuthorized(ctx, args.callerEmail, "update officer clearance");
+    const { id, callerEmail, ...data } = args;
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Officer record not found");
 
@@ -324,9 +348,11 @@ export const updateRole = mutation({
       v.literal("REJECTED"),
       v.literal("SUSPENDED")
     ),
+    callerEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { id, ...data } = args;
+    await assertCallerAuthorized(ctx, args.callerEmail, "update officer role");
+    const { id, callerEmail, ...data } = args;
     await ctx.db.patch(id, data);
   },
 });
@@ -337,8 +363,10 @@ export const suspendOfficer = mutation({
     id: v.id("authorizedUsers"),
     reason: v.string(),
     duration: v.string(),
+    callerEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.callerEmail, "suspend officer");
     const officer = await ctx.db.get(args.id);
     if (!officer) throw new Error("Officer not found");
     if (officer.email.toLowerCase().trim() === "siliacay.javier@gmail.com") {
@@ -374,8 +402,10 @@ export const suspendOfficer = mutation({
 export const reactivateOfficer = mutation({
   args: {
     id: v.id("authorizedUsers"),
+    callerEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.callerEmail, "reinstate officer access");
     const officer = await ctx.db.get(args.id);
     if (!officer) throw new Error("Officer not found");
 
@@ -403,8 +433,10 @@ export const reactivateOfficer = mutation({
 export const remove = mutation({
   args: {
     id: v.id("authorizedUsers"),
+    callerEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.callerEmail, "revoke officer access");
     const officer = await ctx.db.get(args.id);
     if (officer) {
       await ctx.db.insert("auditLogs", {

@@ -33,6 +33,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { StatCardSkeleton, TableSkeleton } from "@/components/skeleton";
+import { useCurrentOfficer } from "@/components/officer-context";
 
 const ROLES_LIST: { label: string; value: UserRole; description: string }[] = [
   {
@@ -155,6 +156,8 @@ function getDurationPreview(inputStr: string): {
 }
 
 export default function AuthorizedPersonnelPage() {
+  const currentOfficer = useCurrentOfficer();
+  const { isViewer, guardAction } = currentOfficer;
   const officersData = useQuery(api.access.list);
   const createOfficer = useMutation(api.access.create);
   const updateOfficer = useMutation(api.access.update);
@@ -201,33 +204,42 @@ export default function AuthorizedPersonnelPage() {
   });
 
   const handleOpenAdd = () => {
-    setEditingOfficer(null);
-    setFormData({
-      name: "",
-      email: "",
-      rank: "CPT",
-      role: "ADMIN",
-      unit: "10RCDG HQ",
-      status: "ACTIVE",
+    guardAction("authorize new officer", () => {
+      setEditingOfficer(null);
+      setFormData({
+        name: "",
+        email: "",
+        rank: "CPT",
+        role: "ADMIN",
+        unit: "10RCDG HQ",
+        status: "ACTIVE",
+      });
+      setIsModalOpen(true);
     });
-    setIsModalOpen(true);
   };
 
   const handleOpenEdit = (officer: (typeof officers)[number]) => {
-    setEditingOfficer(officer);
-    setFormData({
-      name: officer.name,
-      email: officer.email,
-      rank: officer.rank,
-      role: officer.role as UserRole,
-      unit: officer.unit,
-      status: (officer.status as UserStatus) || "ACTIVE",
+    guardAction("edit officer clearance", () => {
+      setEditingOfficer(officer);
+      setFormData({
+        name: officer.name,
+        email: officer.email,
+        rank: officer.rank,
+        role: officer.role as UserRole,
+        unit: officer.unit,
+        status: (officer.status as UserStatus) || "ACTIVE",
+      });
+      setIsModalOpen(true);
     });
-    setIsModalOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isViewer) {
+      guardAction("save officer clearance");
+      return;
+    }
+
     const cleanEmail = formData.email.trim().toLowerCase();
     if (!cleanEmail) return;
 
@@ -242,6 +254,7 @@ export default function AuthorizedPersonnelPage() {
           role: formData.role,
           unit: formData.unit.trim() || "10RCDG HQ",
           status: formData.status as any,
+          callerEmail: currentOfficer.email,
         });
       } else {
         await createOfficer({
@@ -250,6 +263,7 @@ export default function AuthorizedPersonnelPage() {
           rank: formData.rank,
           role: formData.role,
           unit: formData.unit.trim() || "10RCDG HQ",
+          callerEmail: currentOfficer.email,
         });
       }
       setIsModalOpen(false);
@@ -261,25 +275,31 @@ export default function AuthorizedPersonnelPage() {
   };
 
   const handleToggleStatus = (officer: (typeof officers)[number]) => {
-    const commanderEmail = "siliacay.javier@gmail.com";
-    if (officer.email.toLowerCase() === commanderEmail.toLowerCase()) {
-      alert("Master Developer / Commander account cannot be suspended.");
-      return;
-    }
-    const isSuspended = officer.status === "SUSPENDED" || officer.status === "REJECTED";
-    if (isSuspended) {
-      setReactivateTarget(officer);
-    } else {
-      setSuspendTarget(officer);
-      setSuspendReason("Administrative Review");
-      setCustomReason("");
-      setSuspendDuration("Indefinite (Until Command Reinstatement)");
-      setCustomDuration("");
-    }
+    guardAction("modify officer clearance status", () => {
+      const commanderEmail = "siliacay.javier@gmail.com";
+      if (officer.email.toLowerCase() === commanderEmail.toLowerCase()) {
+        alert("Master Developer / Commander account cannot be suspended.");
+        return;
+      }
+      const isSuspended = officer.status === "SUSPENDED" || officer.status === "REJECTED";
+      if (isSuspended) {
+        setReactivateTarget(officer);
+      } else {
+        setSuspendTarget(officer);
+        setSuspendReason("Administrative Review");
+        setCustomReason("");
+        setSuspendDuration("Indefinite (Until Command Reinstatement)");
+        setCustomDuration("");
+      }
+    });
   };
 
   const handleConfirmSuspension = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isViewer) {
+      guardAction("suspend officer access");
+      return;
+    }
     if (!suspendTarget) return;
     const finalReason =
       suspendReason === "Other (Specify Below)"
@@ -297,6 +317,7 @@ export default function AuthorizedPersonnelPage() {
         id: suspendTarget._id,
         reason: finalReason,
         duration: finalDuration,
+        callerEmail: currentOfficer.email,
       });
       setSuspendTarget(null);
     } catch (err: any) {
@@ -308,9 +329,16 @@ export default function AuthorizedPersonnelPage() {
 
   const handleConfirmReactivate = async () => {
     if (!reactivateTarget) return;
+    if (isViewer) {
+      guardAction("reinstate officer clearance");
+      return;
+    }
     try {
       setIsReactivating(true);
-      await reactivateOfficer({ id: reactivateTarget._id });
+      await reactivateOfficer({
+        id: reactivateTarget._id,
+        callerEmail: currentOfficer.email,
+      });
       setReactivateTarget(null);
     } catch (err: any) {
       alert(err?.message || "Failed to reinstate officer access");
@@ -320,19 +348,28 @@ export default function AuthorizedPersonnelPage() {
   };
 
   const handleOpenRevokeModal = (officer: (typeof officers)[number]) => {
-    const commanderEmail = "siliacay.javier@gmail.com";
-    if (officer.email.toLowerCase() === commanderEmail.toLowerCase()) {
-      alert("Primary Group Commander access cannot be revoked.");
-      return;
-    }
-    setRevokeTarget(officer);
+    guardAction("revoke officer access", () => {
+      const commanderEmail = "siliacay.javier@gmail.com";
+      if (officer.email.toLowerCase() === commanderEmail.toLowerCase()) {
+        alert("Primary Group Commander access cannot be revoked.");
+        return;
+      }
+      setRevokeTarget(officer);
+    });
   };
 
   const handleConfirmRevoke = async () => {
     if (!revokeTarget) return;
+    if (isViewer) {
+      guardAction("revoke officer authorization");
+      return;
+    }
     try {
       setIsRevoking(true);
-      await removeOfficer({ id: revokeTarget._id });
+      await removeOfficer({
+        id: revokeTarget._id,
+        callerEmail: currentOfficer.email,
+      });
       setRevokeTarget(null);
     } catch (err: any) {
       alert(err?.message || "Failed to revoke access");
@@ -393,6 +430,21 @@ export default function AuthorizedPersonnelPage() {
           </button>
         </div>
       </div>
+
+      {/* Viewer Clearance Alert Banner */}
+      {isViewer && (
+        <div className="p-3.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-950 flex items-center justify-between gap-3 text-xs shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <Shield className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>
+              <strong>Viewer Clearance Mode:</strong> You are viewing authorized personnel rosters with read-only privileges. Modifying clearances or authorizing officers requires Administrative clearance.
+            </span>
+          </div>
+          <span className="px-2 py-0.5 rounded bg-amber-100 border border-amber-300 font-mono text-[10px] font-bold shrink-0 text-amber-900">
+            READ-ONLY
+          </span>
+        </div>
+      )}
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

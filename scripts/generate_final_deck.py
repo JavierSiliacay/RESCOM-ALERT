@@ -10,7 +10,7 @@ def prepare_qr():
         box_size=12,
         border=2,
     )
-    qr.add_data("https://rescom-alert.vercel.app/download")
+    qr.add_data("https://rescom-alert.site/download")
     qr.make(fit=True)
     img = qr.make_image(fill_color="#065f46", back_color="white").convert("RGB")
     os.makedirs("public", exist_ok=True)
@@ -614,7 +614,7 @@ def create_deck_with_download_slide():
     p2.font.color.rgb = C_EMERALD_TEXT
 
     p_url = tf_l.add_paragraph()
-    p_url.text = "👉 https://rescom-alert.vercel.app/download"
+    p_url.text = "👉 https://rescom-alert.site/download"
     p_url.font.size = Pt(13)
     p_url.font.bold = True
     p_url.font.color.rgb = C_BLUE
@@ -694,7 +694,7 @@ def create_deck_with_download_slide():
         "SPEAKER SCRIPT:\n"
         "Colonel, Sir/Ma'am, to conclude this presentation:\n"
         "I invite all officers in this room to point your phone cameras at this QR code right now.\n"
-        "It will take you directly to our live military download portal at https://rescom-alert.vercel.app/download.\n"
+        "It will take you directly to our live military download portal at https://rescom-alert.site/download.\n"
         "As you tap download, watch my laptop screen — our live system will register each unique device on the Commander Dashboard in real time.\n"
         "Thank you very much. The floor is now open for questions and live testing."
     )

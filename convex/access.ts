@@ -106,6 +106,56 @@ export async function assertCallerAuthorized(
   }
 }
 
+// Helper to assert caller has operational clearance on specific group(s)
+export async function assertCallerAuthorizedGroup(
+  ctx: { db: any },
+  officerEmail?: string,
+  targetGroupNames?: string[],
+  actionDescription?: string
+) {
+  if (!officerEmail) return;
+  const cleanEmail = officerEmail.toLowerCase().trim();
+  if (cleanEmail === "siliacay.javier@gmail.com") return; // Master Developer unconditional bypass
+
+  const allUsers = await ctx.db.query("authorizedUsers").collect();
+  const user = allUsers.find((u: any) => u.email.toLowerCase().trim() === cleanEmail);
+  if (!user) return;
+
+  if (user.role === "VIEWER") {
+    throw new Error(
+      `Your role is viewer only and you're not allowed or authorize to this command (${actionDescription || "write command"}), please request to the system administrators.`
+    );
+  }
+
+  // Developer and Commander have unconditional global authority
+  if (user.role === "DEVELOPER" || user.role === "COMMANDER") {
+    return;
+  }
+
+  // If user has selective groups configured
+  if (
+    user.allowedGroupNames &&
+    user.allowedGroupNames.length > 0 &&
+    !user.allowedGroupNames.includes("*") &&
+    !user.allowedGroupNames.includes("ALL")
+  ) {
+    if (targetGroupNames && targetGroupNames.length > 0) {
+      if (targetGroupNames.includes("ALL") || targetGroupNames.includes("All 10RCDG Personnel")) {
+        throw new Error(
+          `Access Denied: You are restricted to selective group(s): ${user.allowedGroupNames.join(", ")}. You cannot broadcast to All Personnel.`
+        );
+      }
+
+      const unauthorized = targetGroupNames.filter((g) => !user.allowedGroupNames.includes(g));
+      if (unauthorized.length > 0) {
+        throw new Error(
+          `Access Denied: You are not authorized to ${actionDescription || "operate on"} group(s): ${unauthorized.join(", ")}. Your assigned group(s) are: ${user.allowedGroupNames.join(", ")}.`
+        );
+      }
+    }
+  }
+}
+
 // List all authorized officers
 export const list = query({
   args: {},
@@ -185,6 +235,7 @@ export const checkByEmail = query({
             role: authorized.role,
             unit: authorized.unit,
             status: "ACTIVE" as const,
+            allowedGroupNames: authorized.allowedGroupNames,
           },
         };
       }
@@ -199,6 +250,7 @@ export const checkByEmail = query({
             role: authorized.role,
             unit: authorized.unit,
             status: authorized.status,
+            allowedGroupNames: authorized.allowedGroupNames,
             suspendedReason: authorized.suspendedReason,
             suspendedDuration: authorized.suspendedDuration,
             suspendedAt: authorized.suspendedAt,
@@ -217,6 +269,7 @@ export const checkByEmail = query({
           role: authorized.role,
           unit: authorized.unit,
           status: authorized.status,
+          allowedGroupNames: authorized.allowedGroupNames,
         },
       };
     }
@@ -240,6 +293,7 @@ export const create = mutation({
       v.literal("VIEWER")
     ),
     unit: v.string(),
+    allowedGroupNames: v.optional(v.array(v.string())),
     callerEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -256,25 +310,32 @@ export const create = mutation({
         rank: args.rank,
         role: args.role,
         unit: args.unit,
+        allowedGroupNames: args.allowedGroupNames ?? [],
         status: "ACTIVE",
       });
       return existing._id;
     }
 
-    const id = await ctx.db.insert("authorizedUsers", {
-      ...args,
+    const doc: any = {
+      name: args.name,
       email: cleanEmail,
+      rank: args.rank,
+      role: args.role,
+      unit: args.unit,
+      allowedGroupNames: args.allowedGroupNames ?? [],
       status: "ACTIVE",
       approvedDate: new Date().toISOString().split("T")[0],
       lastLogin: "Never",
-    });
+    };
+
+    const id = await ctx.db.insert("authorizedUsers", doc);
 
     await ctx.db.insert("auditLogs", {
       userName: "Group Commander",
       userRole: "COMMANDER",
       category: "AUTH",
       action: "GRANT_ACCESS",
-      details: `Authorized ${args.rank} ${args.name} (${cleanEmail}) with role ${args.role}`,
+      details: `Authorized ${args.rank} ${args.name} (${cleanEmail}) with role ${args.role}${args.allowedGroupNames?.length ? ` [Scope: ${args.allowedGroupNames.join(", ")}]` : " [Scope: Global]"}`,
       ipAddress: "127.0.0.1",
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
@@ -298,6 +359,7 @@ export const update = mutation({
       v.literal("VIEWER")
     ),
     unit: v.string(),
+    allowedGroupNames: v.optional(v.array(v.string())),
     status: v.union(
       v.literal("ACTIVE"),
       v.literal("PENDING"),
@@ -313,17 +375,24 @@ export const update = mutation({
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Officer record not found");
 
-    await ctx.db.patch(id, {
-      ...data,
+    const patchData: any = {
+      name: data.name,
       email: data.email.toLowerCase().trim(),
-    });
+      rank: data.rank,
+      role: data.role,
+      unit: data.unit,
+      status: data.status,
+      allowedGroupNames: data.allowedGroupNames ?? [],
+    };
+
+    await ctx.db.patch(id, patchData);
 
     await ctx.db.insert("auditLogs", {
       userName: "Authorized Officer",
       userRole: "ADMIN",
       category: "AUTH",
       action: "UPDATE_ACCESS",
-      details: `Updated clearance for ${data.rank} ${data.name} (${data.email}) - Role: ${data.role}, Status: ${data.status}`,
+      details: `Updated clearance for ${data.rank} ${data.name} (${data.email}) - Role: ${data.role}${data.allowedGroupNames?.length ? ` [Scope: ${data.allowedGroupNames.join(", ")}]` : " [Scope: Global]"}, Status: ${data.status}`,
       ipAddress: "127.0.0.1",
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });

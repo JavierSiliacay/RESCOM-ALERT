@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Users,
   Search,
@@ -289,7 +289,7 @@ function CampaignLiveTimer({
 
 export default function PersonnelPage() {
   const currentOfficer = useCurrentOfficer();
-  const { isViewer, guardAction } = currentOfficer;
+  const { isViewer, guardAction, isGlobalAdmin, isScopedAdmin, isGroupAuthorized } = currentOfficer;
   const personnel = useQuery(api.personnel.list);
   const groups = useQuery(api.groups.list);
   const campaigns = useQuery(api.enlistment.listCampaigns);
@@ -369,10 +369,25 @@ export default function PersonnelPage() {
   const isLoadingCampaigns = campaigns === undefined;
   const isLoadingSubmissions = submissions === undefined;
 
-  const personnelList = personnel || [];
-  const groupsList = groups || [];
-  const campaignsList = campaigns || [];
+  const rawPersonnelList = personnel || [];
+  const rawGroupsList = groups || [];
+  const rawCampaignsList = campaigns || [];
   const submissionsList = submissions || [];
+
+  const personnelList = useMemo(() => {
+    if (isGlobalAdmin) return rawPersonnelList;
+    return rawPersonnelList.filter((p) => isGroupAuthorized(p.groupName));
+  }, [rawPersonnelList, isGlobalAdmin, isGroupAuthorized]);
+
+  const groupsList = useMemo(() => {
+    if (isGlobalAdmin) return rawGroupsList;
+    return rawGroupsList.filter((g) => isGroupAuthorized(g.name));
+  }, [rawGroupsList, isGlobalAdmin, isGroupAuthorized]);
+
+  const campaignsList = useMemo(() => {
+    if (isGlobalAdmin) return rawCampaignsList;
+    return rawCampaignsList.filter((c) => isGroupAuthorized(c.groupName));
+  }, [rawCampaignsList, isGlobalAdmin, isGroupAuthorized]);
 
   const pendingSubmissions = submissionsList.filter((s) => s.status === "PENDING");
 
@@ -1644,7 +1659,9 @@ export default function PersonnelPage() {
                   }}
                   className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer shadow-2xs"
                 >
-                  <option value="">All 10RCDG Personnel (General Roster)</option>
+                  <option value="">
+                    {isScopedAdmin ? "Select an Assigned Group..." : "All 10RCDG Personnel (General Roster)"}
+                  </option>
                   {groupsList.map((g) => (
                     <option key={g._id} value={g._id}>
                       {g.name}
@@ -1905,7 +1922,9 @@ export default function PersonnelPage() {
                     onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600"
                   >
-                    <option value="">All 10RCDG Personnel (General Roster)</option>
+                    <option value="">
+                      {isScopedAdmin ? "Select an Assigned Group..." : "All 10RCDG Personnel (General Roster)"}
+                    </option>
                     {groupsList.map((g) => (
                       <option key={g._id} value={g._id}>
                         {g.name}

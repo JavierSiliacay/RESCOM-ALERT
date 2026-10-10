@@ -21,6 +21,7 @@ import {
   Code2,
   Clock,
   AlertTriangle,
+  Layers,
 } from "lucide-react";
 import { UserRole, UserStatus } from "@/auth";
 import {
@@ -159,6 +160,7 @@ export default function AuthorizedPersonnelPage() {
   const currentOfficer = useCurrentOfficer();
   const { isViewer, guardAction } = currentOfficer;
   const officersData = useQuery(api.access.list);
+  const groupsData = useQuery(api.groups.list);
   const createOfficer = useMutation(api.access.create);
   const updateOfficer = useMutation(api.access.update);
   const updateOfficerRole = useMutation(api.access.updateRole);
@@ -168,6 +170,7 @@ export default function AuthorizedPersonnelPage() {
 
   const isLoading = officersData === undefined;
   const officers = officersData || [];
+  const contactGroups = groupsData || [];
 
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
@@ -194,13 +197,24 @@ export default function AuthorizedPersonnelPage() {
   const [reactivateTarget, setReactivateTarget] = useState<(typeof officers)[number] | null>(null);
   const [isReactivating, setIsReactivating] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    email: string;
+    rank: string;
+    role: UserRole;
+    unit: string;
+    status: UserStatus;
+    scopeType: "GLOBAL" | "SELECTIVE";
+    allowedGroupNames: string[];
+  }>({
     name: "",
     email: "",
     rank: "CPT",
-    role: "ADMIN" as UserRole,
+    role: "ADMIN",
     unit: "10RCDG HQ",
-    status: "ACTIVE" as UserStatus,
+    status: "ACTIVE",
+    scopeType: "GLOBAL",
+    allowedGroupNames: [],
   });
 
   const handleOpenAdd = () => {
@@ -213,6 +227,8 @@ export default function AuthorizedPersonnelPage() {
         role: "ADMIN",
         unit: "10RCDG HQ",
         status: "ACTIVE",
+        scopeType: "GLOBAL",
+        allowedGroupNames: [],
       });
       setIsModalOpen(true);
     });
@@ -221,6 +237,8 @@ export default function AuthorizedPersonnelPage() {
   const handleOpenEdit = (officer: (typeof officers)[number]) => {
     guardAction("edit officer clearance", () => {
       setEditingOfficer(officer);
+      const officerGroups = (officer as any).allowedGroupNames || [];
+      const isSelective = officerGroups.length > 0 && !officerGroups.includes("*") && !officerGroups.includes("ALL");
       setFormData({
         name: officer.name,
         email: officer.email,
@@ -228,6 +246,8 @@ export default function AuthorizedPersonnelPage() {
         role: officer.role as UserRole,
         unit: officer.unit,
         status: (officer.status as UserStatus) || "ACTIVE",
+        scopeType: isSelective ? "SELECTIVE" : "GLOBAL",
+        allowedGroupNames: isSelective ? officerGroups : [],
       });
       setIsModalOpen(true);
     });
@@ -243,6 +263,16 @@ export default function AuthorizedPersonnelPage() {
     const cleanEmail = formData.email.trim().toLowerCase();
     if (!cleanEmail) return;
 
+    if (formData.role === "ADMIN" && formData.scopeType === "SELECTIVE" && formData.allowedGroupNames.length === 0) {
+      alert("Please select at least one contact group for selective scope, or switch to Global Clearance.");
+      return;
+    }
+
+    const finalAllowedGroups =
+      formData.role === "ADMIN" && formData.scopeType === "SELECTIVE"
+        ? formData.allowedGroupNames
+        : [];
+
     try {
       setIsSaving(true);
       if (editingOfficer) {
@@ -253,6 +283,7 @@ export default function AuthorizedPersonnelPage() {
           rank: formData.rank,
           role: formData.role,
           unit: formData.unit.trim() || "10RCDG HQ",
+          allowedGroupNames: finalAllowedGroups,
           status: formData.status as any,
           callerEmail: currentOfficer.email,
         });
@@ -263,6 +294,7 @@ export default function AuthorizedPersonnelPage() {
           rank: formData.rank,
           role: formData.role,
           unit: formData.unit.trim() || "10RCDG HQ",
+          allowedGroupNames: finalAllowedGroups,
           callerEmail: currentOfficer.email,
         });
       }
@@ -610,9 +642,27 @@ export default function AuthorizedPersonnelPage() {
                             COMMANDER
                           </span>
                         ) : officer.role === "ADMIN" || officer.role === "OPERATOR" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 font-mono">
-                            ADMIN
-                          </span>
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 font-mono">
+                              ADMIN
+                            </span>
+                            {officer.allowedGroupNames &&
+                            officer.allowedGroupNames.length > 0 &&
+                            !officer.allowedGroupNames.includes("*") &&
+                            !officer.allowedGroupNames.includes("ALL") ? (
+                              <div
+                                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-semibold truncate max-w-[170px]"
+                                title={`Restricted to: ${officer.allowedGroupNames.join(", ")}`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                <span className="truncate">{officer.allowedGroupNames.join(", ")}</span>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-slate-400 font-medium">
+                                Global Authority
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
                             VIEWER
@@ -824,6 +874,111 @@ export default function AuthorizedPersonnelPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* Group Scope Selector (Visible when ADMIN is selected) */}
+                {formData.role === "ADMIN" && (
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-emerald-700" />
+                        Group Authority Scope
+                      </label>
+                      <span className="text-[10px] text-slate-500 font-mono font-semibold">
+                        {formData.scopeType === "GLOBAL" ? "All Groups" : `${formData.allowedGroupNames.length} Selected`}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <label
+                        className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2 transition-all ${
+                          formData.scopeType === "GLOBAL"
+                            ? "bg-white border-emerald-600 ring-1 ring-emerald-600 text-slate-900 font-bold shadow-2xs"
+                            : "bg-slate-100/70 border-slate-200 text-slate-600 hover:bg-white"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="scopeType"
+                          value="GLOBAL"
+                          checked={formData.scopeType === "GLOBAL"}
+                          onChange={() => setFormData({ ...formData, scopeType: "GLOBAL", allowedGroupNames: [] })}
+                          className="text-emerald-700 focus:ring-emerald-600"
+                        />
+                        <span>Global (All Groups)</span>
+                      </label>
+
+                      <label
+                        className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2 transition-all ${
+                          formData.scopeType === "SELECTIVE"
+                            ? "bg-white border-emerald-600 ring-1 ring-emerald-600 text-slate-900 font-bold shadow-2xs"
+                            : "bg-slate-100/70 border-slate-200 text-slate-600 hover:bg-white"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="scopeType"
+                          value="SELECTIVE"
+                          checked={formData.scopeType === "SELECTIVE"}
+                          onChange={() => setFormData({ ...formData, scopeType: "SELECTIVE" })}
+                          className="text-emerald-700 focus:ring-emerald-600"
+                        />
+                        <span>Selective Units Only</span>
+                      </label>
+                    </div>
+
+                    {formData.scopeType === "SELECTIVE" && (
+                      <div className="pt-2 border-t border-slate-200 space-y-2">
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          Select the specific contact group(s) this admin is permitted to manage and broadcast to:
+                        </p>
+                        <div className="max-h-40 overflow-y-auto space-y-1.5 p-1 bg-white rounded-lg border border-slate-200">
+                          {contactGroups.length === 0 ? (
+                            <p className="text-xs text-slate-400 p-2">No contact groups available.</p>
+                          ) : (
+                            contactGroups.map((g) => {
+                              const isChecked = formData.allowedGroupNames.includes(g.name);
+                              return (
+                                <label
+                                  key={g._id}
+                                  className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-all ${
+                                    isChecked
+                                      ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 font-semibold"
+                                      : "bg-slate-50/60 border-slate-100 text-slate-700 hover:bg-slate-100/70"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 truncate">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setFormData({
+                                            ...formData,
+                                            allowedGroupNames: [...formData.allowedGroupNames, g.name],
+                                          });
+                                        } else {
+                                          setFormData({
+                                            ...formData,
+                                            allowedGroupNames: formData.allowedGroupNames.filter((name) => name !== g.name),
+                                          });
+                                        }
+                                      }}
+                                      className="rounded text-emerald-700 focus:ring-emerald-600"
+                                    />
+                                    <span className="truncate">{g.name}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-2">
+                                    {g.unit}
+                                  </span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Modal Footer (Pinned) */}

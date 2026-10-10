@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   Send,
@@ -132,7 +132,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 
 function MessagingContent() {
   const currentOfficer = useCurrentOfficer();
-  const { isViewer, guardAction } = currentOfficer;
+  const { isViewer, guardAction, isGlobalAdmin, isScopedAdmin, isGroupAuthorized } = currentOfficer;
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -157,11 +157,21 @@ function MessagingContent() {
   const isLoadingOutbox = broadcastsData === undefined;
   const isLoadingAudit = auditLogsData === undefined;
 
-  const groups = groupsData || [];
-  const personnel = personnelData || [];
+  const rawGroups = groupsData || [];
+  const rawPersonnel = personnelData || [];
   const templates = templatesData || [];
   const messages = broadcastsData || [];
   const logs = auditLogsData || [];
+
+  const groups = useMemo(() => {
+    if (isGlobalAdmin) return rawGroups;
+    return rawGroups.filter((g) => isGroupAuthorized(g.name));
+  }, [rawGroups, isGlobalAdmin, isGroupAuthorized]);
+
+  const personnel = useMemo(() => {
+    if (isGlobalAdmin) return rawPersonnel;
+    return rawPersonnel.filter((p) => isGroupAuthorized(p.groupName));
+  }, [rawPersonnel, isGlobalAdmin, isGroupAuthorized]);
 
   const [activeTab, setActiveTab] = useState<"send" | "outbox" | "audit">(
     tabParam === "outbox" || tabParam === "history"
@@ -369,7 +379,14 @@ function MessagingContent() {
           senderName: currentOfficer.displayName || "Duty Officer",
           senderEmail: currentOfficer.email || undefined,
           senderRank: currentOfficer.rank || undefined,
-          targetGroupNames: recipientMode === "GROUP" ? selectedGroups : ["Direct SMS"],
+          targetGroupNames:
+            recipientMode === "GROUP"
+              ? selectedGroups.includes("ALL")
+                ? isScopedAdmin
+                  ? groups.map((g) => g.name)
+                  : ["All 10RCDG Personnel"]
+                : selectedGroups
+              : ["Direct SMS"],
           recipients: numbersToSend,
           totalRecipients: numbersToSend.length,
           deliveredCount: isOk ? numbersToSend.length : 0,
@@ -766,7 +783,9 @@ function MessagingContent() {
                           : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                       }`}
                     >
-                      All 10RCDG Personnel ({personnel.length})
+                      {isScopedAdmin
+                        ? `All My Assigned Units (${personnel.length})`
+                        : `All 10RCDG Personnel (${personnel.length})`}
                     </button>
                     {groups.map((grp) => {
                       const isSelected = selectedGroups.includes(grp._id) || selectedGroups.includes(grp.name);

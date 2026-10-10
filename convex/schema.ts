@@ -113,6 +113,7 @@ export default defineSchema({
     approvedDate: v.string(),
     lastLogin: v.string(),
     lastSeenAt: v.optional(v.number()), // Unix timestamp in milliseconds for real-time live presence
+    allowedGroupNames: v.optional(v.array(v.string())), // Selective group authority for scoped admins (empty/undefined = global)
     suspendedReason: v.optional(v.string()),
     suspendedDuration: v.optional(v.string()),
     suspendedAt: v.optional(v.string()),

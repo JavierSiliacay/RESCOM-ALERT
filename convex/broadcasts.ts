@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { assertCallerAuthorized } from "./access";
+import { assertCallerAuthorized, assertCallerAuthorizedGroup } from "./access";
 
 // List recent broadcast transmissions
 export const list = query({
@@ -39,6 +39,7 @@ export const record = mutation({
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.senderEmail, "record SMS broadcast");
+    await assertCallerAuthorizedGroup(ctx, args.senderEmail, args.targetGroupNames, "transmit SMS broadcast");
     const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" });
     const id = await ctx.db.insert("broadcasts", {
       ...args,

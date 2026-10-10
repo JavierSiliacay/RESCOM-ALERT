@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { assertCallerAuthorized } from "./access";
+import { assertCallerAuthorized, assertCallerAuthorizedGroup } from "./access";
 
 // List all personnel
 export const list = query({
@@ -26,6 +26,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.createdByEmail, "create personnel");
+    await assertCallerAuthorizedGroup(ctx, args.createdByEmail, [args.groupName], "create personnel");
     const creatorName = args.createdBy || "Authorized Officer";
 
     const id = await ctx.db.insert("personnel", {
@@ -77,6 +78,7 @@ export const update = mutation({
     const { id, ...data } = args;
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Personnel record not found");
+    await assertCallerAuthorizedGroup(ctx, args.updatedByEmail, [data.groupName, existing.groupName], "update personnel");
 
     const editorName = data.updatedBy || "Authorized Officer";
     const updateTimestamp = new Date().toLocaleString("en-US", {
@@ -166,6 +168,7 @@ export const remove = mutation({
     await assertCallerAuthorized(ctx, args.officerEmail, "remove personnel");
     const person = await ctx.db.get(args.id);
     if (person) {
+      await assertCallerAuthorizedGroup(ctx, args.officerEmail, [person.groupName], "remove personnel");
       await ctx.db.insert("auditLogs", {
         userName: "Authorized Officer",
         userRole: "ADMIN",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Send, CheckCircle2, AlertCircle, Loader2, Users, Smartphone, X, ArrowRight, UserCheck } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
@@ -10,7 +10,7 @@ import { PersonnelRecipientCombobox, RecipientChip } from "@/components/personne
 
 export function QuickMessageCard() {
   const currentOfficer = useCurrentOfficer();
-  const { isViewer, guardAction } = currentOfficer;
+  const { isViewer, guardAction, isGlobalAdmin, isScopedAdmin, isGroupAuthorized } = currentOfficer;
   const groupsData = useQuery(api.groups.list);
   const personnelData = useQuery(api.personnel.list);
   const templatesData = useQuery(api.templates.list);
@@ -32,9 +32,19 @@ export function QuickMessageCard() {
   const [lastSentCount, setLastSentCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
-  const groups = groupsData || [];
-  const personnel = personnelData || [];
+  const rawGroups = groupsData || [];
+  const rawPersonnel = personnelData || [];
   const templates = templatesData || [];
+
+  const groups = useMemo(() => {
+    if (isGlobalAdmin) return rawGroups;
+    return rawGroups.filter((g) => isGroupAuthorized(g.name));
+  }, [rawGroups, isGlobalAdmin, isGroupAuthorized]);
+
+  const personnel = useMemo(() => {
+    if (isGlobalAdmin) return rawPersonnel;
+    return rawPersonnel.filter((p) => isGroupAuthorized(p.groupName));
+  }, [rawPersonnel, isGlobalAdmin, isGroupAuthorized]);
 
   // Compute active recipient numbers based on mode
   const getActiveNumbers = (): string[] => {
@@ -112,7 +122,14 @@ export function QuickMessageCard() {
             senderName: currentOfficer.displayName || "Duty Officer",
             senderEmail: currentOfficer.email || undefined,
             senderRank: currentOfficer.rank || undefined,
-            targetGroupNames: recipientMode === "GROUP" ? [selectedGroup] : ["Direct SMS"],
+            targetGroupNames:
+              recipientMode === "GROUP"
+                ? selectedGroup === "ALL"
+                  ? isScopedAdmin
+                    ? groups.map((g) => g.name)
+                    : ["All 10RCDG Personnel"]
+                  : [selectedGroup]
+                : ["Direct SMS"],
             recipients: numbersToSend,
             totalRecipients: numbersToSend.length,
             deliveredCount: numbersToSend.length,
@@ -244,7 +261,11 @@ export function QuickMessageCard() {
               onChange={(e) => setSelectedGroup(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-emerald-700 focus:bg-white cursor-pointer"
             >
-              <option value="ALL">All 10RCDG Personnel ({personnel.length})</option>
+              <option value="ALL">
+                {isScopedAdmin
+                  ? `All My Assigned Units (${personnel.length})`
+                  : `All 10RCDG Personnel (${personnel.length})`}
+              </option>
               {groups.map((g) => (
                 <option key={g._id} value={g.name}>
                   {g.name} ({g.memberCount})

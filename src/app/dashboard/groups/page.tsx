@@ -125,7 +125,7 @@ const COLOR_PRESETS = [
 
 export default function GroupsPage() {
   const currentOfficer = useCurrentOfficer();
-  const { isViewer, guardAction } = currentOfficer;
+  const { isViewer, guardAction, isGlobalAdmin, isScopedAdmin, isGroupAuthorized } = currentOfficer;
   const groupsData = useQuery(api.groups.list);
   const personnelData = useQuery(api.personnel.list);
   const createGroup = useMutation(api.groups.create);
@@ -197,6 +197,10 @@ export default function GroupsPage() {
   });
 
   const handleOpenAdd = () => {
+    if (isScopedAdmin) {
+      alert("Access Denied: Creating new contact groups is restricted to Command / Global Administrators.");
+      return;
+    }
     guardAction("create new contact group", () => {
       setEditingGroupId(null);
       setFormData({
@@ -210,6 +214,10 @@ export default function GroupsPage() {
   };
 
   const handleOpenEdit = (group: (typeof groups)[number]) => {
+    if (!isGroupAuthorized(group.name)) {
+      alert("Access Denied: You are not authorized to modify contact groups outside your assigned unit.");
+      return;
+    }
     guardAction("edit contact group", () => {
       setEditingGroupId(group._id);
       setFormData({
@@ -257,9 +265,13 @@ export default function GroupsPage() {
     }
   };
 
-  const handleDelete = async (id: Id<"contactGroups">) => {
+  const handleDelete = async (id: Id<"contactGroups">, groupName?: string) => {
+    if (groupName && !isGroupAuthorized(groupName)) {
+      alert("Access Denied: You are not authorized to delete contact groups outside your assigned unit.");
+      return;
+    }
     guardAction("delete contact group", async () => {
-      if (confirm("Are you sure you want to delete this contact group?")) {
+      if (confirm(`Are you sure you want to delete this contact group${groupName ? ` "${groupName}"` : ""}?`)) {
         try {
           await removeGroup({
             id,
@@ -466,22 +478,28 @@ export default function GroupsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleOpenEdit(group)}
-                    title="Edit Group"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(group._id)}
-                    title="Delete Group"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                {isGroupAuthorized(group.name) ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleOpenEdit(group)}
+                      title="Edit Group"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(group._id, group.name)}
+                      title="Delete Group"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">
+                    Read Only
+                  </span>
+                )}
               </div>
 
               {/* Description */}
@@ -509,13 +527,19 @@ export default function GroupsPage() {
                 </span>
               </button>
 
-              <Link
-                href={`/dashboard/messaging?tab=send&group=${encodeURIComponent(group.name)}`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Send Alert</span>
-              </Link>
+              {isGroupAuthorized(group.name) ? (
+                <Link
+                  href={`/dashboard/messaging?tab=send&group=${encodeURIComponent(group.name)}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition-colors"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send Alert</span>
+                </Link>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-400 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg">
+                  Restricted Scope
+                </span>
+              )}
             </div>
           </div>
         ))

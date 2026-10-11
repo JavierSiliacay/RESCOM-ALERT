@@ -48,7 +48,7 @@ export default function DashboardPage() {
             10RCDG Mass Messaging System
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Dashboard Overview Unit
+            Dashboard Overview
           </h1>
           <p className="text-slate-500 mt-0.5 text-sm">
             Operational SMS gateway & live unit dispatch console.

@@ -10,6 +10,7 @@ import {
   Users,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Bookmark,
   Plus,
   Pencil,
@@ -43,10 +44,12 @@ import {
   formatBroadcastTitle,
   getPhCoreDigits,
   matchesPhMobileSearch,
+  isSamePhMobileNumber,
 } from "@/lib/sms";
 import { StatCardSkeleton, TableSkeleton } from "@/components/skeleton";
 import { useCurrentOfficer } from "@/components/officer-context";
 import { PersonnelRecipientCombobox, RecipientChip } from "@/components/personnel-recipient-combobox";
+import { AndroidIcon, KeypadPhoneIcon, HybridIcon, ForceSmsIcon } from "@/components/device-icons";
 
 /**
  * Highlight matching words/characters with a light-green badge.
@@ -206,6 +209,7 @@ function MessagingContent() {
   const [messageTitle, setMessageTitle] = useState("");
   const [messageContent, setMessageContent] = useState("");
   const [priority, setPriority] = useState<"ROUTINE" | "URGENT" | "FLASH">("ROUTINE");
+  const [dispatchChannel, setDispatchChannel] = useState<"HYBRID" | "APP_PUSH" | "KEYPAD_SMS" | "FORCE_SMS">("HYBRID");
 
   // Group selection helpers
   const toggleGroup = (groupId: string) => {
@@ -222,22 +226,67 @@ function MessagingContent() {
     }
   };
 
-  // Compute active recipient numbers
-  const getActiveNumbers = (): string[] => {
+  // Categorize active recipients into Android and Keypad
+  const getCategorizedRecipients = () => {
+    let targetPersonnel: typeof personnel = [];
     if (recipientMode === "GROUP") {
       const activePersonnel = personnel.filter((p) => p.status === "ACTIVE");
-      const filtered = activePersonnel.filter((p) => {
+      targetPersonnel = activePersonnel.filter((p) => {
         if (selectedGroups.includes("ALL")) return true;
         return selectedGroups.some((gId) => {
           return p.groupId === gId || p.groupName === gId;
         });
       });
-      return filtered.map((p) => p.mobileNumber);
+    } else {
+      targetPersonnel = manualRecipients.map((r) => {
+        const found = personnel.find((p) => isSamePhMobileNumber(p.mobileNumber, r.number));
+        return found || ({ mobileNumber: r.number, deviceType: "ANDROID" } as any);
+      });
     }
-    return manualRecipients.map((r) => r.number);
+
+    const androidTroops = targetPersonnel.filter((p) => ((p as any).deviceType || "ANDROID") === "ANDROID");
+    const keypadTroops = targetPersonnel.filter((p) => (p as any).deviceType === "KEYPAD");
+
+    return {
+      total: targetPersonnel.length,
+      androidTroops,
+      keypadTroops,
+    };
   };
 
-  const activeRecipientCount = getActiveNumbers().length;
+  const categorizedRecipients = getCategorizedRecipients();
+
+  // Compute effective targets based on dispatch channel mode
+  const getEffectiveTargets = () => {
+    const { androidTroops, keypadTroops } = categorizedRecipients;
+    let smsNumbers: string[] = [];
+    let pushNumbers: string[] = [];
+
+    if (dispatchChannel === "HYBRID") {
+      smsNumbers = keypadTroops.map((p) => p.mobileNumber);
+      pushNumbers = androidTroops.map((p) => p.mobileNumber);
+    } else if (dispatchChannel === "APP_PUSH") {
+      smsNumbers = [];
+      pushNumbers = androidTroops.map((p) => p.mobileNumber);
+    } else if (dispatchChannel === "KEYPAD_SMS") {
+      smsNumbers = keypadTroops.map((p) => p.mobileNumber);
+      pushNumbers = [];
+    } else {
+      smsNumbers = [
+        ...keypadTroops.map((p) => p.mobileNumber),
+        ...androidTroops.map((p) => p.mobileNumber),
+      ];
+      pushNumbers = [];
+    }
+    return {
+      smsNumbers,
+      pushNumbers,
+      totalCount: smsNumbers.length + pushNumbers.length,
+    };
+  };
+
+  const effectiveTargets = getEffectiveTargets();
+  const activeRecipientCount = categorizedRecipients.total;
 
   // Template Management Modal
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -335,8 +384,8 @@ function MessagingContent() {
       guardAction("transmit mass SMS broadcast");
       return;
     }
-    const numbersToSend = getActiveNumbers();
-    if (numbersToSend.length === 0) return;
+    const { smsNumbers, pushNumbers, totalCount } = getEffectiveTargets();
+    if (totalCount === 0) return;
 
     const finalBroadcastTitle = (selectedTemplateTitle && selectedTemplateTitle.trim())
       ? selectedTemplateTitle.trim()
@@ -347,19 +396,24 @@ function MessagingContent() {
     setIsSending(true);
 
     try {
-      const res = await fetch("/api/sms/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          recipients: numbersToSend,
-          message: messageContent,
-          title: finalBroadcastTitle,
-          simSubscriptionId: 1, // SIM 1 (TNT) default
-        }),
-      });
+      let data: any = { success: true };
+      let isOk = true;
 
-      const data = await res.json();
-      const isOk = res.ok && data.success;
+      // Only invoke SMS gateway if there are cellular SMS recipients
+      if (smsNumbers.length > 0) {
+        const res = await fetch("/api/sms/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipients: smsNumbers,
+            message: messageContent,
+            title: finalBroadcastTitle,
+            simSubscriptionId: 1, // SIM 1 (TNT) default
+          }),
+        });
+        data = await res.json();
+        isOk = res.ok && data.success;
+      }
 
       if (isOk) {
         setIsSuccess(true);
@@ -387,18 +441,30 @@ function MessagingContent() {
                   : ["All 10RCDG Personnel"]
                 : selectedGroups
               : ["Direct SMS"],
-          recipients: numbersToSend,
-          totalRecipients: numbersToSend.length,
-          deliveredCount: isOk ? numbersToSend.length : 0,
-          failedCount: isOk ? 0 : numbersToSend.length,
-          status: isOk ? "DELIVERED" : "FAILED",
-          simSubscriptionId: 1,
-          gatewayBatchId: data.messageId || data.smsBatchId || undefined,
-          recipientStatuses: numbersToSend.map((num) => ({
-            number: num,
-            status: isOk ? "sent" : "failed",
-            sentAt: new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Manila" }),
-          })),
+          recipients: [...smsNumbers, ...pushNumbers],
+          totalRecipients: totalCount,
+          deliveredCount: isOk ? totalCount : pushNumbers.length,
+          failedCount: isOk ? 0 : smsNumbers.length,
+          channel: dispatchChannel,
+          pushRecipientCount: pushNumbers.length,
+          smsRecipientCount: smsNumbers.length,
+          status: isOk ? "DELIVERED" : (pushNumbers.length > 0 ? "DELIVERED" : "FAILED"),
+          simSubscriptionId: smsNumbers.length > 0 ? 1 : undefined,
+          gatewayBatchId: data.messageId || data.smsBatchId || "APP_PUSH_INSTANT",
+          recipientStatuses: [
+            ...pushNumbers.map((num) => ({
+              number: num,
+              status: "sent",
+              channel: "APP_PUSH",
+              sentAt: new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Manila" }),
+            })),
+            ...smsNumbers.map((num) => ({
+              number: num,
+              status: isOk ? "sent" : "failed",
+              channel: "SMS_GATEWAY",
+              sentAt: new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Manila" }),
+            })),
+          ],
         });
       } catch (dbErr) {
         console.error("Warning: Failed to save broadcast history to Convex database:", dbErr);
@@ -407,7 +473,7 @@ function MessagingContent() {
       setIsSending(false);
       setIsConfirmModalOpen(false);
     } catch (err: unknown) {
-      console.error("Error dispatching SMS broadcast:", err);
+      console.error("Error dispatching broadcast:", err);
       setIsSending(false);
       setIsConfirmModalOpen(false);
     }
@@ -810,12 +876,180 @@ function MessagingContent() {
 
               {/* Mode B: Autocomplete Personnel Combobox + Direct Numbers */}
               {recipientMode === "MANUAL" && (
-                <PersonnelRecipientCombobox
-                  recipients={manualRecipients}
-                  onChange={setManualRecipients}
-                  personnel={personnel}
-                />
+                <div className="space-y-2">
+                  <PersonnelRecipientCombobox
+                    recipients={manualRecipients}
+                    onChange={setManualRecipients}
+                    personnel={personnel}
+                  />
+                  {manualRecipients.length === 0 ? (
+                    <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>
+                        <strong>Direct Mode Active:</strong> Type a mobile number or soldier name above, then press <strong>Enter</strong> or click <strong>Add +</strong>.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-medium">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Ready to send to <strong>{manualRecipients.length} direct recipient{manualRecipients.length === 1 ? "" : "s"}</strong>.</span>
+                      </span>
+                      <span className="font-mono text-[11px] font-bold text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                        Targeting {manualRecipients.length} Only
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
+            </div>
+
+            {/* 4-Mode Dispatch Channel Strategy Selector */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-emerald-700" />
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Dispatch Channel Strategy
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-mono">
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold flex items-center gap-1.5">
+                    <AndroidIcon className="w-3 h-3 text-[#3DDC84]" />
+                    <span>{categorizedRecipients.androidTroops.length} Android</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-bold flex items-center gap-1.5">
+                    <KeypadPhoneIcon className="w-3 h-3 text-slate-500" />
+                    <span>{categorizedRecipients.keypadTroops.length} Keypad</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <label
+                  className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+                    dispatchChannel === "HYBRID"
+                      ? "bg-emerald-50/70 border-emerald-600 ring-1 ring-emerald-600 text-slate-900 shadow-2xs"
+                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <input
+                        type="radio"
+                        name="dispatchChannel"
+                        value="HYBRID"
+                        checked={dispatchChannel === "HYBRID"}
+                        onChange={() => setDispatchChannel("HYBRID")}
+                        className="text-emerald-700 focus:ring-emerald-600"
+                      />
+                      <span className="flex items-center gap-1.5">
+                        <HybridIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span>Smart Hybrid</span>
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-200/80 text-emerald-950 font-mono">
+                      RECOMMENDED
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
+                    App Push to {categorizedRecipients.androidTroops.length} Android (Free ₱0) + Cellular SMS to {categorizedRecipients.keypadTroops.length} Keypad.
+                  </p>
+                </label>
+
+                <label
+                  className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+                    dispatchChannel === "APP_PUSH"
+                      ? "bg-emerald-50/70 border-emerald-600 ring-1 ring-emerald-600 text-slate-900 shadow-2xs"
+                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <input
+                        type="radio"
+                        name="dispatchChannel"
+                        value="APP_PUSH"
+                        checked={dispatchChannel === "APP_PUSH"}
+                        onChange={() => setDispatchChannel("APP_PUSH")}
+                        className="text-emerald-700 focus:ring-emerald-600"
+                      />
+                      <span className="flex items-center gap-1.5">
+                        <AndroidIcon className="w-3.5 h-3.5 text-[#3DDC84] shrink-0" />
+                        <span>Android Push (₱0)</span>
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 font-mono">
+                      FREE (₱0)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
+                    Reaches {categorizedRecipients.androidTroops.length} Android troops instantly via app. Consumes 0 SMS credits.
+                  </p>
+                </label>
+
+                <label
+                  className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+                    dispatchChannel === "KEYPAD_SMS"
+                      ? "bg-emerald-50/70 border-emerald-600 ring-1 ring-emerald-600 text-slate-900 shadow-2xs"
+                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <input
+                        type="radio"
+                        name="dispatchChannel"
+                        value="KEYPAD_SMS"
+                        checked={dispatchChannel === "KEYPAD_SMS"}
+                        onChange={() => setDispatchChannel("KEYPAD_SMS")}
+                        className="text-emerald-700 focus:ring-emerald-600"
+                      />
+                      <span className="flex items-center gap-1.5">
+                        <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                        <span>Keypad SMS Only</span>
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-slate-200 text-slate-800 font-mono">
+                      CELLULAR
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
+                    Targets only {categorizedRecipients.keypadTroops.length} basic keypad troops via TextBee cellular gateway.
+                  </p>
+                </label>
+
+                <label
+                  className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+                    dispatchChannel === "FORCE_SMS"
+                      ? "bg-emerald-50/70 border-emerald-600 ring-1 ring-emerald-600 text-slate-900 shadow-2xs"
+                      : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <input
+                        type="radio"
+                        name="dispatchChannel"
+                        value="FORCE_SMS"
+                        checked={dispatchChannel === "FORCE_SMS"}
+                        onChange={() => setDispatchChannel("FORCE_SMS")}
+                        className="text-emerald-700 focus:ring-emerald-600"
+                      />
+                      <span className="flex items-center gap-1.5">
+                        <ForceSmsIcon className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                        <span>Force SMS (All)</span>
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-red-100 text-red-900 font-mono">
+                      RED ALERT
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
+                    Overrides push and forces cellular SMS to all {categorizedRecipients.total} troops. Red alert emergency fallback.
+                  </p>
+                </label>
+              </div>
             </div>
 
             {/* Template Selector & Manager */}
@@ -942,7 +1176,12 @@ function MessagingContent() {
                 </div>
 
                 <div className="text-[11px] text-slate-500 font-mono">
-                  Gateway: <span className="font-bold text-emerald-700">SIM 1 · TNT (Infinix X6711)</span>
+                  Gateway:{" "}
+                  {dispatchChannel === "APP_PUSH" ? (
+                    <span className="font-bold text-blue-700">Bypassed (Free App Push • ₱0 SMS)</span>
+                  ) : (
+                    <span className="font-bold text-emerald-700">SIM 1 · TNT (Infinix X6711)</span>
+                  )}
                 </div>
               </div>
 
@@ -952,11 +1191,18 @@ function MessagingContent() {
                 onClick={() =>
                   guardAction("review and broadcast message", () => setIsConfirmModalOpen(true))
                 }
-                disabled={!messageContent.trim() || activeRecipientCount === 0}
-                className="w-full mt-2 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wider cursor-pointer"
+                disabled={!messageContent.trim() || effectiveTargets.totalCount === 0}
+                className={`w-full mt-2 py-3 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wider cursor-pointer ${
+                  recipientMode === "MANUAL"
+                    ? "bg-blue-700 hover:bg-blue-800"
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                }`}
               >
                 <Send className="w-4 h-4" />
-                Review & Broadcast to {activeRecipientCount} {activeRecipientCount === 1 ? "Recipient" : "Recipients"}
+                {recipientMode === "MANUAL"
+                  ? `Review & Send Direct to ${manualRecipients.length} Recipient${manualRecipients.length === 1 ? `: ${manualRecipients[0].name || manualRecipients[0].number}` : "s"}`
+                  : `Review & Broadcast to Group: ${selectedGroups.includes("ALL") ? "All 10RCDG Personnel" : selectedGroups.length + " Units"} (${effectiveTargets.totalCount} Troops)`}
+                {dispatchChannel === "APP_PUSH" ? " (Free ₱0)" : ""}
               </button>
             </div>
           </div>
@@ -1156,6 +1402,27 @@ function MessagingContent() {
                                   NO SMS TEMPLATE
                                 </span>
                               )}
+                              {msg.channel === "HYBRID" ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase font-mono bg-purple-50 text-purple-700 border border-purple-200">
+                                  <HybridIcon className="w-3 h-3 shrink-0" />
+                                  <span>HYBRID</span>
+                                </span>
+                              ) : msg.channel === "APP_PUSH" ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
+                                  <span>PUSH (₱0)</span>
+                                </span>
+                              ) : msg.channel === "KEYPAD_SMS" ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase font-mono bg-amber-50 text-amber-700 border border-amber-200">
+                                  <KeypadPhoneIcon className="w-3 h-3 text-amber-700 shrink-0" />
+                                  <span>KEYPAD SMS</span>
+                                </span>
+                              ) : msg.channel === "FORCE_SMS" ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase font-mono bg-red-50 text-red-700 border border-red-200">
+                                  <ForceSmsIcon className="w-3 h-3 text-red-600 shrink-0" />
+                                  <span>FORCE SMS</span>
+                                </span>
+                              ) : null}
                             </div>
                           );
                         })()}
@@ -1164,8 +1431,26 @@ function MessagingContent() {
                           Sent by: <span className="font-bold text-slate-700">{msg.senderName || "Command"}</span>
                         </div>
                       </td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
-                        {msg.totalRecipients} <span className="text-slate-400 font-normal">recipients</span>
+                      <td className="py-3.5 px-4 font-mono">
+                        <div className="font-bold text-slate-800">
+                          {msg.totalRecipients} <span className="text-slate-400 font-normal">recipients</span>
+                        </div>
+                        {(msg.pushRecipientCount !== undefined || msg.smsRecipientCount !== undefined) && (
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-2">
+                            {Boolean(msg.pushRecipientCount) && (
+                              <span className="flex items-center gap-1 text-emerald-700 font-semibold">
+                                <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
+                                <span>{msg.pushRecipientCount} push</span>
+                              </span>
+                            )}
+                            {Boolean(msg.smsRecipientCount) && (
+                              <span className="flex items-center gap-1 text-slate-600 font-semibold">
+                                <KeypadPhoneIcon className="w-3 h-3 text-slate-500 shrink-0" />
+                                <span>{msg.smsRecipientCount} sms</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-1.5">
@@ -1470,23 +1755,87 @@ function MessagingContent() {
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">
-                  Confirm SMS Transmission
+                  Confirm Alert Broadcast
                 </h3>
                 <p className="text-xs text-slate-500">
-                  You are about to transmit live SMS to {activeRecipientCount} recipients.
+                  You are about to transmit this alert to {effectiveTargets.totalCount} recipients.
                 </p>
               </div>
             </div>
 
             <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
               <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Channel Strategy:</span>
+                <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                  {dispatchChannel === "HYBRID" ? (
+                    <>
+                      <HybridIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span>Smart Hybrid ({effectiveTargets.pushNumbers.length} Push [₱0] + {effectiveTargets.smsNumbers.length} SMS)</span>
+                    </>
+                  ) : dispatchChannel === "APP_PUSH" ? (
+                    <>
+                      <AndroidIcon className="w-3.5 h-3.5 text-[#3DDC84] shrink-0" />
+                      <span>Android Push Notification ({effectiveTargets.pushNumbers.length} Troops • 100% Free ₱0)</span>
+                    </>
+                  ) : dispatchChannel === "KEYPAD_SMS" ? (
+                    <>
+                      <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span>Keypad Phone SMS Only ({effectiveTargets.smsNumbers.length} SMS)</span>
+                    </>
+                  ) : (
+                    <>
+                      <ForceSmsIcon className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span>Mass Cellular SMS Blast ({effectiveTargets.smsNumbers.length} SMS)</span>
+                    </>
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-slate-500 font-medium">Gateway Carrier:</span>
-                <span className="font-mono font-bold text-emerald-700">SIM 1 · TNT (Infinix X6711)</span>
+                <span className="font-mono font-bold text-emerald-700">
+                  {effectiveTargets.smsNumbers.length > 0
+                    ? "SIM 1 · TNT (Infinix X6711 GSM Gateway)"
+                    : "Bypassed (Free Push via Companion App • ₱0 Cost)"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Audience Scope:</span>
+                <span className="font-bold text-xs">
+                  {recipientMode === "MANUAL" ? (
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-300 font-mono">
+                      DIRECT PERSONNEL ONLY ({manualRecipients.length})
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+                      MASS GROUP ({selectedGroups.includes("ALL") ? "ALL 10RCDG PERSONNEL" : selectedGroups.join(", ")})
+                    </span>
+                  )}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500 font-medium">Total Recipients:</span>
-                <span className="font-mono font-bold text-slate-800">{activeRecipientCount} Numbers</span>
+                <span className="font-mono font-bold text-slate-800">{effectiveTargets.totalCount} {effectiveTargets.totalCount === 1 ? "Recipient" : "Troops"}</span>
               </div>
+              {recipientMode === "MANUAL" && manualRecipients.length > 0 && (
+                <div className="pt-2 border-t border-slate-200">
+                  <span className="text-slate-500 font-medium block mb-1">Target Direct Soldiers:</span>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-2 bg-white rounded-lg border border-slate-200">
+                    {manualRecipients.map((r, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-900 border border-blue-200 rounded text-[11px] font-mono">
+                        {r.rank ? `${r.rank} ` : ""}{r.name ? `${r.name} · ` : ""}{r.number}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {recipientMode === "GROUP" && (
+                <div className="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-900 text-[11px] flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>
+                    <strong>Mass Unit Alert:</strong> This broadcast will go out to <strong>all {effectiveTargets.totalCount} troops</strong> in the selected units.
+                  </span>
+                </div>
+              )}
               <div className="pt-2 border-t border-slate-200">
                 <span className="text-slate-500 font-medium block mb-1">Message Preview:</span>
                 <p className="text-slate-800 font-mono text-[11px] leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200">
@@ -1656,6 +2005,37 @@ function MessagingContent() {
                       <span className="text-[11px] text-slate-500 font-medium">Target Unit:</span>
                       <span className="font-bold text-slate-800">
                         {selectedMessage.targetGroupNames?.join(", ") || "Direct SMS"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500 font-medium">Channel Strategy:</span>
+                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                        {selectedMessage.channel === "HYBRID" ? (
+                          <>
+                            <HybridIcon className="w-3.5 h-3.5 shrink-0" />
+                            <span>Smart Hybrid ({selectedMessage.pushRecipientCount || 0} Push + {selectedMessage.smsRecipientCount || 0} SMS)</span>
+                          </>
+                        ) : selectedMessage.channel === "APP_PUSH" ? (
+                          <>
+                            <AndroidIcon className="w-3.5 h-3.5 text-[#3DDC84] shrink-0" />
+                            <span>Android Push Only (100% Free ₱0)</span>
+                          </>
+                        ) : selectedMessage.channel === "KEYPAD_SMS" ? (
+                          <>
+                            <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                            <span>Keypad SMS Only</span>
+                          </>
+                        ) : selectedMessage.channel === "FORCE_SMS" ? (
+                          <>
+                            <ForceSmsIcon className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                            <span>Mass Cellular SMS Blast</span>
+                          </>
+                        ) : (
+                          <>
+                            <Radio className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            <span>SMS Gateway</span>
+                          </>
+                        )}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -1944,11 +2324,36 @@ function MessagingContent() {
                                         query={modalRecipientSearch}
                                       />
                                     </span>
+                                    {/* Soldier Phone Capability Badge */}
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                      {((soldier as any)?.deviceType || "ANDROID") === "ANDROID" ? (
+                                        <>
+                                          <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
+                                          <span>Android</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <KeypadPhoneIcon className="w-3 h-3 text-slate-500 shrink-0" />
+                                          <span>Keypad</span>
+                                        </>
+                                      )}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
 
-                              <div className="shrink-0">
+                              <div className="shrink-0 flex items-center gap-1.5">
+                                {perRecipientStatus?.channel === "APP_PUSH" ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                    <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
+                                    <span>Push (₱0)</span>
+                                  </span>
+                                ) : perRecipientStatus?.channel === "SMS_GATEWAY" ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                    <KeypadPhoneIcon className="w-3 h-3 text-amber-700 shrink-0" />
+                                    <span>Cellular SMS</span>
+                                  </span>
+                                ) : null}
                                 <span
                                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
                                     isSuccess

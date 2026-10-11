@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { RankSearchSelect } from "@/components/rank-search-select";
 import { sanitizePhMobileInput, isValidPhMobileNumber, formatPhMobileDisplay } from "@/lib/sms";
+import { AndroidIcon, KeypadPhoneIcon } from "@/components/device-icons";
 
 function extractCleanErrorMessage(err: any): string {
   if (!err) return "Failed to submit enlistment.";
@@ -78,6 +79,7 @@ export default function PublicEnlistmentPage() {
     firstName: "",
     lastName: "",
     mobileNumber: "09",
+    deviceType: "ANDROID" as "ANDROID" | "KEYPAD",
     groupId: "",
     groupName: "All 10RCDG Personnel",
     unit: "",
@@ -152,10 +154,14 @@ export default function PublicEnlistmentPage() {
         ...prev,
         groupId: campaign.groupId || "",
         groupName: campaign.groupName || "All 10RCDG Personnel",
-        unit: campaign.targetUnit === "All Units" ? "10RCDG HQ" : campaign.targetUnit,
+        unit: prev.unit || (campaign.targetUnit === "All Units" ? "10RCDG HQ" : campaign.targetUnit),
       }));
     }
   }, [campaign]);
+
+  const isGroupLocked = Boolean(
+    (campaign?.groupName && campaign.groupName !== "All 10RCDG Personnel") || campaign?.groupId
+  );
 
   // Live Countdown State
   const [timeLeft, setTimeLeft] = useState<{
@@ -290,8 +296,9 @@ export default function PublicEnlistmentPage() {
         rank: formData.rank,
         mobileNumber: formData.mobileNumber,
         unit: formData.unit.trim() || (campaign?.targetUnit || "10RCDG HQ"),
-        groupId: formData.groupId || undefined,
-        groupName: formData.groupName || "All 10RCDG Personnel",
+        groupId: isGroupLocked ? (campaign?.groupId || undefined) : (formData.groupId || undefined),
+        groupName: isGroupLocked ? (campaign?.groupName || "All 10RCDG Personnel") : (formData.groupName || "All 10RCDG Personnel"),
+        deviceType: formData.deviceType,
       });
       setIsSubmitted(true);
     } catch (err: any) {
@@ -449,6 +456,26 @@ export default function PublicEnlistmentPage() {
               <div className="flex justify-between pb-1.5 border-b border-slate-200">
                 <span className="text-slate-500">Unit / Station:</span>
                 <span className="font-bold text-slate-800">{formData.unit}</span>
+              </div>
+              <div className="flex justify-between pb-1.5 border-b border-slate-200">
+                <span className="text-slate-500">Assigned Group:</span>
+                <span className="font-bold text-slate-900">{campaign.groupName || formData.groupName}</span>
+              </div>
+              <div className="flex justify-between items-center pb-1.5 border-b border-slate-200">
+                <span className="text-slate-500">Device Type:</span>
+                <span className="font-bold text-emerald-800 flex items-center gap-1.5">
+                  {formData.deviceType === "ANDROID" ? (
+                    <>
+                      <AndroidIcon className="w-3.5 h-3.5 text-[#3DDC84] shrink-0" />
+                      <span>Android Smartphone</span>
+                    </>
+                  ) : (
+                    <>
+                      <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span>Basic Keypad Phone</span>
+                    </>
+                  )}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Campaign Batch:</span>
@@ -748,26 +775,44 @@ export default function PublicEnlistmentPage() {
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Assigned Group <span className="text-emerald-700">*</span>
                   </label>
-                  <select
-                    value={formData.groupId}
-                    onChange={(e) => {
-                      const selectedVal = e.target.value;
-                      const grp = groupsList.find((g) => g._id === selectedVal);
-                      setFormData((prev) => ({
-                        ...prev,
-                        groupId: selectedVal,
-                        groupName: grp ? grp.name : "All 10RCDG Personnel",
-                      }));
-                    }}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs cursor-pointer"
-                  >
-                    <option value="">All 10RCDG Personnel (General Roster)</option>
-                    {groupsList.map((g) => (
-                      <option key={g._id} value={g._id}>
-                        {g.name}
-                      </option>
-                    ))}
-                  </select>
+                  {isGroupLocked ? (
+                    <div>
+                      <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-900 text-xs font-bold shadow-2xs">
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
+                          <span className="truncate">{campaign?.groupName || formData.groupName}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-extrabold shrink-0 flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>LOCKED</span>
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Pre-assigned to this campaign group by Command.
+                      </p>
+                    </div>
+                  ) : (
+                    <select
+                      value={formData.groupId}
+                      onChange={(e) => {
+                        const selectedVal = e.target.value;
+                        const grp = groupsList.find((g) => g._id === selectedVal);
+                        setFormData((prev) => ({
+                          ...prev,
+                          groupId: selectedVal,
+                          groupName: grp ? grp.name : "All 10RCDG Personnel",
+                        }));
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs cursor-pointer"
+                    >
+                      <option value="">All 10RCDG Personnel (General Roster)</option>
+                      {groupsList.map((g) => (
+                        <option key={g._id} value={g._id}>
+                          {g.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
@@ -783,7 +828,66 @@ export default function PublicEnlistmentPage() {
                 </div>
               </div>
 
+              {/* Primary Phone Capability */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Primary Phone Capability <span className="text-emerald-700">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-normal">Helps command route emergency siren alerts</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <label
+                    className={`p-3 rounded-xl border cursor-pointer flex items-center gap-3 transition-all ${
+                      formData.deviceType === "ANDROID"
+                        ? "bg-emerald-50/80 border-emerald-600 ring-1 ring-emerald-600 text-emerald-950 font-bold shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-white"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="deviceType"
+                      value="ANDROID"
+                      checked={formData.deviceType === "ANDROID"}
+                      onChange={() => setFormData((prev) => ({ ...prev, deviceType: "ANDROID" }))}
+                      className="text-emerald-700 focus:ring-emerald-600"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <AndroidIcon className="w-4 h-4 text-[#3DDC84] shrink-0" />
+                        <span>Android Smartphone</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-normal block mt-0.5">
+                        Touchscreen • App Siren & Free Push
+                      </span>
+                    </div>
+                  </label>
 
+                  <label
+                    className={`p-3 rounded-xl border cursor-pointer flex items-center gap-3 transition-all ${
+                      formData.deviceType === "KEYPAD"
+                        ? "bg-emerald-50/80 border-emerald-600 ring-1 ring-emerald-600 text-emerald-950 font-bold shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-white"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="deviceType"
+                      value="KEYPAD"
+                      checked={formData.deviceType === "KEYPAD"}
+                      onChange={() => setFormData((prev) => ({ ...prev, deviceType: "KEYPAD" }))}
+                      className="text-emerald-700 focus:ring-emerald-600"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <KeypadPhoneIcon className="w-4 h-4 text-slate-600 shrink-0" />
+                        <span>Basic Keypad Phone</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-normal block mt-0.5">
+                        Nokia / Basic cellular SMS only
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
 
               {submissionError && (
                 <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">

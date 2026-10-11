@@ -21,6 +21,7 @@ export const create = mutation({
     groupName: v.string(),
     unit: v.string(),
     email: v.optional(v.string()),
+    deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     createdBy: v.optional(v.string()),
     createdByEmail: v.optional(v.string()),
   },
@@ -38,6 +39,7 @@ export const create = mutation({
       groupName: args.groupName,
       unit: args.unit,
       email: args.email,
+      deviceType: args.deviceType || "ANDROID",
       status: "ACTIVE",
       createdAt: new Date().toISOString().split("T")[0],
       createdBy: creatorName,
@@ -70,6 +72,7 @@ export const update = mutation({
     groupName: v.string(),
     unit: v.string(),
     email: v.optional(v.string()),
+    deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     updatedBy: v.optional(v.string()),
     updatedByEmail: v.optional(v.string()),
   },
@@ -98,6 +101,7 @@ export const update = mutation({
       groupName: data.groupName,
       unit: data.unit,
       email: data.email || "",
+      deviceType: data.deviceType || existing.deviceType || "ANDROID",
       updatedBy: editorName,
       updatedAt: updateTimestamp,
     });
@@ -112,6 +116,45 @@ export const update = mutation({
       ipAddress: "127.0.0.1",
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
+  },
+});
+
+// Update personnel device type (fast 1-click toggle)
+export const setDeviceType = mutation({
+  args: {
+    id: v.id("personnel"),
+    deviceType: v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS")),
+    officerEmail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.officerEmail, "update personnel device type");
+    const existing = await ctx.db.get(args.id);
+    if (!existing) throw new Error("Personnel record not found");
+    await assertCallerAuthorizedGroup(ctx, args.officerEmail, [existing.groupName], "update personnel device type");
+
+    await ctx.db.patch(args.id, { deviceType: args.deviceType });
+
+    return { success: true };
+  },
+});
+
+// Batch update personnel device type
+export const batchSetDeviceType = mutation({
+  args: {
+    ids: v.array(v.id("personnel")),
+    deviceType: v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS")),
+    officerEmail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.officerEmail, "batch update personnel device type");
+    for (const id of args.ids) {
+      const person = await ctx.db.get(id);
+      if (person) {
+        await assertCallerAuthorizedGroup(ctx, args.officerEmail, [person.groupName], "batch update personnel device type");
+        await ctx.db.patch(id, { deviceType: args.deviceType });
+      }
+    }
+    return { count: args.ids.length };
   },
 });
 

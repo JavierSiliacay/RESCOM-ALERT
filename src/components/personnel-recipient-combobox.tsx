@@ -390,7 +390,7 @@ export function PersonnelRecipientCombobox({
           </span>
         ))}
 
-        {/* Input */}
+        {/* Input & Quick Add Button */}
         <div className="flex-1 min-w-[190px] flex items-center gap-1.5">
           <input
             ref={inputRef}
@@ -403,11 +403,40 @@ export function PersonnelRecipientCombobox({
             onFocus={() => {
               if (inputValue.trim() && totalItems > 0) setIsOpen(true);
             }}
+            onBlur={(e) => {
+              // If blurring to an element inside our own dropdown or container, don't auto-commit
+              if (containerRef.current && containerRef.current.contains(e.relatedTarget as Node)) {
+                return;
+              }
+              setTimeout(() => {
+                if (inputValue.trim()) {
+                  const digits = inputValue.replace(/\D/g, "");
+                  if (digits.length >= 7) {
+                    addRawNumber(inputValue);
+                  }
+                }
+              }, 200);
+            }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder={recipients.length === 0 ? placeholder : "Add another soldier or mobile number..."}
             className="w-full bg-transparent text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none py-1 font-medium"
           />
+
+          {/* Quick Add Button when typing valid digits */}
+          {cleanQueryDigits.length >= 7 && (
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault(); // Prevent blur before click executes
+                addRawNumber(inputValue);
+              }}
+              className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1 shrink-0 cursor-pointer active:scale-95"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Add +</span>
+            </button>
+          )}
         </div>
       </div>
 

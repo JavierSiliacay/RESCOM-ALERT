@@ -191,6 +191,7 @@ export const submitEnlistment = mutation({
     groupName: v.string(),
     email: v.optional(v.string()),
     serialNumber: v.optional(v.string()),
+    deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
   },
   handler: async (ctx, args) => {
     const cleanCode = args.campaignCode.toLowerCase().trim();
@@ -259,10 +260,14 @@ export const submitEnlistment = mutation({
       rank: args.rank.trim(),
       mobileNumber: cleanMobile,
       unit: args.unit.trim() || campaign.targetUnit,
-      groupId: args.groupId || campaign.groupId,
-      groupName: args.groupName.trim() || campaign.groupName,
+      groupId: campaign.groupId || args.groupId,
+      groupName:
+        campaign.groupName && campaign.groupName !== "All 10RCDG Personnel"
+          ? campaign.groupName
+          : (args.groupName?.trim() || campaign.groupName || "All 10RCDG Personnel"),
       email: args.email?.trim() || undefined,
       serialNumber: args.serialNumber?.trim() || undefined,
+      deviceType: args.deviceType || "ANDROID",
       status: "PENDING",
       submittedAt: new Date().toISOString(),
     });
@@ -327,6 +332,7 @@ export const approveSubmission = mutation({
         groupName: sub.groupName,
         groupId: sub.groupId,
         status: "ACTIVE",
+        deviceType: sub.deviceType || existing.deviceType || "ANDROID",
         email: sub.email || existing.email,
         updatedBy: approverName,
         updatedAt: updateTimestamp,
@@ -341,6 +347,7 @@ export const approveSubmission = mutation({
         unit: sub.unit,
         groupId: sub.groupId,
         groupName: sub.groupName,
+        deviceType: sub.deviceType || "ANDROID",
         status: "ACTIVE",
         email: sub.email,
         createdAt: new Date().toISOString().split("T")[0],
@@ -404,6 +411,7 @@ export const bulkApproveSubmissions = mutation({
           groupName: sub.groupName,
           groupId: sub.groupId,
           status: "ACTIVE",
+          deviceType: sub.deviceType || existing.deviceType || "ANDROID",
           email: sub.email || existing.email,
           updatedBy: approverName,
           updatedAt: updateTimestamp,
@@ -417,6 +425,7 @@ export const bulkApproveSubmissions = mutation({
           unit: sub.unit,
           groupId: sub.groupId,
           groupName: sub.groupName,
+          deviceType: sub.deviceType || "ANDROID",
           status: "ACTIVE",
           email: sub.email,
           createdAt: nowStr.split("T")[0],
@@ -484,6 +493,16 @@ export const removeCampaign = mutation({
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.officerEmail, "delete enlistment campaign");
+    const campaign = await ctx.db.get(args.campaignId);
+    if (!campaign) {
+      throw new ConvexError("Enlistment campaign not found.");
+    }
+    const isLive = campaign.status === "ACTIVE" && Date.now() < campaign.expiresAt;
+    if (isLive) {
+      throw new ConvexError(
+        "Active enlistment campaigns cannot be deleted while live. Please close the campaign early or wait until its duration finishes."
+      );
+    }
     const subs = await ctx.db
       .query("enlistmentSubmissions")
       .withIndex("by_campaignId", (q) => q.eq("campaignId", args.campaignId))

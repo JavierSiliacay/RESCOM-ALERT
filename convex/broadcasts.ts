@@ -23,6 +23,9 @@ export const record = mutation({
     totalRecipients: v.number(),
     deliveredCount: v.number(),
     failedCount: v.number(),
+    channel: v.optional(v.union(v.literal("HYBRID"), v.literal("APP_PUSH"), v.literal("KEYPAD_SMS"), v.literal("FORCE_SMS"))),
+    pushRecipientCount: v.optional(v.number()),
+    smsRecipientCount: v.optional(v.number()),
     status: v.union(v.literal("DELIVERED"), v.literal("SENDING"), v.literal("FAILED")),
     simSubscriptionId: v.optional(v.number()),
     gatewayBatchId: v.optional(v.string()),
@@ -31,6 +34,7 @@ export const record = mutation({
         v.object({
           number: v.string(),
           status: v.string(),
+          channel: v.optional(v.string()),
           sentAt: v.optional(v.string()),
           error: v.optional(v.string()),
         })

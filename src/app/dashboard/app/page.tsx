@@ -24,6 +24,7 @@ import {
   HelpCircle,
   Users,
   Activity,
+  Siren,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useQuery } from "convex/react";
@@ -522,8 +523,11 @@ export default function MobileAppPage() {
                 <div className="p-3 bg-white rounded-lg border border-red-200 font-mono text-xs text-slate-900">
                   <strong>[10RCDG RED ALERT]</strong> Immediate muster at 1001st CDC Headquarters. Bring full combat load.
                 </div>
-                <p className="text-xs text-red-900 leading-relaxed">
-                  🚨 <strong>What happens on the soldier's phone:</strong> The phone lights up instantly, ignores Silent/Do Not Disturb mode, and plays a loud emergency siren continuously until the soldier taps the <strong>"Acknowledge & Silence"</strong> button on their screen.
+                <p className="text-xs text-red-900 leading-relaxed flex items-start gap-1.5">
+                  <Siren className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>What happens on the soldier's phone:</strong> The phone lights up instantly, ignores Silent/Do Not Disturb mode, and plays a loud emergency siren continuously until the soldier taps the <strong>"Acknowledge & Silence"</strong> button on their screen.
+                  </span>
                 </p>
               </div>
 

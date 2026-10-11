@@ -13,6 +13,7 @@ export default defineSchema({
     unit: v.string(), // e.g. "10RCDG HQ", "1001st CDC"
     status: v.union(v.literal("ACTIVE"), v.literal("INACTIVE")),
     email: v.optional(v.string()),
+    deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     createdAt: v.string(),
     createdBy: v.optional(v.string()), // Officer name who registered the personnel
     updatedAt: v.optional(v.string()), // Timestamp of last edit
@@ -52,6 +53,9 @@ export default defineSchema({
     totalRecipients: v.number(),
     deliveredCount: v.number(),
     failedCount: v.number(),
+    channel: v.optional(v.union(v.literal("HYBRID"), v.literal("APP_PUSH"), v.literal("KEYPAD_SMS"), v.literal("FORCE_SMS"))),
+    pushRecipientCount: v.optional(v.number()),
+    smsRecipientCount: v.optional(v.number()),
     status: v.union(v.literal("DELIVERED"), v.literal("SENDING"), v.literal("FAILED")),
     simSubscriptionId: v.optional(v.number()), // 1 for SIM 1, 2 for SIM 2
     gatewayBatchId: v.optional(v.string()),
@@ -60,6 +64,7 @@ export default defineSchema({
         v.object({
           number: v.string(),
           status: v.string(),
+          channel: v.optional(v.string()), // "APP_PUSH" | "SMS_GATEWAY"
           sentAt: v.optional(v.string()),
           error: v.optional(v.string()),
         })
@@ -163,6 +168,7 @@ export default defineSchema({
     groupName: v.string(),
     email: v.optional(v.string()),
     serialNumber: v.optional(v.string()),
+    deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     status: v.union(v.literal("PENDING"), v.literal("APPROVED"), v.literal("REJECTED")),
     submittedAt: v.string(),
     reviewedAt: v.optional(v.string()),

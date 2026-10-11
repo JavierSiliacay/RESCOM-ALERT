@@ -29,6 +29,9 @@ import {
   Check,
   Smartphone,
   Download,
+  ArrowRight,
+  Lock,
+  ShieldAlert,
 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -53,6 +56,8 @@ import {
   CampaignCardSkeleton,
 } from "@/components/skeleton";
 import { useCurrentOfficer } from "@/components/officer-context";
+import { AndroidIcon, KeypadPhoneIcon } from "@/components/device-icons";
+import { TablePagination } from "@/components/table-pagination";
 
 /**
  * Highlight matching words/characters with a light-green badge.
@@ -297,6 +302,8 @@ export default function PersonnelPage() {
 
   const createPersonnel = useMutation(api.personnel.create);
   const updatePersonnel = useMutation(api.personnel.update);
+  const setDeviceType = useMutation(api.personnel.setDeviceType);
+  const batchSetDeviceType = useMutation(api.personnel.batchSetDeviceType);
   const togglePersonnelStatus = useMutation(api.personnel.toggleStatus);
   const removePersonnel = useMutation(api.personnel.remove);
 
@@ -315,6 +322,11 @@ export default function PersonnelPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [selectedDevice, setSelectedDevice] = useState<"ALL" | "ANDROID" | "KEYPAD">("ALL");
+
+  // Selected Personnel for Batch Actions
+  const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<Id<"personnel">[]>([]);
+  const [isBatchUpdatingDevice, setIsBatchUpdatingDevice] = useState(false);
 
   // Manual Add/Edit Personnel Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -326,6 +338,16 @@ export default function PersonnelPage() {
   const [statusConfirmTarget, setStatusConfirmTarget] = useState<(typeof personnelList)[number] | null>(null);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
+  // Device Capability Confirmation Modal State (Prevents misclick / accidental tagging)
+  const [deviceConfirmTarget, setDeviceConfirmTarget] = useState<{
+    mode: "BATCH" | "SINGLE";
+    targetDevice: "ANDROID" | "KEYPAD";
+    person?: (typeof personnelList)[number];
+    ids?: Id<"personnel">[];
+    count: number;
+  } | null>(null);
+  const [isUpdatingDevice, setIsUpdatingDevice] = useState(false);
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -334,6 +356,7 @@ export default function PersonnelPage() {
     groupId: "",
     unit: "10RCDG HQ",
     email: "",
+    deviceType: "ANDROID" as "ANDROID" | "KEYPAD" | "IOS",
   });
 
   // Campaign Generator Modal State
@@ -389,7 +412,23 @@ export default function PersonnelPage() {
     return rawCampaignsList.filter((c) => isGroupAuthorized(c.groupName));
   }, [rawCampaignsList, isGlobalAdmin, isGroupAuthorized]);
 
+  // Campaign Protection, Deletion, and Close Early Modals
+  const [campaignProtectionTarget, setCampaignProtectionTarget] = useState<(typeof rawCampaignsList)[number] | null>(null);
+  const [campaignDeleteTarget, setCampaignDeleteTarget] = useState<(typeof rawCampaignsList)[number] | null>(null);
+  const [campaignCloseEarlyTarget, setCampaignCloseEarlyTarget] = useState<(typeof rawCampaignsList)[number] | null>(null);
+  const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
+  const [isClosingCampaign, setIsClosingCampaign] = useState(false);
+  const [campaignActionError, setCampaignActionError] = useState<string | null>(null);
+
   const pendingSubmissions = submissionsList.filter((s) => s.status === "PENDING");
+
+  const androidCount = useMemo(() => {
+    return personnelList.filter((p) => ((p as any).deviceType || "ANDROID") === "ANDROID").length;
+  }, [personnelList]);
+
+  const keypadCount = useMemo(() => {
+    return personnelList.filter((p) => (p as any).deviceType === "KEYPAD").length;
+  }, [personnelList]);
 
   // Search Bar Dropdown & Autocomplete State
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -410,6 +449,10 @@ export default function PersonnelPage() {
 
   // Filtered Personnel List (space-insensitive and case-insensitive for numbers and names)
   const filteredPersonnel = personnelList.filter((person) => {
+    const personDevice = (person as any).deviceType || "ANDROID";
+    const matchesDevice = selectedDevice === "ALL" || personDevice === selectedDevice;
+    if (!matchesDevice) return false;
+
     if (!trimmedQuery) {
       const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
       const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
@@ -526,6 +569,47 @@ export default function PersonnelPage() {
   const totalMatches = filteredPersonnel.length;
   const showSearchDropdown = isSearchFocused && trimmedQuery.length > 0;
 
+  // Personnel Table Pagination State
+  const [personnelPage, setPersonnelPage] = useState(1);
+  const [personnelPageSize, setPersonnelPageSize] = useState(25);
+
+  // Auto-reset personnel page when filters change
+  useEffect(() => {
+    setPersonnelPage(1);
+  }, [searchQuery, selectedGroup, selectedStatus, selectedDevice]);
+
+  // Paginated Personnel Slice
+  const paginatedPersonnel = useMemo(() => {
+    const start = (personnelPage - 1) * personnelPageSize;
+    return filteredPersonnel.slice(start, start + personnelPageSize);
+  }, [filteredPersonnel, personnelPage, personnelPageSize]);
+
+  // Submissions Queue Filter & Pagination State
+  const [submissionStatusFilter, setSubmissionStatusFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL");
+  const [submissionsPage, setSubmissionsPage] = useState(1);
+  const [submissionsPageSize, setSubmissionsPageSize] = useState(20);
+
+  // Filtered Submissions List
+  const filteredSubmissions = useMemo(() => {
+    if (submissionStatusFilter === "ALL") return submissionsList;
+    return submissionsList.filter((s) => s.status === submissionStatusFilter);
+  }, [submissionsList, submissionStatusFilter]);
+
+  // Auto-reset submissions page when filter changes
+  useEffect(() => {
+    setSubmissionsPage(1);
+  }, [submissionStatusFilter]);
+
+  // Paginated Submissions Slice
+  const paginatedSubmissions = useMemo(() => {
+    const start = (submissionsPage - 1) * submissionsPageSize;
+    return filteredSubmissions.slice(start, start + submissionsPageSize);
+  }, [filteredSubmissions, submissionsPage, submissionsPageSize]);
+
+  const pendingOnPage = useMemo(() => {
+    return paginatedSubmissions.filter((s) => s.status === "PENDING");
+  }, [paginatedSubmissions]);
+
   const handleOpenAddModal = () => {
     guardAction("add new personnel member", () => {
       setEditingId(null);
@@ -538,6 +622,7 @@ export default function PersonnelPage() {
         groupId: groupsList[0]?._id || "",
         unit: "10RCDG HQ",
         email: "",
+        deviceType: "ANDROID",
       });
       setIsAddModalOpen(true);
     });
@@ -559,9 +644,76 @@ export default function PersonnelPage() {
         groupId: matchedGroup ? matchedGroup._id : (person.groupId || groupsList[0]?._id || ""),
         unit: person.unit || "10RCDG HQ",
         email: person.email || "",
+        deviceType: (person as any).deviceType || "ANDROID",
       });
       setIsAddModalOpen(true);
     });
+  };
+
+  const handleInitiateToggleDevice = (person: (typeof personnelList)[number]) => {
+    guardAction("toggle personnel device type", () => {
+      const current = (person as any).deviceType || "ANDROID";
+      const next = current === "ANDROID" ? "KEYPAD" : "ANDROID";
+      setDeviceConfirmTarget({
+        mode: "SINGLE",
+        targetDevice: next,
+        person,
+        count: 1,
+      });
+    });
+  };
+
+  const handleInitiateBatchSetDevice = (type: "ANDROID" | "KEYPAD") => {
+    if (selectedPersonnelIds.length === 0) return;
+    guardAction(`set ${selectedPersonnelIds.length} soldiers to ${type}`, () => {
+      setDeviceConfirmTarget({
+        mode: "BATCH",
+        targetDevice: type,
+        ids: [...selectedPersonnelIds],
+        count: selectedPersonnelIds.length,
+      });
+    });
+  };
+
+  const handleConfirmDeviceChange = async () => {
+    if (!deviceConfirmTarget) return;
+    setIsUpdatingDevice(true);
+    try {
+      if (deviceConfirmTarget.mode === "SINGLE" && deviceConfirmTarget.person) {
+        await setDeviceType({
+          id: deviceConfirmTarget.person._id,
+          deviceType: deviceConfirmTarget.targetDevice,
+          officerEmail: currentOfficer.email,
+        });
+      } else if (deviceConfirmTarget.mode === "BATCH" && deviceConfirmTarget.ids) {
+        await batchSetDeviceType({
+          ids: deviceConfirmTarget.ids,
+          deviceType: deviceConfirmTarget.targetDevice,
+          officerEmail: currentOfficer.email,
+        });
+        setSelectedPersonnelIds([]);
+      }
+      setDeviceConfirmTarget(null);
+    } catch (err: any) {
+      alert(err?.message || "Failed to update device capability");
+    } finally {
+      setIsUpdatingDevice(false);
+    }
+  };
+
+  const handleSelectAllPersonnel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const pageIds = paginatedPersonnel.map((p) => p._id);
+      const combined = Array.from(new Set([...selectedPersonnelIds, ...pageIds]));
+      setSelectedPersonnelIds(combined);
+    } else {
+      const pageIds = new Set(paginatedPersonnel.map((p) => p._id));
+      setSelectedPersonnelIds(selectedPersonnelIds.filter((id) => !pageIds.has(id)));
+    }
+  };
+
+  const handleSelectAllFilteredPersonnel = () => {
+    setSelectedPersonnelIds(filteredPersonnel.map((p) => p._id));
   };
 
   const handleSavePersonnel = async (e: React.FormEvent) => {
@@ -594,6 +746,7 @@ export default function PersonnelPage() {
           groupName,
           unit: formData.unit.trim(),
           email: formData.email.trim() || undefined,
+          deviceType: formData.deviceType,
           updatedBy: currentOfficer.displayName,
           updatedByEmail: currentOfficer.email,
         });
@@ -607,6 +760,7 @@ export default function PersonnelPage() {
           groupName,
           unit: formData.unit.trim(),
           email: formData.email.trim() || undefined,
+          deviceType: formData.deviceType,
           createdBy: currentOfficer.displayName,
           createdByEmail: currentOfficer.email,
         });
@@ -784,34 +938,48 @@ export default function PersonnelPage() {
     });
   };
 
-  const handleCloseCampaign = async (id: Id<"enlistmentCampaigns">) => {
-    guardAction("close enlistment campaign early", async () => {
-      if (confirm("Close this enlistment campaign window early? The public link will immediately stop accepting new registrations.")) {
-        try {
-          await closeCampaign({
-            campaignId: id,
-            officerEmail: currentOfficer.email,
-          });
-        } catch (err: any) {
-          alert(err?.message || "Failed to close campaign");
-        }
+  const handleConfirmCloseCampaign = async (
+    camp: (typeof rawCampaignsList)[number],
+    thenUnlockDelete: boolean = false
+  ) => {
+    setIsClosingCampaign(true);
+    setCampaignActionError(null);
+    try {
+      await closeCampaign({
+        campaignId: camp._id,
+        officerEmail: currentOfficer.email,
+      });
+      setCampaignCloseEarlyTarget(null);
+      if (thenUnlockDelete) {
+        setCampaignProtectionTarget(null);
+        setCampaignDeleteTarget({
+          ...camp,
+          isExpired: true,
+          status: "CLOSED",
+        });
       }
-    });
+    } catch (err: any) {
+      setCampaignActionError(err?.message || "Failed to close campaign early");
+    } finally {
+      setIsClosingCampaign(false);
+    }
   };
 
-  const handleRemoveCampaign = async (id: Id<"enlistmentCampaigns">) => {
-    guardAction("delete enlistment campaign", async () => {
-      if (confirm("Permanently delete this enlistment campaign and all associated submissions?")) {
-        try {
-          await removeCampaign({
-            campaignId: id,
-            officerEmail: currentOfficer.email,
-          });
-        } catch (err: any) {
-          alert(err?.message || "Failed to delete campaign");
-        }
-      }
-    });
+  const handleConfirmRemoveCampaign = async () => {
+    if (!campaignDeleteTarget) return;
+    setIsDeletingCampaign(true);
+    setCampaignActionError(null);
+    try {
+      await removeCampaign({
+        campaignId: campaignDeleteTarget._id,
+        officerEmail: currentOfficer.email,
+      });
+      setCampaignDeleteTarget(null);
+    } catch (err: any) {
+      setCampaignActionError(err?.message || "Failed to delete campaign");
+    } finally {
+      setIsDeletingCampaign(false);
+    }
   };
 
   const activeCount = personnelList.filter((p) => p.status === "ACTIVE").length;
@@ -953,6 +1121,16 @@ export default function PersonnelPage() {
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Broadcast Numbers</p>
                     <p className="text-2xl font-extrabold text-emerald-700 mt-1">{activeCount}</p>
+                    <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-mono font-bold">
+                      <span className="inline-flex items-center gap-1 text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        <AndroidIcon className="w-2.5 h-2.5 text-[#3DDC84]" />
+                        <span>{androidCount}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                        <KeypadPhoneIcon className="w-2.5 h-2.5 text-slate-500" />
+                        <span>{keypadCount}</span>
+                      </span>
+                    </div>
                   </div>
                   <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
                     <UserCheck className="w-5 h-5" />
@@ -1106,16 +1284,38 @@ export default function PersonnelPage() {
               )}
             </div>
 
-            <div className="flex items-center gap-2.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto pb-1 md:pb-0">
+              {/* Device Summary Ratio Badges */}
+              <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[11px] shadow-2xs">
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                  {androidCount} Android ({Math.round((androidCount / (personnelList.length || 1)) * 100)}%)
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 font-bold text-[11px] shadow-2xs">
+                  <Phone className="w-3.5 h-3.5 text-slate-500" />
+                  {keypadCount} Keypad ({Math.round((keypadCount / (personnelList.length || 1)) * 100)}%)
+                </span>
+              </div>
+
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 shrink-0">
                 <Filter className="w-3.5 h-3.5" />
                 <span>Filter:</span>
               </div>
 
               <select
+                value={selectedDevice}
+                onChange={(e) => setSelectedDevice(e.target.value as any)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer"
+              >
+                <option value="ALL">All Devices ({personnelList.length})</option>
+                <option value="ANDROID">Android ({androidCount})</option>
+                <option value="KEYPAD">Keypad ({keypadCount})</option>
+              </select>
+
+              <select
                 value={selectedGroup}
                 onChange={(e) => setSelectedGroup(e.target.value)}
-                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600"
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer"
               >
                 <option value="ALL">All Groups</option>
                 {groupsList.map((g) => (
@@ -1128,7 +1328,7 @@ export default function PersonnelPage() {
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600"
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="ACTIVE">Active Only</option>
@@ -1137,10 +1337,52 @@ export default function PersonnelPage() {
             </div>
           </div>
 
+          {/* Floating / Sticky Batch Action Bar */}
+          {selectedPersonnelIds.length > 0 && (
+            <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-150">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-bold text-xs text-emerald-950">
+                  {selectedPersonnelIds.length} Soldier{selectedPersonnelIds.length > 1 ? "s" : ""} Selected
+                </span>
+                <span className="text-[11px] text-emerald-700/80 font-medium">
+                  • Apply rapid device capability tagging:
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleInitiateBatchSetDevice("ANDROID")}
+                  disabled={isUpdatingDevice}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer shadow-2xs"
+                >
+                  <AndroidIcon className="w-3.5 h-3.5 text-white shrink-0" />
+                  <span>Set as Android ({selectedPersonnelIds.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInitiateBatchSetDevice("KEYPAD")}
+                  disabled={isUpdatingDevice}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-700 hover:bg-slate-800 text-white transition-colors cursor-pointer shadow-2xs"
+                >
+                  <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-200 shrink-0" />
+                  <span>Set as Keypad ({selectedPersonnelIds.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPersonnelIds([])}
+                  className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Personnel Table */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             {isLoadingPersonnel ? (
-              <TableSkeleton rows={8} cols={6} />
+              <TableSkeleton rows={8} cols={7} />
             ) : filteredPersonnel.length === 0 ? (
               <div className="py-16 text-center text-slate-400">
                 <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
@@ -1149,23 +1391,76 @@ export default function PersonnelPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
+                {selectedPersonnelIds.length > 0 && filteredPersonnel.length > paginatedPersonnel.length && (
+                  <div className="bg-emerald-50 border-b border-emerald-200 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 text-emerald-950 font-medium">
+                    <span>
+                      <strong className="font-bold text-emerald-900">{selectedPersonnelIds.length}</strong> troop{selectedPersonnelIds.length > 1 ? "s" : ""} selected.
+                    </span>
+                    {selectedPersonnelIds.length < filteredPersonnel.length ? (
+                      <button
+                        type="button"
+                        onClick={handleSelectAllFilteredPersonnel}
+                        className="font-bold underline text-emerald-800 hover:text-emerald-950 cursor-pointer"
+                      >
+                        Select all {filteredPersonnel.length} matching troops across all pages
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPersonnelIds([])}
+                        className="font-bold underline text-emerald-800 hover:text-emerald-950 cursor-pointer"
+                      >
+                        Clear selection
+                      </button>
+                    )}
+                  </div>
+                )}
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      <th className="py-3.5 px-4 sm:px-6">Name & Rank</th>
-                      <th className="py-3.5 px-4">Mobile Number</th>
-                      <th className="py-3.5 px-4">Unit / CDC</th>
-                      <th className="py-3.5 px-4">Group</th>
-                      <th className="py-3.5 px-4">Status</th>
-                      <th className="py-3.5 px-4 text-right pr-6">Actions</th>
+                      <th className="py-3.5 px-3 sm:px-4 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={
+                            paginatedPersonnel.length > 0 &&
+                            paginatedPersonnel.every((p) => selectedPersonnelIds.includes(p._id))
+                          }
+                          onChange={handleSelectAllPersonnel}
+                          className="rounded text-emerald-700 focus:ring-emerald-600 cursor-pointer"
+                          title="Select all troops on this page"
+                        />
+                      </th>
+                      <th className="py-3.5 px-3 sm:px-4">Name & Rank</th>
+                      <th className="py-3.5 px-3">Mobile Number</th>
+                      <th className="py-3.5 px-3">Device Type</th>
+                      <th className="py-3.5 px-3">Unit / CDC</th>
+                      <th className="py-3.5 px-3">Group</th>
+                      <th className="py-3.5 px-3">Status</th>
+                      <th className="py-3.5 px-3 text-right pr-6">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                    {filteredPersonnel.map((person) => {
+                    {paginatedPersonnel.map((person) => {
                       const badge = getRankBadgeStyle(person.rank);
+                      const isAndroid = ((person as any).deviceType || "ANDROID") === "ANDROID";
+                      const isSelected = selectedPersonnelIds.includes(person._id);
                       return (
-                      <tr key={person._id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3.5 px-4 sm:px-6 font-bold text-slate-900">
+                      <tr key={person._id} className={`hover:bg-slate-50/80 transition-colors ${isSelected ? "bg-emerald-50/40" : ""}`}>
+                        <td className="py-3.5 px-3 sm:px-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPersonnelIds([...selectedPersonnelIds, person._id]);
+                              } else {
+                                setSelectedPersonnelIds(selectedPersonnelIds.filter((id) => id !== person._id));
+                              }
+                            }}
+                            className="rounded text-emerald-700 focus:ring-emerald-600 cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3.5 px-3 sm:px-4 font-bold text-slate-900">
                           <div className="flex items-center gap-2.5">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono border ${badge.bg} ${badge.text} ${badge.border}`}>
                               <HighlightMatch text={person.rank} query={searchQuery} />
@@ -1195,21 +1490,47 @@ export default function PersonnelPage() {
                           </div>
                         </td>
 
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
+                        <td className="py-3.5 px-3 font-mono font-bold text-slate-800">
                           <HighlightMatch text={formatPhMobileDisplay(person.mobileNumber)} query={searchQuery} />
                         </td>
 
-                        <td className="py-3.5 px-4 font-medium text-slate-600">
+                        {/* 1-Click Fast Device Toggle */}
+                        <td className="py-3.5 px-3">
+                          <button
+                            type="button"
+                            onClick={() => handleInitiateToggleDevice(person)}
+                            title={`Current: ${isAndroid ? "Android (App Push Capable)" : "Keypad (Cellular SMS Only)"}. Click to change.`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                              isAndroid
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-2xs"
+                                : "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200"
+                            }`}
+                          >
+                            {isAndroid ? (
+                              <>
+                                <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
+                                <span>Android</span>
+                              </>
+                            ) : (
+                              <>
+                                <KeypadPhoneIcon className="w-3 h-3 text-slate-500 shrink-0" />
+                                <span>Keypad</span>
+                              </>
+                            )}
+                          </button>
+                        </td>
+
+                        <td className="py-3.5 px-3 font-medium text-slate-600">
                           <HighlightMatch text={person.unit} query={searchQuery} />
                         </td>
 
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-3">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                             {person.groupName}
                           </span>
                         </td>
 
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-3">
                           <button
                             type="button"
                             onClick={() => handleInitiateToggleStatus(person)}
@@ -1250,6 +1571,15 @@ export default function PersonnelPage() {
                 </table>
               </div>
             )}
+            <TablePagination
+              currentPage={personnelPage}
+              totalItems={filteredPersonnel.length}
+              pageSize={personnelPageSize}
+              pageSizeOptions={[15, 25, 50, 100]}
+              onPageChange={setPersonnelPage}
+              onPageSizeChange={setPersonnelPageSize}
+              itemName="troops"
+            />
           </div>
         </div>
       )}
@@ -1367,24 +1697,50 @@ export default function PersonnelPage() {
                         <span>Share / QR</span>
                       </button>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         {!camp.isExpired && (
                           <button
                             type="button"
-                            onClick={() => handleCloseCampaign(camp._id)}
+                            onClick={() =>
+                              guardAction("close enlistment campaign early", () => {
+                                setCampaignActionError(null);
+                                setCampaignCloseEarlyTarget(camp);
+                              })
+                            }
                             className="px-2.5 py-1.5 hover:bg-amber-50 text-slate-500 hover:text-amber-800 font-bold text-[11px] rounded-xl transition-colors cursor-pointer"
                           >
                             Close Early
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCampaign(camp._id)}
-                          className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                          title="Delete Campaign"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {!camp.isExpired ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              guardAction("delete enlistment campaign", () => {
+                                setCampaignActionError(null);
+                                setCampaignProtectionTarget(camp);
+                              })
+                            }
+                            className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 hover:text-amber-900 border border-amber-200/80 rounded-lg transition-colors cursor-pointer flex items-center justify-center shadow-2xs"
+                            title="Protected: Link is LIVE. Deletion is locked."
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              guardAction("delete enlistment campaign", () => {
+                                setCampaignActionError(null);
+                                setCampaignDeleteTarget(camp);
+                              })
+                            }
+                            className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                            title="Permanently Delete Campaign"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1430,20 +1786,95 @@ export default function PersonnelPage() {
               )}
             </div>
 
+            {/* Filter Tabs for Submissions */}
+            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl w-fit">
+              <button
+                type="button"
+                onClick={() => setSubmissionStatusFilter("ALL")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  submissionStatusFilter === "ALL"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                All ({submissionsList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubmissionStatusFilter("PENDING")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  submissionStatusFilter === "PENDING"
+                    ? "bg-white text-amber-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                Pending ({pendingSubmissions.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubmissionStatusFilter("APPROVED")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  submissionStatusFilter === "APPROVED"
+                    ? "bg-white text-emerald-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                Approved ({submissionsList.filter((s) => s.status === "APPROVED").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubmissionStatusFilter("REJECTED")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  submissionStatusFilter === "REJECTED"
+                    ? "bg-white text-rose-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                Rejected ({submissionsList.filter((s) => s.status === "REJECTED").length})
+              </button>
+            </div>
+
             {/* Submissions Table */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
               {isLoadingSubmissions ? (
                 <TableSkeleton rows={4} cols={5} />
-              ) : submissionsList.length === 0 ? (
+              ) : filteredSubmissions.length === 0 ? (
                 <div className="py-12 text-center text-slate-400">
                   <UserPlus className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  <p className="text-xs font-bold text-slate-700">No Enlistment Submissions Yet</p>
+                  <p className="text-xs font-bold text-slate-700">No Submissions Found</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Share your enlistment links in unit Viber / Messenger groups to start gathering numbers.
+                    {submissionStatusFilter !== "ALL"
+                      ? `No ${submissionStatusFilter.toLowerCase()} submissions in this category.`
+                      : "Share your enlistment links in unit Viber / Messenger groups to start gathering numbers."}
                   </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
+                  {selectedSubmissionIds.length > 0 && pendingSubmissions.length > pendingOnPage.length && (
+                    <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 text-amber-950 font-medium">
+                      <span>
+                        <strong className="font-bold text-amber-900">{selectedSubmissionIds.length}</strong> submission{selectedSubmissionIds.length > 1 ? "s" : ""} selected on this page.
+                      </span>
+                      {selectedSubmissionIds.length < pendingSubmissions.length ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSubmissionIds(pendingSubmissions.map((s) => s._id))}
+                          className="font-bold underline text-amber-800 hover:text-amber-950 cursor-pointer"
+                        >
+                          Select all {pendingSubmissions.length} pending submissions across all pages
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSubmissionIds([])}
+                          className="font-bold underline text-amber-800 hover:text-amber-950 cursor-pointer"
+                        >
+                          Clear selection
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
@@ -1451,21 +1882,25 @@ export default function PersonnelPage() {
                           <input
                             type="checkbox"
                             checked={
-                              pendingSubmissions.length > 0 &&
-                              selectedSubmissionIds.length === pendingSubmissions.length
+                              pendingOnPage.length > 0 &&
+                              pendingOnPage.every((s) => selectedSubmissionIds.includes(s._id))
                             }
                             onChange={(e) => {
                               if (e.target.checked) {
-                                setSelectedSubmissionIds(pendingSubmissions.map((s) => s._id));
+                                const pagePendingIds = pendingOnPage.map((s) => s._id);
+                                setSelectedSubmissionIds(Array.from(new Set([...selectedSubmissionIds, ...pagePendingIds])));
                               } else {
-                                setSelectedSubmissionIds([]);
+                                const pagePendingIds = new Set(pendingOnPage.map((s) => s._id));
+                                setSelectedSubmissionIds(selectedSubmissionIds.filter((id) => !pagePendingIds.has(id)));
                               }
                             }}
                             className="rounded text-emerald-700 focus:ring-emerald-600 cursor-pointer"
+                            title="Select all pending on this page"
                           />
                         </th>
                         <th className="py-3 px-4">Soldier & Rank</th>
                         <th className="py-3 px-4">Mobile Number</th>
+                        <th className="py-3 px-4">Device</th>
                         <th className="py-3 px-4">Assigned Unit</th>
                         <th className="py-3 px-4">Batch Code</th>
                         <th className="py-3 px-4">Status</th>
@@ -1473,8 +1908,9 @@ export default function PersonnelPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                      {submissionsList.map((sub) => {
+                      {paginatedSubmissions.map((sub) => {
                         const isSelected = selectedSubmissionIds.includes(sub._id);
+                        const isAndroid = (sub.deviceType || "ANDROID") === "ANDROID";
                         return (
                           <tr
                             key={sub._id}
@@ -1514,6 +1950,28 @@ export default function PersonnelPage() {
 
                             <td className="py-3 px-4 font-mono font-bold text-slate-800">
                               {formatPhMobileDisplay(sub.mobileNumber)}
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
+                                  isAndroid
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                    : "bg-slate-100 text-slate-700 border-slate-300"
+                                }`}
+                              >
+                                {isAndroid ? (
+                                  <>
+                                    <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
+                                    <span>Android</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <KeypadPhoneIcon className="w-3 h-3 text-slate-500 shrink-0" />
+                                    <span>Keypad</span>
+                                  </>
+                                )}
+                              </span>
                             </td>
 
                             <td className="py-3 px-4 font-medium text-slate-600">
@@ -1574,6 +2032,15 @@ export default function PersonnelPage() {
                   </table>
                 </div>
               )}
+              <TablePagination
+                currentPage={submissionsPage}
+                totalItems={filteredSubmissions.length}
+                pageSize={submissionsPageSize}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageChange={setSubmissionsPage}
+                onPageSizeChange={setSubmissionsPageSize}
+                itemName="submissions"
+              />
             </div>
           </div>
         </div>
@@ -1946,6 +2413,58 @@ export default function PersonnelPage() {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Primary Device Capability *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label
+                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2.5 transition-all ${
+                      formData.deviceType === "ANDROID"
+                        ? "bg-emerald-50/80 border-emerald-600 ring-1 ring-emerald-600 font-bold text-emerald-950 shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="deviceType"
+                      value="ANDROID"
+                      checked={formData.deviceType === "ANDROID"}
+                      onChange={() => setFormData({ ...formData, deviceType: "ANDROID" })}
+                      className="text-emerald-700 focus:ring-emerald-600"
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <AndroidIcon className="w-3.5 h-3.5 text-[#3DDC84] shrink-0" />
+                      <span>Android (Push Capable)</span>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2.5 transition-all ${
+                      formData.deviceType === "KEYPAD"
+                        ? "bg-slate-100 border-slate-600 ring-1 ring-slate-600 font-bold text-slate-900 shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="deviceType"
+                      value="KEYPAD"
+                      checked={formData.deviceType === "KEYPAD"}
+                      onChange={() => setFormData({ ...formData, deviceType: "KEYPAD" })}
+                      className="text-slate-700 focus:ring-slate-600"
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span>Keypad (SMS Only)</span>
+                    </div>
+                  </label>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Android devices receive free in-app alerts; keypad phones will be sent cellular SMS.
+                </p>
+              </div>
+
               <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
                 <button
                   type="button"
@@ -2124,6 +2643,533 @@ export default function PersonnelPage() {
                   <>
                     <UserCheck className="w-3.5 h-3.5" />
                     <span>Reactivate Member</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Device Capability Confirmation Modal (Protects against misclicks / accidents) */}
+      {deviceConfirmTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                    deviceConfirmTarget.targetDevice === "ANDROID"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200 shadow-2xs"
+                      : "bg-slate-100 text-slate-800 border-slate-200 shadow-2xs"
+                  }`}
+                >
+                  {deviceConfirmTarget.targetDevice === "ANDROID" ? (
+                    <AndroidIcon className="w-5 h-5 text-[#3DDC84]" />
+                  ) : (
+                    <KeypadPhoneIcon className="w-5 h-5 text-slate-700" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {deviceConfirmTarget.mode === "BATCH"
+                      ? `Confirm Set as ${deviceConfirmTarget.targetDevice === "ANDROID" ? "Android" : "Keypad"}?`
+                      : `Switch to ${deviceConfirmTarget.targetDevice === "ANDROID" ? "Android Smartphone" : "Basic Keypad Phone"}?`}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {deviceConfirmTarget.targetDevice === "ANDROID"
+                      ? "Enables free in-app alert sirens (₱0 SMS cost)"
+                      : "Routes alerts through cellular SMS gateway"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeviceConfirmTarget(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 text-xs">
+              {/* Summary Card */}
+              {deviceConfirmTarget.mode === "SINGLE" && deviceConfirmTarget.person ? (
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold font-mono border ${getRankBadgeStyle(
+                          deviceConfirmTarget.person.rank
+                        )}`}
+                      >
+                        {deviceConfirmTarget.person.rank}
+                      </span>
+                      <span className="font-bold text-slate-900 text-sm">
+                        {deviceConfirmTarget.person.firstName} {deviceConfirmTarget.person.lastName}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500">
+                      {formatPhMobileDisplay(deviceConfirmTarget.person.mobileNumber)}
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">Device Capability:</span>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">
+                        {((deviceConfirmTarget.person as any).deviceType || "ANDROID") === "ANDROID" ? (
+                          <>
+                            <AndroidIcon className="w-2.5 h-2.5 text-[#3DDC84]" />
+                            <span>Android</span>
+                          </>
+                        ) : (
+                          <>
+                            <KeypadPhoneIcon className="w-2.5 h-2.5 text-slate-600" />
+                            <span>Keypad</span>
+                          </>
+                        )}
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          deviceConfirmTarget.targetDevice === "ANDROID"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : "bg-slate-100 text-slate-800 border-slate-300"
+                        }`}
+                      >
+                        {deviceConfirmTarget.targetDevice === "ANDROID" ? (
+                          <>
+                            <AndroidIcon className="w-2.5 h-2.5 text-[#3DDC84]" />
+                            <span>Android (New)</span>
+                          </>
+                        ) : (
+                          <>
+                            <KeypadPhoneIcon className="w-2.5 h-2.5 text-slate-600" />
+                            <span>Keypad (New)</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Affected Troops:</span>
+                    <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                      {deviceConfirmTarget.count} Soldier{deviceConfirmTarget.count > 1 ? "s" : ""} Selected
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">New Tag:</span>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                        deviceConfirmTarget.targetDevice === "ANDROID"
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                          : "bg-slate-100 text-slate-800 border-slate-300"
+                      }`}
+                    >
+                      {deviceConfirmTarget.targetDevice === "ANDROID" ? (
+                        <>
+                          <AndroidIcon className="w-3 h-3 text-[#3DDC84]" />
+                          <span>Android Smartphone</span>
+                        </>
+                      ) : (
+                        <>
+                          <KeypadPhoneIcon className="w-3 h-3 text-slate-600" />
+                          <span>Basic Keypad Phone</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Operational Guidance Notice */}
+              {deviceConfirmTarget.targetDevice === "ANDROID" ? (
+                <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-xs text-emerald-950">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span>Cost Optimization Routing (Free ₱0 Push)</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-900 leading-relaxed font-semibold">
+                    Are you sure you want to mark {deviceConfirmTarget.count > 1 ? `these ${deviceConfirmTarget.count} soldiers` : "this soldier"} as Android?
+                  </p>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    During Smart Hybrid broadcasts, RESCOM ALERT will automatically transmit in-app siren alerts to their companion app for free (saving cellular SMS credits).
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-950 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-xs text-amber-950">
+                    <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Cellular SMS Gateway Routing</span>
+                  </div>
+                  <p className="text-[11px] text-amber-900 leading-relaxed font-semibold">
+                    Are you sure you want to mark {deviceConfirmTarget.count > 1 ? `these ${deviceConfirmTarget.count} soldiers` : "this soldier"} as Keypad?
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    During Smart Hybrid broadcasts, RESCOM ALERT will send SMS through the GSM hardware gateway (TextBee SIM). In-app push notifications will be bypassed for {deviceConfirmTarget.count > 1 ? "these troops" : "this troop"}.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isUpdatingDevice}
+                onClick={() => setDeviceConfirmTarget(null)}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isUpdatingDevice}
+                onClick={handleConfirmDeviceChange}
+                className={`px-4.5 py-2 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                  deviceConfirmTarget.targetDevice === "ANDROID"
+                    ? "bg-emerald-700 hover:bg-emerald-600"
+                    : "bg-slate-800 hover:bg-slate-700"
+                }`}
+              >
+                {isUpdatingDevice ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Updating...</span>
+                  </>
+                ) : deviceConfirmTarget.targetDevice === "ANDROID" ? (
+                  <>
+                    <AndroidIcon className="w-3.5 h-3.5 text-white" />
+                    <span>Confirm Set as Android</span>
+                  </>
+                ) : (
+                  <>
+                    <KeypadPhoneIcon className="w-3.5 h-3.5 text-white" />
+                    <span>Confirm Set as Keypad</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Campaign Protection Notice Modal */}
+      {campaignProtectionTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-amber-200 overflow-hidden transform animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50 via-amber-50/70 to-orange-50/40 border-b border-amber-200/80 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 shadow-xs">
+                  <Lock className="w-5 h-5 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight">
+                    Enlistment Link is Active
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                      DELETION PROTECTED
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCampaignProtectionTarget(null);
+                  setCampaignActionError(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-amber-100/60 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-4">
+              {/* Campaign snapshot */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white text-slate-700 border border-slate-200">
+                    {campaignProtectionTarget.targetUnit}
+                  </span>
+                  <span className="font-mono text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    Passcode: {campaignProtectionTarget.passcode}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  {campaignProtectionTarget.title}
+                </h4>
+                <div className="flex items-center justify-between text-xs text-slate-600 pt-1 border-t border-slate-200/80">
+                  <span>Group: <strong className="text-slate-800">{campaignProtectionTarget.groupName}</strong></span>
+                  <span>Submissions: <strong className="text-emerald-700">{campaignProtectionTarget.totalSubmissions} ({campaignProtectionTarget.pendingCount} pending)</strong></span>
+                </div>
+              </div>
+
+              {/* Warning Notice Box */}
+              <div className="p-3.5 bg-amber-50/80 border border-amber-300/80 rounded-xl space-y-2">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="space-y-1.5 text-xs text-amber-950">
+                    <p className="font-bold leading-snug">
+                      This public enlistment link is currently LIVE and accepting submissions.
+                    </p>
+                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                      To prevent accidental deletion, loss of applicant records, and dead links for soldiers scanning the QR code, <strong>active campaigns cannot be deleted directly</strong>.
+                    </p>
+                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                      You can only delete this campaign if you <strong>close it early</strong> or wait for its duration window to conclude.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {campaignActionError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold">
+                  {campaignActionError}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isClosingCampaign}
+                onClick={() => {
+                  setCampaignProtectionTarget(null);
+                  setCampaignActionError(null);
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer text-center"
+              >
+                Keep Link Live
+              </button>
+              <button
+                type="button"
+                disabled={isClosingCampaign}
+                onClick={() => handleConfirmCloseCampaign(campaignProtectionTarget, true)}
+                className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isClosingCampaign ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Closing Window...</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Close Early & Unlock Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Permanent Deletion Confirmation Modal */}
+      {campaignDeleteTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-rose-200 overflow-hidden transform animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-50 via-rose-50/70 to-red-50/40 border-b border-rose-200/80 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 border border-rose-300 text-rose-700 flex items-center justify-center shrink-0 shadow-xs">
+                  <Trash2 className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight">
+                    Permanently Delete Campaign?
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-100 text-rose-900 border border-rose-300">
+                      IRREVERSIBLE PURGE
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCampaignDeleteTarget(null);
+                  setCampaignActionError(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-rose-100/60 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-4">
+              <div className="p-3.5 bg-rose-50/80 border border-rose-200 rounded-xl space-y-2">
+                <p className="text-xs font-bold text-rose-950">
+                  Are you sure you want to permanently delete this enlistment campaign?
+                </p>
+                <p className="text-[11px] text-rose-900/90 leading-relaxed">
+                  This will permanently erase <strong>{campaignDeleteTarget.title}</strong>, its QR enlistment portal, and all <strong>{campaignDeleteTarget.totalSubmissions} associated applicant submissions</strong> from the database. This action cannot be reversed.
+                </p>
+              </div>
+
+              {/* Target info */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Unit / Group:</span>
+                  <span className="font-semibold text-slate-800">{campaignDeleteTarget.targetUnit} &middot; {campaignDeleteTarget.groupName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Security Passcode:</span>
+                  <span className="font-mono font-semibold text-slate-800">{campaignDeleteTarget.passcode}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Status:</span>
+                  <span className="font-semibold text-slate-600">Closed / Concluded</span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-slate-200 text-rose-700 font-bold">
+                  <span>Submissions to be purged:</span>
+                  <span>{campaignDeleteTarget.totalSubmissions} records</span>
+                </div>
+              </div>
+
+              {campaignActionError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold">
+                  {campaignActionError}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeletingCampaign}
+                onClick={() => {
+                  setCampaignDeleteTarget(null);
+                  setCampaignActionError(null);
+                }}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingCampaign}
+                onClick={handleConfirmRemoveCampaign}
+                className="px-4.5 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingCampaign ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Permanent Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Early Confirmation Modal */}
+      {campaignCloseEarlyTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-amber-200 overflow-hidden transform animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50 to-orange-50/40 border-b border-amber-200/80 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 shadow-xs">
+                  <Clock className="w-5 h-5 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight">
+                    Close Enlistment Window Early?
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      IMMEDIATE DEACTIVATION
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCampaignCloseEarlyTarget(null);
+                  setCampaignActionError(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-amber-100/60 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-3">
+              <p className="text-xs font-bold text-slate-900">
+                Are you sure you want to close &ldquo;{campaignCloseEarlyTarget.title}&rdquo; ahead of schedule?
+              </p>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                The public enlistment link will immediately stop accepting new soldier registrations. Existing submissions ({campaignCloseEarlyTarget.totalSubmissions} records) will remain safely in your queue for review and approval.
+              </p>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Unit:</span>
+                  <span className="font-semibold text-slate-800">{campaignCloseEarlyTarget.targetUnit}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Target Group:</span>
+                  <span className="font-semibold text-slate-800">{campaignCloseEarlyTarget.groupName}</span>
+                </div>
+              </div>
+
+              {campaignActionError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold">
+                  {campaignActionError}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isClosingCampaign}
+                onClick={() => {
+                  setCampaignCloseEarlyTarget(null);
+                  setCampaignActionError(null);
+                }}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Keep Window Open
+              </button>
+              <button
+                type="button"
+                disabled={isClosingCampaign}
+                onClick={() => handleConfirmCloseCampaign(campaignCloseEarlyTarget, false)}
+                className="px-4.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isClosingCampaign ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Closing...</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Close Window Early</span>
                   </>
                 )}
               </button>

@@ -641,7 +641,7 @@ export default function AuthorizedPersonnelPage() {
             className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
           >
             <option value="ALL">All Roles</option>
-            <option value="DEVELOPER">⚡ System Developer</option>
+            <option value="DEVELOPER">System Developer</option>
             <option value="COMMANDER">Group Commander</option>
             <option value="ADMIN">Admin</option>
             <option value="VIEWER">Viewer</option>

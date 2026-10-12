@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -10,7 +12,10 @@ import {
   Volume2,
   ExternalLink,
   ChevronRight,
+  Lock,
 } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 interface GuideStep {
   step: number;
@@ -28,10 +33,10 @@ const STEPS: GuideStep[] = [
     step: 1,
     phase: "INSTALL",
     title: "Open Downloaded APK with Package Installer",
-    tagalogSummary: "Buksan ang rescom-alert.apk gamit ang Package installer.",
+    tagalogSummary: "Buksan ang rescom-alert-v1.0.5.apk gamit ang Package installer.",
     instructions: [
       "Pumunta sa inyong Downloads folder o sa browser notification.",
-      "Pindutin ang file na rescom-alert.apk.",
+      "Pindutin ang file na rescom-alert-v1.0.5.apk (o rescom-alert.apk).",
       'Sa "Open with" pop-up, piliin ang Package installer at pindutin ang "Just once" o "Always".',
     ],
     imageSrc: "/installation-guide/Step1.jpg",
@@ -104,7 +109,7 @@ const STEPS: GuideStep[] = [
     tagalogSummary: "I-off ang toggle at bumalik sa Downloads para i-install ang APK.",
     instructions: [
       'I-toggle patayin ang "Scan apps with Play Protect" (pindutin ang "Turn off" sa confirmation dialog).',
-      "Bumalik sa inyong Downloads folder at pindutin muli ang rescom-alert.apk.",
+      "Bumalik sa inyong Downloads folder at pindutin muli ang rescom-alert-v1.0.5.apk.",
       'Pindutin ang "Install" — magtutuloy na ang pag-install nang maayos!',
     ],
     imageSrc: "/installation-guide/Step7.jpg",
@@ -201,6 +206,41 @@ const STEPS: GuideStep[] = [
 ];
 
 export default function InstallationGuidePage() {
+  const portalSettings = useQuery(api.downloads.getPortalSettings);
+
+  if (portalSettings && portalSettings.isDownloadPortalEnabled === false) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-800 antialiased selection:bg-slate-200 selection:text-slate-900">
+        <main className="max-w-md w-full mx-auto px-4 py-16 sm:py-24 my-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center space-y-5">
+            <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 text-slate-500 mx-auto flex items-center justify-center">
+              <Lock className="w-5 h-5 text-slate-600" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                Guide Temporarily Unavailable
+              </h1>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+                The mobile app download portal and installation documentation are currently offline. Please check back later.
+              </p>
+            </div>
+            <div className="pt-2">
+              <Link
+                href="/download"
+                className="inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
+              >
+                <span>Back to Download Page</span>
+              </Link>
+            </div>
+          </div>
+        </main>
+        <footer className="py-6 text-center text-[11px] text-slate-400 font-mono">
+          10th Regional Community Defense Group (10RCDG), RESCOM, Philippine Army
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900 pb-16">
       {/* Top Bar */}

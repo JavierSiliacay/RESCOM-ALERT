@@ -197,5 +197,83 @@ export const alertBridgeService = {
       return "7V8UpW3jxbp";
     }
   },
+
+  /**
+   * Checks if flashlight strobe on alert is enabled
+   */
+  isFlashlightStrobeEnabled: async (): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return true;
+    try {
+      return await AlertBridge.isFlashlightStrobeEnabled();
+    } catch (e) {
+      return true;
+    }
+  },
+
+  /**
+   * Sets flashlight strobe enabled state
+   */
+  setFlashlightStrobe: async (enabled: boolean): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return false;
+    try {
+      return await AlertBridge.setFlashlightStrobe(enabled);
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /**
+   * Gets current alert sound settings
+   */
+  getAlertSoundSettings: async (): Promise<{ isDefault: boolean; title: string; uri: string }> => {
+    if (Platform.OS !== "android" || !AlertBridge) {
+      return { isDefault: true, title: "10RCDG Tactical Klaxon (Default)", uri: "" };
+    }
+    try {
+      return await AlertBridge.getAlertSoundSettings();
+    } catch (e) {
+      return { isDefault: true, title: "10RCDG Tactical Klaxon (Default)", uri: "" };
+    }
+  },
+
+  /**
+   * Resets alert sound back to official default siren
+   */
+  resetToDefaultAlertSound: async (): Promise<{ isDefault: boolean; title: string; uri: string }> => {
+    if (Platform.OS !== "android" || !AlertBridge) {
+      return { isDefault: true, title: "10RCDG Tactical Klaxon (Default)", uri: "" };
+    }
+    try {
+      return await AlertBridge.resetToDefaultAlertSound();
+    } catch (e) {
+      return { isDefault: true, title: "10RCDG Tactical Klaxon (Default)", uri: "" };
+    }
+  },
+
+  /**
+   * Previews alert sound for 3.5 seconds
+   */
+  previewAlertSound: async (): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return false;
+    try {
+      return await AlertBridge.previewAlertSound();
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /**
+   * Opens Android document picker to choose custom .mp3 / .wav
+   */
+  pickAudioFile: async (): Promise<{ success: boolean; uri?: string; title?: string; isDefault?: boolean; error?: string }> => {
+    if (Platform.OS !== "android" || !AlertBridge) {
+      return { success: false, error: "Native Android only" };
+    }
+    try {
+      return await AlertBridge.pickAudioFile();
+    } catch (e: any) {
+      return { success: false, error: e?.message || "File pick failed" };
+    }
+  },
 };
 

@@ -7,6 +7,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -14,7 +15,6 @@ import {
 import { alertBridgeService, PermissionStatus } from "../services/alertBridge";
 import { colors, radius, shadow } from "../theme";
 import { RankInsignia } from "../components/RankInsignia";
-import { convexHttpService } from "../services/convexHttp";
 
 interface ProfileScreenProps {
   soldier?: any;
@@ -25,7 +25,6 @@ interface ProfileScreenProps {
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   soldier,
   onOpenPairing,
-  onSoldierUpdated,
 }) => {
   const [perms, setPerms] = useState<PermissionStatus>({
     hasSmsPermission: false,
@@ -34,32 +33,25 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     canDrawOverlays: false,
   });
 
-  const refresh = async () => setPerms(await alertBridgeService.checkSystemPermissions());
+  const [strobeEnabled, setStrobeEnabled] = useState(true);
+  const [soundSettings, setSoundSettings] = useState({
+    isDefault: true,
+    title: "10RCDG Tactical Klaxon (Default)",
+    uri: "",
+  });
+  const [isPreviewing, setIsPreviewing] = useState(false);
 
-  const handleUnlink = () => {
-    Alert.alert(
-      "Unlink Mobile Device?",
-      "This will remove your soldier profile from this device. You will need to re-enter your mobile number to receive push alerts.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Unlink",
-          style: "destructive",
-          onPress: async () => {
-            if (soldier?.id) {
-              await convexHttpService.unlinkDevice(soldier.id);
-            }
-            await alertBridgeService.clearSoldierProfile();
-            onSoldierUpdated?.(null);
-          },
-        },
-      ]
-    );
+  const refresh = async () => {
+    const currentPerms = await alertBridgeService.checkSystemPermissions();
+    setPerms(currentPerms);
+    const strobe = await alertBridgeService.isFlashlightStrobeEnabled();
+    setStrobeEnabled(strobe);
+    const sound = await alertBridgeService.getAlertSoundSettings();
+    setSoundSettings(sound);
   };
 
   useEffect(() => {
     refresh();
-    // Re-check when the soldier comes back from Android settings
     const sub = AppState.addEventListener("change", (s) => {
       if (s === "active") {
         refresh();
@@ -68,6 +60,38 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     });
     return () => sub.remove();
   }, []);
+
+  const handleToggleStrobe = async (val: boolean) => {
+    setStrobeEnabled(val);
+    await alertBridgeService.setFlashlightStrobe(val);
+  };
+
+  const handlePickSound = async () => {
+    const res = await alertBridgeService.pickAudioFile();
+    if (res.success && res.title) {
+      setSoundSettings({
+        isDefault: false,
+        title: res.title,
+        uri: res.uri || "",
+      });
+      Alert.alert(
+        "Alert Tone Set",
+        `Selected: ${res.title}\n\nTap "Play Sample" to test volume on your device.`
+      );
+    }
+  };
+
+  const handleResetSound = async () => {
+    const res = await alertBridgeService.resetToDefaultAlertSound();
+    setSoundSettings(res);
+  };
+
+  const handlePreviewSound = async () => {
+    if (isPreviewing) return;
+    setIsPreviewing(true);
+    await alertBridgeService.previewAlertSound();
+    setTimeout(() => setIsPreviewing(false), 3600);
+  };
 
   const handleRequestSms = async () => {
     if (Platform.OS !== "android") return;
@@ -166,9 +190,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <View style={styles.soldierCardTelemetry}>
             <Text style={styles.soldierCardPhone}>📱 Reg: {soldier.mobileNumber}</Text>
-            <TouchableOpacity onPress={handleUnlink} activeOpacity={0.7}>
-              <Text style={styles.unlinkText}>Switch Phone</Text>
-            </TouchableOpacity>
+            <View style={styles.boundBadge}>
+              <Text style={styles.boundBadgeText}>ACTIVE &amp; BOUND</Text>
+            </View>
           </View>
         </View>
       ) : (
@@ -200,7 +224,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
       </View>
 
-      {/* Setup checks */}
+      {/* 2. Setup checks */}
       <View style={styles.card}>
         {steps.map((s, i) => (
           <View key={s.key} style={[styles.step, i === steps.length - 1 && { borderBottomWidth: 0 }]}>
@@ -224,7 +248,86 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         ))}
       </View>
 
-      {/* Help & Troubleshooting */}
+      {/* 3. Alarm Tone & Visual Strobe Preferences */}
+      <View style={[styles.card, { marginTop: 14, paddingVertical: 14 }]}>
+        <Text style={styles.cardTitle}>Alarm Tone &amp; Hardware Strobe</Text>
+        <Text style={styles.sectionSubtitle}>
+          Configure emergency alert sound and camera flashlight for field operations.
+        </Text>
+
+        {/* Flashlight Strobe Row */}
+        <View style={styles.prefRow}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={styles.prefTitle}>Flashlight Strobe on Alert</Text>
+            <Text style={styles.prefDesc}>
+              Rapid rear camera LED flash for dark quarters or noisy storms.
+            </Text>
+          </View>
+          <Switch
+            value={strobeEnabled}
+            onValueChange={handleToggleStrobe}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor="#ffffff"
+          />
+        </View>
+
+        {/* Siren Sound Tone Row */}
+        <View style={[styles.prefRow, { borderTopWidth: 1, borderTopColor: colors.borderSoft, paddingTop: 14 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.prefTitle}>Alert Siren Tone</Text>
+            <View style={styles.toneStatusRow}>
+              <View style={[styles.toneDot, { backgroundColor: soundSettings.isDefault ? colors.primary : colors.amber }]} />
+              <Text style={styles.toneName} numberOfLines={1}>
+                {soundSettings.title}
+              </Text>
+            </View>
+
+            {/* Tactical Actions: Play Sample, Choose File, Reset */}
+            <View style={styles.toneActionsRow}>
+              <TouchableOpacity
+                style={[styles.toneBtn, isPreviewing && styles.toneBtnActive]}
+                onPress={handlePreviewSound}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.toneBtnText, isPreviewing && styles.toneBtnTextActive]}>
+                  {isPreviewing ? "PLAYING..." : "▶ PLAY SAMPLE"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.toneBtn}
+                onPress={handlePickSound}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.toneBtnText}>CHOOSE .MP3 / .WAV</Text>
+              </TouchableOpacity>
+
+              {!soundSettings.isDefault && (
+                <TouchableOpacity
+                  style={[styles.toneBtn, styles.toneBtnReset]}
+                  onPress={handleResetSound}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.toneBtnResetText}>RESET TO DEFAULT</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* 4. Hardware Authorization Notice (Admin-only security lock) */}
+      <View style={[styles.card, styles.authNoticeCard]}>
+        <View style={styles.authNoticeHeader}>
+          <Text style={styles.authNoticeLock}>🔒</Text>
+          <Text style={styles.authNoticeTitle}>Hardware Device Authorization</Text>
+        </View>
+        <Text style={styles.authNoticeText}>
+          This phone is enrolled in the 10RCDG emergency mobilization grid. If you replace or upgrade your phone, coordinate with your Unit Administrator to re-pair access via Command QR Code.
+        </Text>
+      </View>
+
+      {/* 5. Help & Troubleshooting */}
       <View style={[styles.card, styles.helpCard]}>
         <Text style={styles.cardTitle}>Need Help or Siren Not Ringing?</Text>
 
@@ -249,7 +352,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
 
         <View style={styles.helpSection}>
-          <Text style={styles.helpSubtitle}>3. Technical Support & Inquiries</Text>
+          <Text style={styles.helpSubtitle}>3. Technical Support &amp; Inquiries</Text>
           <Text style={styles.helpText}>
             Contact the in-charge personnel of the portal, your system administrator, or message the official 10RCDG unit page:
           </Text>
@@ -291,7 +394,31 @@ const styles = StyleSheet.create({
   bannerText: { fontSize: 12, color: colors.amberDark, marginTop: 2 },
 
   card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: 16, paddingVertical: 4, ...shadow },
-  cardTitle: { fontSize: 15, fontWeight: "800", color: colors.text, marginTop: 12 },
+  cardTitle: { fontSize: 15, fontWeight: "800", color: colors.text, marginTop: 4 },
+  sectionSubtitle: { fontSize: 12, color: colors.textMuted, lineHeight: 18, marginTop: 2, marginBottom: 12 },
+
+  prefRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 },
+  prefTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
+  prefDesc: { fontSize: 12, color: colors.textMuted, marginTop: 2, lineHeight: 17 },
+
+  toneStatusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6, backgroundColor: colors.subtle, padding: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.borderSoft },
+  toneDot: { width: 8, height: 8, borderRadius: 4 },
+  toneName: { fontSize: 13, fontWeight: "700", color: colors.text, flex: 1 },
+
+  toneActionsRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" },
+  toneBtn: { backgroundColor: colors.subtle, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 8 },
+  toneBtnActive: { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder },
+  toneBtnText: { fontSize: 11, fontWeight: "800", color: colors.primaryText, letterSpacing: 0.3 },
+  toneBtnTextActive: { color: colors.primary },
+  toneBtnReset: { backgroundColor: "#fef2f2", borderColor: "#fecaca" },
+  toneBtnResetText: { fontSize: 11, fontWeight: "800", color: "#b91c1c", letterSpacing: 0.3 },
+
+  authNoticeCard: { marginTop: 14, paddingVertical: 14, backgroundColor: "#f8fafc", borderColor: "#cbd5e1" },
+  authNoticeHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  authNoticeLock: { fontSize: 14 },
+  authNoticeTitle: { fontSize: 13, fontWeight: "800", color: colors.text },
+  authNoticeText: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
+
   helpCard: { marginTop: 14, paddingVertical: 14 },
   helpSection: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSoft },
   helpSubtitle: { fontSize: 13, fontWeight: "800", color: colors.primary, marginBottom: 4 },
@@ -316,94 +443,22 @@ const styles = StyleSheet.create({
   fixBtn: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: 12, paddingVertical: 8 },
   fixText: { color: "#fff", fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
 
+  soldierCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: 14, marginBottom: 12, ...shadow },
+  soldierCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  soldierCardName: { fontSize: 16, fontWeight: "800", color: colors.text },
+  soldierCardUnit: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  soldierCardTelemetry: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSoft },
+  soldierCardPhone: { fontSize: 12, fontFamily: Platform.OS === "android" ? "monospace" : "Menlo", color: colors.textMuted, fontWeight: "600" },
+  boundBadge: { backgroundColor: colors.primarySoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: colors.primaryBorder },
+  boundBadgeText: { fontSize: 10, fontWeight: "800", color: colors.primary, letterSpacing: 0.5 },
+
+  pairDeviceBanner: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, backgroundColor: colors.card, borderWidth: 2, borderColor: colors.primary, borderStyle: "dashed", borderRadius: radius.lg, marginBottom: 12 },
+  pairIconWrap: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
+  pairPlus: { fontSize: 20, fontWeight: "900", color: colors.primary },
+  pairTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
+  pairSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+
   clearBtn: { marginTop: 18, paddingVertical: 14, borderRadius: radius.md, borderWidth: 1, borderColor: colors.redBorder, backgroundColor: colors.card, alignItems: "center" },
   clearText: { color: colors.red, fontWeight: "700", fontSize: 14 },
   footer: { textAlign: "center", fontSize: 11, color: colors.textFaint, marginTop: 20 },
-
-  // Soldier Card
-  soldierCard: {
-    backgroundColor: "#0f172a",
-    borderRadius: radius.lg,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
-    marginBottom: 14,
-  },
-  soldierCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  soldierCardName: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#ffffff",
-    letterSpacing: 0.3,
-  },
-  soldierCardUnit: {
-    fontSize: 11,
-    color: "#94a3b8",
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  soldierCardTelemetry: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.06)",
-  },
-  soldierCardPhone: {
-    fontFamily: "monospace",
-    fontSize: 11,
-    color: "#cbd5e1",
-    fontWeight: "700",
-  },
-  unlinkText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.amberDark,
-    textDecorationLine: "underline",
-  },
-
-  // Pair Banner
-  pairDeviceBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    borderStyle: "dashed",
-    marginBottom: 14,
-  },
-  pairIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pairPlus: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: colors.primary,
-    marginTop: -2,
-  },
-  pairTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  pairSub: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
 });
-

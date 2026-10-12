@@ -40,31 +40,40 @@ export function formatPhMobileDisplay(value: string): string {
   const clean = value.replace(/[^\d+]/g, "");
 
   if (clean.startsWith("+63")) {
-    const digits = clean.slice(3).replace(/\D/g, "").slice(0, 10);
-    if (digits.length === 0) return "+63 ";
+    let digits = clean.slice(3).replace(/\D/g, "");
+    if (digits.startsWith("0")) digits = digits.slice(1);
+    digits = digits.slice(0, 10);
+    if (digits.length === 0) return "+63";
     if (digits.length <= 3) return `+63 ${digits}`;
     if (digits.length <= 6) return `+63 ${digits.slice(0, 3)} ${digits.slice(3)}`;
     return `+63 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 10)}`;
-  } else if (clean.startsWith("639")) {
-    const digits = clean.slice(2).replace(/\D/g, "").slice(0, 10);
+  } else if (clean.startsWith("639") || clean.startsWith("6309")) {
+    let digits = clean.slice(2).replace(/\D/g, "");
+    if (digits.startsWith("0")) digits = digits.slice(1);
+    digits = digits.slice(0, 10);
     if (digits.length <= 3) return `+63 ${digits}`;
     if (digits.length <= 6) return `+63 ${digits.slice(0, 3)} ${digits.slice(3)}`;
     return `+63 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 10)}`;
+  } else if (clean.startsWith("+")) {
+    return clean.slice(0, 16);
   } else if (clean.startsWith("09")) {
     const digits = clean.replace(/\D/g, "").slice(0, 11);
     if (digits.length <= 4) return digits;
     if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
     return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 11)}`;
-  } else if (clean.startsWith("+")) {
-    return clean.slice(0, 17);
   } else if (clean.startsWith("9")) {
     const digits = ("0" + clean).replace(/\D/g, "").slice(0, 11);
     if (digits.length <= 4) return digits;
     if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
     return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 11)}`;
+  } else if (clean.startsWith("0")) {
+    const digits = clean.replace(/\D/g, "").slice(0, 11);
+    if (digits.length <= 4) return digits;
+    if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
+    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 11)}`;
   }
 
-  // Fallback for general typing
+  // Fallback for general typing (capped strictly at 11 digits)
   const digits = clean.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 4) return digits;
   if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
@@ -95,9 +104,17 @@ export function formatPhMobileNumber(raw: string): string | null {
   if (/^\+639\d{9}$/.test(clean)) {
     return clean;
   }
+  // +6309XXXXXXXXX (14 chars)
+  if (/^\+6309\d{9}$/.test(clean)) {
+    return "+63" + clean.substring(4);
+  }
   // 639XXXXXXXXX (12 digits)
   if (/^639\d{9}$/.test(clean)) {
     return "+" + clean;
+  }
+  // 6309XXXXXXXXX (13 digits)
+  if (/^6309\d{9}$/.test(clean)) {
+    return "+63" + clean.substring(4);
   }
   // 09XXXXXXXXX (11 digits)
   if (/^09\d{9}$/.test(clean)) {
@@ -232,6 +249,25 @@ export function matchesPhMobileSearch(storedPhone: string, searchQuery: string):
 
 
 /**
+ * Official 11-character cryptographic hash for com.rescom.alert
+ * Enables Google Play Services SMS Retriever API (Layer 2 Zero-Permission Bypass on Android 15/16).
+ */
+export const SMS_RETRIEVER_APP_HASH = "7V8UpW3jxbp";
+
+/**
+ * Formats an outgoing SMS dispatch to satisfy both:
+ * 1. Layer 1: Classic SMS Receiver (contains [10RCDG)
+ * 2. Layer 2: Google SMS Retriever API (ends with 11-char app signature hash 7V8UpW3jxbp)
+ */
+export function formatEmergencySmsBroadcast(message: string): string {
+  let trimmed = message.trim();
+  if (!trimmed.includes(SMS_RETRIEVER_APP_HASH)) {
+    trimmed = `${trimmed}\n\n${SMS_RETRIEVER_APP_HASH}`;
+  }
+  return trimmed;
+}
+
+/**
  * Dispatches an SMS message using the TextBee API gateway or simulation fallback.
  */
 export async function dispatchSms({
@@ -256,6 +292,9 @@ export async function dispatchSms({
       ? Number(process.env.TEXTBEE_SIM_SUBSCRIPTION_ID)
       : 1;
 
+  // Format message with Layer 2 SMS Retriever Hash for Android 15/16 zero-permission delivery
+  const finalMessage = formatEmergencySmsBroadcast(message);
+
   // Format and validate Philippine mobile numbers
   const formattedRecipients = recipients.map((num) => {
     const formatted = formatPhMobileNumber(num);
@@ -267,7 +306,7 @@ export async function dispatchSms({
     try {
       const payload: Record<string, unknown> = {
         recipients: formattedRecipients,
-        message: message,
+        message: finalMessage,
       };
 
       if (activeSimId) {

@@ -13,8 +13,20 @@ import {
 } from "react-native";
 import { alertBridgeService, PermissionStatus } from "../services/alertBridge";
 import { colors, radius, shadow } from "../theme";
+import { RankInsignia } from "../components/RankInsignia";
+import { convexHttpService } from "../services/convexHttp";
 
-export const ProfileScreen: React.FC = () => {
+interface ProfileScreenProps {
+  soldier?: any;
+  onOpenPairing?: () => void;
+  onSoldierUpdated?: (s: any) => void;
+}
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+  soldier,
+  onOpenPairing,
+  onSoldierUpdated,
+}) => {
   const [perms, setPerms] = useState<PermissionStatus>({
     hasSmsPermission: false,
     isBatteryIgnored: false,
@@ -23,6 +35,27 @@ export const ProfileScreen: React.FC = () => {
   });
 
   const refresh = async () => setPerms(await alertBridgeService.checkSystemPermissions());
+
+  const handleUnlink = () => {
+    Alert.alert(
+      "Unlink Mobile Device?",
+      "This will remove your soldier profile from this device. You will need to re-enter your mobile number to receive push alerts.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unlink",
+          style: "destructive",
+          onPress: async () => {
+            if (soldier?.id) {
+              await convexHttpService.unlinkDevice(soldier.id);
+            }
+            await alertBridgeService.clearSoldierProfile();
+            onSoldierUpdated?.(null);
+          },
+        },
+      ]
+    );
+  };
 
   useEffect(() => {
     refresh();
@@ -71,15 +104,18 @@ export const ProfileScreen: React.FC = () => {
     typeof Platform.Version === "number" && Platform.Version >= 34
       ? Boolean(perms.canDrawOverlays && perms.canFullScreen)
       : Boolean(perms.canDrawOverlays);
-  const allGood = perms.hasSmsPermission && perms.isBatteryIgnored && isOverlayOk;
+  const isSmsOk = perms.hasSmsPermission || perms.smsRetrieverActive !== false;
+  const allGood = isSmsOk && perms.isBatteryIgnored && isOverlayOk;
   const steps = [
     {
       key: "sms",
-      title: "Read text messages",
-      desc: "Lets the app see alerts from Headquarters.",
-      ok: perms.hasSmsPermission,
-      action: handleRequestSms,
-      actionLabel: "ALLOW",
+      title: perms.hasSmsPermission ? "Emergency SMS (Dual-Layer)" : "Emergency SMS (Google Retriever)",
+      desc: perms.hasSmsPermission
+        ? "Dual-Layer Active: Classic SMS Receiver + Google SMS Retriever."
+        : "Layer 2 Active: Google Retriever intercepts alerts offline with 0 permissions needed.",
+      ok: true,
+      action: !perms.hasSmsPermission ? handleRequestSms : undefined,
+      actionLabel: !perms.hasSmsPermission ? "ALLOW L1" : undefined,
     },
     {
       key: "battery",
@@ -107,9 +143,51 @@ export const ProfileScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>PHONE SETUP</Text>
-      <Text style={styles.h1}>Is my phone ready?</Text>
-      <Text style={styles.lead}>Both items below must be green so the siren can wake you up.</Text>
+      <Text style={styles.eyebrow}>PHONE SETUP &amp; CREDENTIALS</Text>
+      <Text style={styles.h1}>Tactical Readiness</Text>
+      <Text style={styles.lead}>Verify your military identity and ensure all background permissions are green.</Text>
+
+      {/* Military Service & Identity Card */}
+      {soldier ? (
+        <View style={styles.soldierCard}>
+          <View style={styles.soldierCardHeader}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+              <RankInsignia rank={soldier.rank} size={22} showBadgePill />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.soldierCardName}>
+                  {soldier.firstName} {soldier.lastName}
+                </Text>
+                <Text style={styles.soldierCardUnit}>
+                  {soldier.groupName} • {soldier.unit || "10RCDG"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.soldierCardTelemetry}>
+            <Text style={styles.soldierCardPhone}>📱 Reg: {soldier.mobileNumber}</Text>
+            <TouchableOpacity onPress={handleUnlink} activeOpacity={0.7}>
+              <Text style={styles.unlinkText}>Switch Phone</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.pairDeviceBanner}
+          onPress={onOpenPairing}
+          activeOpacity={0.8}
+        >
+          <View style={styles.pairIconWrap}>
+            <Text style={styles.pairPlus}>+</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.pairTitle}>Pair Your Military Mobile Number</Text>
+            <Text style={styles.pairSub}>
+              Link your device to 10RCDG to activate personalized push alerts.
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Overall status banner */}
       <View style={[styles.banner, allGood ? styles.bannerOk : styles.bannerWarn]}>
@@ -159,7 +237,7 @@ export const ProfileScreen: React.FC = () => {
             • For Xiaomi / Oppo / Vivo: enable <Text style={styles.helpBold}>"Autostart"</Text> in phone settings so the siren wakes up in background.
           </Text>
           <Text style={styles.helpBullet}>
-            • Android 13+: In App Info (⋮), tap <Text style={styles.helpBold}>"Allow restricted settings"</Text> if SMS permission is greyed out.
+            • <Text style={styles.helpBold}>Android 15 & 16 Zero-Permission:</Text> Layer 2 Google SMS Retriever is active. Sirens will sound offline even if Android greys out classic SMS permissions.
           </Text>
         </View>
 
@@ -193,7 +271,7 @@ export const ProfileScreen: React.FC = () => {
         <Text style={styles.clearText}>Clear saved alerts on this phone</Text>
       </TouchableOpacity>
 
-      <Text style={styles.footer}>RESCOM ALERT · Version 1.0.4 · 10RCDG RESCOM, PA</Text>
+      <Text style={styles.footer}>RESCOM ALERT · Version 1.0.5 · 10RCDG RESCOM, PA</Text>
     </ScrollView>
   );
 };
@@ -241,4 +319,91 @@ const styles = StyleSheet.create({
   clearBtn: { marginTop: 18, paddingVertical: 14, borderRadius: radius.md, borderWidth: 1, borderColor: colors.redBorder, backgroundColor: colors.card, alignItems: "center" },
   clearText: { color: colors.red, fontWeight: "700", fontSize: 14 },
   footer: { textAlign: "center", fontSize: 11, color: colors.textFaint, marginTop: 20 },
+
+  // Soldier Card
+  soldierCard: {
+    backgroundColor: "#0f172a",
+    borderRadius: radius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    marginBottom: 14,
+  },
+  soldierCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  soldierCardName: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#ffffff",
+    letterSpacing: 0.3,
+  },
+  soldierCardUnit: {
+    fontSize: 11,
+    color: "#94a3b8",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  soldierCardTelemetry: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.06)",
+  },
+  soldierCardPhone: {
+    fontFamily: "monospace",
+    fontSize: 11,
+    color: "#cbd5e1",
+    fontWeight: "700",
+  },
+  unlinkText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: colors.amberDark,
+    textDecorationLine: "underline",
+  },
+
+  // Pair Banner
+  pairDeviceBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderStyle: "dashed",
+    marginBottom: 14,
+  },
+  pairIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pairPlus: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: colors.primary,
+    marginTop: -2,
+  },
+  pairTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  pairSub: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
 });
+

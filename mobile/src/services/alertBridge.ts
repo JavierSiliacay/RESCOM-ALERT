@@ -4,6 +4,7 @@ const { AlertBridge } = NativeModules;
 
 export interface PermissionStatus {
   hasSmsPermission: boolean;
+  smsRetrieverActive?: boolean;
   isBatteryIgnored: boolean;
   canDrawOverlays?: boolean;
   canFullScreen?: boolean;
@@ -133,4 +134,68 @@ export const alertBridgeService = {
       return { hasSmsPermission: false, isBatteryIgnored: false };
     }
   },
+
+  /**
+   * Persists soldier identity on native device storage
+   */
+  saveSoldierProfile: async (profile: any): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return false;
+    try {
+      return await AlertBridge.saveSoldierProfile(JSON.stringify(profile));
+    } catch (e) {
+      console.error("Failed to save soldier profile:", e);
+      return false;
+    }
+  },
+
+  /**
+   * Retrieves paired soldier identity from native device storage
+   */
+  getSoldierProfile: async (): Promise<any | null> => {
+    if (Platform.OS !== "android" || !AlertBridge) return null;
+    try {
+      const raw = await AlertBridge.getSoldierProfile();
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /**
+   * Clears soldier profile (unlinks device)
+   */
+  clearSoldierProfile: async (): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return false;
+    try {
+      return await AlertBridge.clearSoldierProfile();
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /**
+   * Arms the Layer 2 Zero-Permission Google SMS Retriever
+   */
+  startSmsRetriever: async (): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge) return false;
+    try {
+      return await AlertBridge.startSmsRetriever();
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /**
+   * Gets the 11-character app hash for SMS Retriever
+   */
+  getSmsRetrieverHash: async (): Promise<string> => {
+    if (Platform.OS !== "android" || !AlertBridge) return "7V8UpW3jxbp";
+    try {
+      return await AlertBridge.getSmsRetrieverHash();
+    } catch (e) {
+      return "7V8UpW3jxbp";
+    }
+  },
 };
+

@@ -16,6 +16,9 @@ import {
 import { AlertsScreen } from "./src/screens/AlertsScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { colors } from "./src/theme";
+import { SoldierHeaderCard } from "./src/components/SoldierHeaderCard";
+import { DevicePairingModal } from "./src/components/DevicePairingModal";
+import { alertBridgeService } from "./src/services/alertBridge";
 
 type TabKey = "ALERTS" | "SETUP";
 
@@ -47,8 +50,29 @@ function TabGlyph({ tab, active }: { tab: TabKey; active: boolean }) {
 function Shell(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<TabKey>("ALERTS");
+  const [soldier, setSoldier] = useState<any>(null);
+  const [isArmed, setIsArmed] = useState(true);
+  const [pairingModalOpen, setPairingModalOpen] = useState(false);
+
+  const refreshProfileAndPerms = async () => {
+    try {
+      const saved = await alertBridgeService.getSoldierProfile();
+      if (saved) {
+        setSoldier(saved);
+      } else {
+        // First install / unlinked: prompt soldier to pair mobile number
+        setTimeout(() => setPairingModalOpen(true), 600);
+      }
+      const perms = await alertBridgeService.checkSystemPermissions();
+      setIsArmed(Boolean(perms.isFullyArmed));
+    } catch (e) {
+      // Background load
+    }
+  };
 
   useEffect(() => {
+    refreshProfileAndPerms();
+
     if (Platform.OS === "android") {
       const perms = [
         PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
@@ -85,20 +109,36 @@ function Shell(): React.JSX.Element {
         </View>
       </View>
 
-      {/* Status strip — same as web "Connected as" bar */}
-      <View style={styles.strip}>
-        <View style={styles.stripDot} />
-        <Text style={styles.stripText}>Siren protection is ON</Text>
-        <View style={{ flex: 1 }} />
-        <View style={styles.stripPill}>
-          <Text style={styles.stripPillText}>NO INTERNET NEEDED</Text>
-        </View>
-      </View>
+      {/* Tactical Soldier Identity Header */}
+      <TouchableOpacity
+        activeOpacity={soldier ? 1 : 0.8}
+        onPress={() => {
+          if (!soldier) setPairingModalOpen(true);
+        }}
+      >
+        <SoldierHeaderCard soldier={soldier} isArmed={isArmed} />
+      </TouchableOpacity>
 
       <View style={{ flex: 1 }}>
         {activeTab === "ALERTS" && <AlertsScreen />}
-        {activeTab === "SETUP" && <ProfileScreen />}
+        {activeTab === "SETUP" && (
+          <ProfileScreen
+            soldier={soldier}
+            onOpenPairing={() => setPairingModalOpen(true)}
+            onSoldierUpdated={(s) => setSoldier(s)}
+          />
+        )}
       </View>
+
+      {/* One-Time Mobile Pairing Modal */}
+      <DevicePairingModal
+        visible={pairingModalOpen}
+        onClose={() => setPairingModalOpen(false)}
+        onSuccess={(linkedSoldier) => {
+          setSoldier(linkedSoldier);
+          refreshProfileAndPerms();
+        }}
+      />
 
       {/* Bottom navigation */}
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>

@@ -1,6 +1,6 @@
 # 🇵🇭 RESCOM ALERT — SOLDIER MOBILE APP INSTALLATION GUIDE
 ### 10th Regional Community Defense Group (10RCDG), Reserve Command, Philippine Army
-**Document Version:** 1.0.4 | **Classification:** Official Troop Mobilization Manual
+**Document Version:** 1.0.5 | **Classification:** Official Troop Mobilization Manual
 
 ---
 
@@ -22,11 +22,11 @@ Kung ang inyong cellphone ay **walang** lumalabas na *"Install anyway"* o *"Inst
 
 ## 🛡️ PHASE 1: Pag-bypass sa Play Protect at Pag-install ng APK
 
-Kapag na-download na ang `rescom-alert.apk`, sundin ang mga sumusunod na hakbang:
+Kapag na-download na ang `rescom-alert-v1.0.5.apk` (o `rescom-alert.apk`), sundin ang mga sumusunod na hakbang:
 
 ### Step 1: Buksan ang Downloaded File
 * Pumunta sa inyong **Downloads** folder o sa browser downloads notification.
-* Pindutin ang file na **`rescom-alert.apk`**.
+* Pindutin ang file na **`rescom-alert-v1.0.5.apk`** (o `rescom-alert.apk`).
 * Sa *"Open with"* pop-up, piliin ang **Package installer** at pindutin ang **"Just once"** (o "Always").
 
 ![Step 1 - Package Installer](./Step1.jpg)
@@ -81,7 +81,7 @@ Kapag na-download na ang `rescom-alert.apk`, sundin ang mga sumusunod na hakbang
 
 > 💡 **MAHALAGANG HAKBANG MATAPOS ITO:**  
 > 1. Bumalik sa inyong **Downloads** folder.  
-> 2. Pindutin muli ang **`rescom-alert.apk`** at pindutin ang **"Install"**.  
+> 2. Pindutin muli ang **`rescom-alert-v1.0.5.apk`** at pindutin ang **"Install"**.  
 > 3. Mag-iinstall na ito nang maayos at walang harang!  
 > *(Paalala: Maaari ninyong ibalik sa ON ang Play Protect matapos ma-install ang app kung inyong naisin).*
 

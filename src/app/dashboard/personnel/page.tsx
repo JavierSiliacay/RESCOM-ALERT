@@ -27,12 +27,14 @@ import {
   UserPlus,
   RefreshCw,
   Check,
+  Copy,
   Smartphone,
   Download,
   ArrowRight,
   Lock,
   ShieldAlert,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -307,6 +309,12 @@ export default function PersonnelPage() {
   const togglePersonnelStatus = useMutation(api.personnel.toggleStatus);
   const removePersonnel = useMutation(api.personnel.remove);
 
+  // Device Pairing Mutations
+  const linkDevice = useMutation(api.personnel.linkDevice);
+  const unlinkDevice = useMutation(api.personnel.unlinkDevice);
+  const batchLinkDevices = useMutation(api.personnel.batchLinkDevices);
+  const batchUnlinkDevices = useMutation(api.personnel.batchUnlinkDevices);
+
   // Enlistment Mutations
   const createCampaign = useMutation(api.enlistment.createCampaign);
   const approveSubmission = useMutation(api.enlistment.approveSubmission);
@@ -322,11 +330,24 @@ export default function PersonnelPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
-  const [selectedDevice, setSelectedDevice] = useState<"ALL" | "ANDROID" | "KEYPAD">("ALL");
+  const [selectedDevice, setSelectedDevice] = useState<"ALL" | "PAIRED" | "UNPAIRED" | "ANDROID" | "KEYPAD">("ALL");
 
   // Selected Personnel for Batch Actions
   const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<Id<"personnel">[]>([]);
   const [isBatchUpdatingDevice, setIsBatchUpdatingDevice] = useState(false);
+
+  // Single Device Pairing Modal State
+  const [devicePairingTarget, setDevicePairingTarget] = useState<(typeof rawPersonnelList)[number] | null>(null);
+  const [customDeviceModel, setCustomDeviceModel] = useState("Samsung Galaxy A54");
+  const [customFcmToken, setCustomFcmToken] = useState("");
+  const [isPairingDevice, setIsPairingDevice] = useState(false);
+  const [activePairingTab, setActivePairingTab] = useState<"DIRECT" | "QR">("DIRECT");
+  const [copiedPairLink, setCopiedPairLink] = useState(false);
+
+  // Batch Device Pairing Modal State
+  const [isBatchPairModalOpen, setIsBatchPairModalOpen] = useState(false);
+  const [batchDeviceModel, setBatchDeviceModel] = useState("Android Device (Bulk Provisioned)");
+  const [isBatchPairing, setIsBatchPairing] = useState(false);
 
   // Manual Add/Edit Personnel Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -335,18 +356,25 @@ export default function PersonnelPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   // Status Toggle Confirmation Modal State
-  const [statusConfirmTarget, setStatusConfirmTarget] = useState<(typeof personnelList)[number] | null>(null);
+  const [statusConfirmTarget, setStatusConfirmTarget] = useState<(typeof rawPersonnelList)[number] | null>(null);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
   // Device Capability Confirmation Modal State (Prevents misclick / accidental tagging)
   const [deviceConfirmTarget, setDeviceConfirmTarget] = useState<{
     mode: "BATCH" | "SINGLE";
     targetDevice: "ANDROID" | "KEYPAD";
-    person?: (typeof personnelList)[number];
+    person?: (typeof rawPersonnelList)[number];
     ids?: Id<"personnel">[];
     count: number;
   } | null>(null);
   const [isUpdatingDevice, setIsUpdatingDevice] = useState(false);
+
+  // Device Unpair Confirmation Modal State (Prevents accidental unlinking)
+  const [unlinkConfirmTarget, setUnlinkConfirmTarget] = useState<{
+    soldier: (typeof rawPersonnelList)[number];
+    reason: string;
+  } | null>(null);
+  const [batchUnlinkConfirmOpen, setBatchUnlinkConfirmOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -430,6 +458,14 @@ export default function PersonnelPage() {
     return personnelList.filter((p) => (p as any).deviceType === "KEYPAD").length;
   }, [personnelList]);
 
+  const pairedAppCount = useMemo(() => {
+    return personnelList.filter((p) => Boolean((p as any).fcmToken)).length;
+  }, [personnelList]);
+
+  const unpairedCount = useMemo(() => {
+    return personnelList.length - pairedAppCount;
+  }, [personnelList, pairedAppCount]);
+
   // Search Bar Dropdown & Autocomplete State
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -449,8 +485,18 @@ export default function PersonnelPage() {
 
   // Filtered Personnel List (space-insensitive and case-insensitive for numbers and names)
   const filteredPersonnel = personnelList.filter((person) => {
+    const isPaired = Boolean((person as any).fcmToken);
     const personDevice = (person as any).deviceType || "ANDROID";
-    const matchesDevice = selectedDevice === "ALL" || personDevice === selectedDevice;
+    let matchesDevice = true;
+    if (selectedDevice === "PAIRED") {
+      matchesDevice = isPaired;
+    } else if (selectedDevice === "UNPAIRED") {
+      matchesDevice = !isPaired;
+    } else if (selectedDevice === "ANDROID") {
+      matchesDevice = personDevice === "ANDROID";
+    } else if (selectedDevice === "KEYPAD") {
+      matchesDevice = personDevice === "KEYPAD";
+    }
     if (!matchesDevice) return false;
 
     if (!trimmedQuery) {
@@ -698,6 +744,137 @@ export default function PersonnelPage() {
       alert(err?.message || "Failed to update device capability");
     } finally {
       setIsUpdatingDevice(false);
+    }
+  };
+
+  // Single Device Pairing Handlers
+  const handleOpenPairModal = (person: (typeof rawPersonnelList)[number]) => {
+    guardAction("manage device pairing", () => {
+      setDevicePairingTarget(person);
+      setCustomDeviceModel(person.deviceModel || "Samsung Galaxy A54");
+      setCustomFcmToken(person.fcmToken || "");
+      setActivePairingTab("DIRECT");
+      setCopiedPairLink(false);
+    });
+  };
+
+  const handleConfirmPairDevice = async () => {
+    if (!devicePairingTarget) return;
+    if (isViewer) {
+      guardAction("pair soldier device");
+      return;
+    }
+    setIsPairingDevice(true);
+    try {
+      await linkDevice({
+        soldierId: devicePairingTarget._id,
+        deviceModel: customDeviceModel.trim() || "Android Device",
+        fcmToken: customFcmToken.trim() || undefined,
+        officerEmail: currentOfficer.email,
+      });
+      setDevicePairingTarget(null);
+    } catch (err: any) {
+      alert(err?.message || "Failed to pair device");
+    } finally {
+      setIsPairingDevice(false);
+    }
+  };
+
+  const handleSingleUnlinkDevice = (
+    soldierId: Id<"personnel">,
+    reason: string = "Phone Damaged / Replacement Transfer"
+  ) => {
+    if (isViewer) {
+      guardAction("unlink soldier device");
+      return;
+    }
+    const target = devicePairingTarget || rawPersonnelList.find((p) => p._id === soldierId);
+    if (!target) return;
+    setUnlinkConfirmTarget({
+      soldier: target,
+      reason,
+    });
+  };
+
+  const handleConfirmExecuteUnlink = async () => {
+    if (!unlinkConfirmTarget) return;
+    const { soldier, reason } = unlinkConfirmTarget;
+    const soldierName = `${soldier.rank} ${soldier.firstName} ${soldier.lastName}`;
+    const currentPhone =
+      (soldier as any)?.deviceModel ||
+      (soldier as any)?.lastDownloadedDeviceModel ||
+      "Authorized Android Device";
+
+    setIsPairingDevice(true);
+    try {
+      await unlinkDevice({
+        soldierId: soldier._id,
+        reason,
+        officerName: currentOfficer.name,
+        officerEmail: currentOfficer.email,
+      });
+      setUnlinkConfirmTarget(null);
+      setDevicePairingTarget(null);
+      alert(
+        `Device unlinked successfully.\n\nOld device (${currentPhone}) revoked.\nTo link their replacement phone, have ${soldierName} scan their authorized Command QR Code.`
+      );
+    } catch (err: any) {
+      alert(err?.message || "Failed to unlink device");
+    } finally {
+      setIsPairingDevice(false);
+    }
+  };
+
+  // Batch Device Pairing Handlers
+  const handleInitiateBatchPair = () => {
+    if (selectedPersonnelIds.length === 0) return;
+    guardAction(`batch pair ${selectedPersonnelIds.length} devices`, () => {
+      setBatchDeviceModel("Android Device (Bulk Provisioned)");
+      setIsBatchPairModalOpen(true);
+    });
+  };
+
+  const handleConfirmBatchPair = async () => {
+    if (selectedPersonnelIds.length === 0) return;
+    setIsBatchPairing(true);
+    try {
+      const res = await batchLinkDevices({
+        soldierIds: selectedPersonnelIds,
+        deviceModel: batchDeviceModel.trim() || "Android Device (Provisioned)",
+        officerEmail: currentOfficer.email,
+      });
+      setIsBatchPairModalOpen(false);
+      setSelectedPersonnelIds([]);
+      alert(`Successfully paired RESCOM Alert App for ${res.count} soldiers!`);
+    } catch (err: any) {
+      alert(err?.message || "Failed to batch pair devices");
+    } finally {
+      setIsBatchPairing(false);
+    }
+  };
+
+  const handleInitiateBatchUnlink = () => {
+    if (selectedPersonnelIds.length === 0) return;
+    guardAction(`batch unlink ${selectedPersonnelIds.length} devices`, () => {
+      setBatchUnlinkConfirmOpen(true);
+    });
+  };
+
+  const handleConfirmBatchUnlink = async () => {
+    if (selectedPersonnelIds.length === 0) return;
+    setIsBatchPairing(true);
+    try {
+      const res = await batchUnlinkDevices({
+        soldierIds: selectedPersonnelIds,
+        officerEmail: currentOfficer.email,
+      });
+      setBatchUnlinkConfirmOpen(false);
+      setSelectedPersonnelIds([]);
+      alert(`Unlinked devices for ${res.count} soldiers.`);
+    } catch (err: any) {
+      alert(err?.message || "Failed to batch unlink devices");
+    } finally {
+      setIsBatchPairing(false);
     }
   };
 
@@ -1289,11 +1466,15 @@ export default function PersonnelPage() {
               <div className="hidden sm:flex items-center gap-1.5 shrink-0">
                 <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[11px] shadow-2xs">
                   <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                  {androidCount} Android ({Math.round((androidCount / (personnelList.length || 1)) * 100)}%)
+                  {pairedAppCount} Paired App ({Math.round((pairedAppCount / (personnelList.length || 1)) * 100)}%)
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[11px] shadow-2xs">
+                  <Link2 className="w-3.5 h-3.5 text-amber-600" />
+                  {unpairedCount} Unpaired
                 </span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 font-bold text-[11px] shadow-2xs">
                   <Phone className="w-3.5 h-3.5 text-slate-500" />
-                  {keypadCount} Keypad ({Math.round((keypadCount / (personnelList.length || 1)) * 100)}%)
+                  {keypadCount} Keypad
                 </span>
               </div>
 
@@ -1308,6 +1489,8 @@ export default function PersonnelPage() {
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer"
               >
                 <option value="ALL">All Devices ({personnelList.length})</option>
+                <option value="PAIRED">Paired App ({pairedAppCount})</option>
+                <option value="UNPAIRED">Unpaired ({unpairedCount})</option>
                 <option value="ANDROID">Android ({androidCount})</option>
                 <option value="KEYPAD">Keypad ({keypadCount})</option>
               </select>
@@ -1346,27 +1529,47 @@ export default function PersonnelPage() {
                   {selectedPersonnelIds.length} Soldier{selectedPersonnelIds.length > 1 ? "s" : ""} Selected
                 </span>
                 <span className="text-[11px] text-emerald-700/80 font-medium">
-                  • Apply rapid device capability tagging:
+                  • Rapid device pairing & tagging:
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleInitiateBatchPair}
+                  disabled={isBatchPairing}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors cursor-pointer shadow-2xs"
+                  title="Bulk provision RESCOM Alert App pairing for all selected soldiers"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
+                  <span>Batch Pair App ({selectedPersonnelIds.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleInitiateBatchUnlink}
+                  disabled={isBatchPairing}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-700 hover:bg-rose-800 text-white transition-colors cursor-pointer shadow-2xs"
+                  title="Unlink devices for selected soldiers"
+                >
+                  <UserX className="w-3.5 h-3.5 text-rose-200 shrink-0" />
+                  <span>Unlink ({selectedPersonnelIds.length})</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => handleInitiateBatchSetDevice("ANDROID")}
                   disabled={isUpdatingDevice}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer shadow-2xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white transition-colors cursor-pointer shadow-2xs"
                 >
                   <AndroidIcon className="w-3.5 h-3.5 text-white shrink-0" />
-                  <span>Set as Android ({selectedPersonnelIds.length})</span>
+                  <span>Tag Android ({selectedPersonnelIds.length})</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleInitiateBatchSetDevice("KEYPAD")}
                   disabled={isUpdatingDevice}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-700 hover:bg-slate-800 text-white transition-colors cursor-pointer shadow-2xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-600 hover:bg-slate-700 text-white transition-colors cursor-pointer shadow-2xs"
                 >
                   <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-200 shrink-0" />
-                  <span>Set as Keypad ({selectedPersonnelIds.length})</span>
+                  <span>Tag Keypad ({selectedPersonnelIds.length})</span>
                 </button>
                 <button
                   type="button"
@@ -1432,7 +1635,7 @@ export default function PersonnelPage() {
                       </th>
                       <th className="py-3.5 px-3 sm:px-4">Name & Rank</th>
                       <th className="py-3.5 px-3">Mobile Number</th>
-                      <th className="py-3.5 px-3">Device Type</th>
+                      <th className="py-3.5 px-3">Device / App Status</th>
                       <th className="py-3.5 px-3">Unit / CDC</th>
                       <th className="py-3.5 px-3">Group</th>
                       <th className="py-3.5 px-3">Status</th>
@@ -1494,30 +1697,50 @@ export default function PersonnelPage() {
                           <HighlightMatch text={formatPhMobileDisplay(person.mobileNumber)} query={searchQuery} />
                         </td>
 
-                        {/* 1-Click Fast Device Toggle */}
+                        {/* Device & App Pairing Status */}
                         <td className="py-3.5 px-3">
-                          <button
-                            type="button"
-                            onClick={() => handleInitiateToggleDevice(person)}
-                            title={`Current: ${isAndroid ? "Android (App Push Capable)" : "Keypad (Cellular SMS Only)"}. Click to change.`}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                              isAndroid
-                                ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-2xs"
-                                : "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200"
-                            }`}
-                          >
-                            {isAndroid ? (
-                              <>
-                                <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
-                                <span>Android</span>
-                              </>
-                            ) : (
-                              <>
-                                <KeypadPhoneIcon className="w-3 h-3 text-slate-500 shrink-0" />
-                                <span>Keypad</span>
-                              </>
-                            )}
-                          </button>
+                          {(person as any).fcmToken ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPairModal(person)}
+                              title={`Device Paired: ${(person as any).deviceModel || "Android Device"}\nInstalled: ${(person as any).appInstalledAt ? new Date((person as any).appInstalledAt).toLocaleDateString() : "Active"}\nClick to manage, transfer, or unlink.`}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100 transition-all cursor-pointer shadow-2xs group"
+                            >
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                              <Smartphone className="w-3 h-3 text-emerald-700 shrink-0" />
+                              <span className="max-w-[100px] truncate">{(person as any).deviceModel || "Paired App"}</span>
+                            </button>
+                          ) : (person as any).previousDeviceModel ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPairModal(person)}
+                              title={`Device Unlinked / Transfer Pending\nPrevious Phone: ${(person as any).previousDeviceModel}\nClick to pair replacement phone.`}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <RefreshCw className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span className="max-w-[100px] truncate">Transfer ({(person as any).previousDeviceModel})</span>
+                            </button>
+                          ) : isAndroid ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPairModal(person)}
+                              title="Android phone not yet paired. Click to pair now."
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <Link2 className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span>Pair App</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleInitiateToggleDevice(person)}
+                              title="Keypad device (Cellular SMS Only). Click to change to Android."
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 transition-all cursor-pointer"
+                            >
+                              <KeypadPhoneIcon className="w-3 h-3 text-slate-500 shrink-0" />
+                              <span>Keypad</span>
+                            </button>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-3 font-medium text-slate-600">
@@ -1548,6 +1771,17 @@ export default function PersonnelPage() {
 
                         <td className="py-3.5 px-4 text-right pr-6">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenPairModal(person)}
+                              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                (person as any).fcmToken
+                                  ? "hover:bg-emerald-100 text-emerald-700 bg-emerald-50 border border-emerald-200"
+                                  : "hover:bg-amber-100 text-amber-700 bg-amber-50 border border-amber-200"
+                              }`}
+                              title={(person as any).fcmToken ? `Manage Device: ${(person as any).deviceModel || "Paired"}` : "Quick Pair RESCOM App"}
+                            >
+                              <Smartphone className="w-3.5 h-3.5" />
+                            </button>
                             <button
                               onClick={() => handleOpenEditModal(person)}
                               className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
@@ -1953,25 +2187,36 @@ export default function PersonnelPage() {
                             </td>
 
                             <td className="py-3 px-4">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
-                                  isAndroid
-                                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                                    : "bg-slate-100 text-slate-700 border-slate-300"
-                                }`}
-                              >
-                                {isAndroid ? (
-                                  <>
-                                    <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
-                                    <span>Android</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <KeypadPhoneIcon className="w-3 h-3 text-slate-500 shrink-0" />
-                                    <span>Keypad</span>
-                                  </>
+                              <div className="space-y-1">
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
+                                    isAndroid
+                                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                      : "bg-slate-100 text-slate-700 border-slate-300"
+                                  }`}
+                                >
+                                  {isAndroid ? (
+                                    <>
+                                      <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
+                                      <span>Android</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <KeypadPhoneIcon className="w-3 h-3 text-slate-500 shrink-0" />
+                                      <span>Keypad</span>
+                                    </>
+                                  )}
+                                </span>
+                                {(sub as any).deviceModel && (
+                                  <div
+                                    className="text-[10px] font-mono text-slate-600 flex items-center gap-1 font-medium truncate max-w-[150px]"
+                                    title={(sub as any).deviceModel}
+                                  >
+                                    <Lock className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                    <span className="truncate">{(sub as any).deviceModel}</span>
+                                  </div>
                                 )}
-                              </span>
+                              </div>
                             </td>
 
                             <td className="py-3 px-4 font-medium text-slate-600">
@@ -2860,6 +3105,153 @@ export default function PersonnelPage() {
         </div>
       )}
 
+      {/* Device Hardware Unpair Confirmation Modal */}
+      {unlinkConfirmTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full border border-slate-200 shadow-xl overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-rose-50 text-rose-700 border-rose-200">
+                  <Smartphone className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Unpair Device?</h3>
+                  <p className="text-xs text-slate-500">Disconnects phone from emergency sirens</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUnlinkConfirmTarget(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900">
+                    {unlinkConfirmTarget.soldier.rank} {unlinkConfirmTarget.soldier.firstName} {unlinkConfirmTarget.soldier.lastName}
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {formatPhMobileDisplay(unlinkConfirmTarget.soldier.mobileNumber)}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-600 flex items-center justify-between pt-1 border-t border-slate-200/60 font-mono">
+                  <span>Current Device:</span>
+                  <span className="font-semibold text-slate-800">
+                    {(unlinkConfirmTarget.soldier as any).deviceModel ||
+                      (unlinkConfirmTarget.soldier as any).lastDownloadedDeviceModel ||
+                      "Android Device"}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                This phone will stop sounding mobilization sirens. To pair a replacement device later, scan the soldier&apos;s <strong>Command QR Code</strong>.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isPairingDevice}
+                onClick={() => setUnlinkConfirmTarget(null)}
+                className="px-3.5 py-2 rounded-xl text-slate-600 hover:bg-slate-200/70 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPairingDevice}
+                onClick={handleConfirmExecuteUnlink}
+                className="px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isPairingDevice ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Unpairing...</span>
+                  </>
+                ) : (
+                  <span>Unpair Device</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Device Unpair Confirmation Modal */}
+      {batchUnlinkConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full border border-slate-200 shadow-xl overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border bg-rose-50 text-rose-700 border-rose-200">
+                  <Smartphone className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Unpair {selectedPersonnelIds.length} Devices?
+                  </h3>
+                  <p className="text-xs text-slate-500">Bulk device disconnection</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchUnlinkConfirmOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 text-xs text-slate-600 leading-relaxed space-y-2">
+              <p>
+                Emergency push sirens will be revoked for{" "}
+                <strong className="text-slate-900">{selectedPersonnelIds.length} selected troops</strong>.
+              </p>
+              <p className="text-slate-500 text-[11px]">
+                Replacement phones can be paired individually using their Command QR codes.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isBatchPairing}
+                onClick={() => setBatchUnlinkConfirmOpen(false)}
+                className="px-3.5 py-2 rounded-xl text-slate-600 hover:bg-slate-200/70 border border-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isBatchPairing}
+                onClick={handleConfirmBatchUnlink}
+                className="px-4 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isBatchPairing ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Unpairing...</span>
+                  </>
+                ) : (
+                  <span>Unpair ({selectedPersonnelIds.length})</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Active Campaign Protection Notice Modal */}
       {campaignProtectionTarget && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
@@ -3170,6 +3562,452 @@ export default function PersonnelPage() {
                   <>
                     <XCircle className="w-3.5 h-3.5" />
                     <span>Close Window Early</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* SINGLE SOLDIER DEVICE PAIRING MODAL */}
+      {/* ========================================================= */}
+      {devicePairingTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-100">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 to-emerald-950 text-white flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 flex items-center justify-center shrink-0">
+                  <Smartphone className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold tracking-tight">
+                    Soldier Device Pairing
+                  </h3>
+                  <p className="text-[11px] text-emerald-300/80 font-mono">
+                    10RCDG RESCOM APP TELEMETRY & PUSH PROVISIONING
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDevicePairingTarget(null)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Soldier Identity Banner */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono border ${getRankBadgeStyle(devicePairingTarget.rank).bg} ${getRankBadgeStyle(devicePairingTarget.rank).text} ${getRankBadgeStyle(devicePairingTarget.rank).border}`}>
+                    {devicePairingTarget.rank}
+                  </span>
+                  <span className="font-extrabold text-sm text-slate-900 truncate">
+                    {devicePairingTarget.firstName} {devicePairingTarget.lastName}
+                  </span>
+                </div>
+                <div className="text-xs font-mono font-bold text-slate-700 mt-1 flex items-center gap-2">
+                  <span>{formatPhMobileDisplay(devicePairingTarget.mobileNumber)}</span>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-slate-500 font-sans font-medium text-[11px]">{devicePairingTarget.groupName}</span>
+                </div>
+              </div>
+
+              {(devicePairingTarget as any).fcmToken ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-300 shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                  <span>PAIRED</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-300 shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span>UNPAIRED</span>
+                </span>
+              )}
+            </div>
+
+            {/* Tab switch: Direct Provision vs QR Code */}
+            <div className="px-5 pt-3 flex items-center gap-2 border-b border-slate-100 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setActivePairingTab("DIRECT")}
+                className={`pb-2.5 px-1 border-b-2 transition-all cursor-pointer ${
+                  activePairingTab === "DIRECT"
+                    ? "border-emerald-600 text-emerald-800"
+                    : "border-transparent text-slate-400 hover:text-slate-700"
+                }`}
+              >
+                1-Click Direct Pair
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePairingTab("QR")}
+                className={`pb-2.5 px-1 border-b-2 transition-all cursor-pointer ${
+                  activePairingTab === "QR"
+                    ? "border-emerald-600 text-emerald-800"
+                    : "border-transparent text-slate-400 hover:text-slate-700"
+                }`}
+              >
+                Soldier Self-Pair QR & Link
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              {activePairingTab === "DIRECT" ? (
+                <div className="space-y-4">
+                  {/* Preset chips */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                      Select Device Model Preset
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        "Samsung Galaxy A54",
+                        "Infinix X6711",
+                        "Xiaomi Redmi Note 12",
+                        "Realme C55",
+                        "Tecno Spark 20",
+                        "Android Phone",
+                      ].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setCustomDeviceModel(preset)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                            customDeviceModel === preset
+                              ? "bg-emerald-50 border-emerald-400 text-emerald-900 font-bold shadow-2xs"
+                              : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Hardware Model Name
+                    </label>
+                    <input
+                      type="text"
+                      value={customDeviceModel}
+                      onChange={(e) => setCustomDeviceModel(e.target.value)}
+                      placeholder="e.g. Samsung Galaxy A54 5G"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                        FCM Push Token (Optional)
+                      </label>
+                      <span className="text-[10px] text-slate-400">Auto-generated if blank</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={customFcmToken}
+                      onChange={(e) => setCustomFcmToken(e.target.value)}
+                      placeholder="Leave blank to auto-generate ready-to-test push token"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 placeholder:font-sans placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all"
+                    />
+                  </div>
+
+                  {((devicePairingTarget as any).appInstalledAt || (devicePairingTarget as any).lastDownloadedDeviceModel) && (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 space-y-1.5 font-mono">
+                      {(devicePairingTarget as any).lastDownloadedDeviceModel && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Download Device:</span>
+                          <span className="font-semibold text-slate-800">
+                            {(devicePairingTarget as any).lastDownloadedDeviceModel}
+                          </span>
+                        </div>
+                      )}
+                      {(devicePairingTarget as any).previousDeviceModel && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Previous Device:</span>
+                          <span className="font-semibold text-amber-700">
+                            {(devicePairingTarget as any).previousDeviceModel}
+                          </span>
+                        </div>
+                      )}
+                      {(devicePairingTarget as any).lastDownloadedAt && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Last Download:</span>
+                          <span className="font-semibold text-slate-700">
+                            {new Date((devicePairingTarget as any).lastDownloadedAt).toLocaleString("en-US", { timeZone: "Asia/Manila" })}
+                          </span>
+                        </div>
+                      )}
+                      {(devicePairingTarget as any).appInstalledAt && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Pairing Date:</span>
+                          <span className="font-semibold text-slate-700">
+                            {new Date((devicePairingTarget as any).appInstalledAt).toLocaleString("en-US", { timeZone: "Asia/Manila" })}
+                          </span>
+                        </div>
+                      )}
+                      {(devicePairingTarget as any).lastActiveAt && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Last Telemetry Ping:</span>
+                          <span className="font-semibold text-emerald-700">
+                            {new Date((devicePairingTarget as any).lastActiveAt).toLocaleString("en-US", { timeZone: "Asia/Manila" })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(devicePairingTarget as any).fcmToken && (
+                    <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/90 space-y-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                        <Smartphone className="w-4 h-4 text-amber-700 shrink-0" />
+                        <span>Phone Replacement / Damaged Device</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        If the soldier reported a damaged phone or changed device, unpair it now. This immediately revokes the old phone&apos;s alert token and clears the hardware lock. Once unpaired, have the soldier scan their authorized <strong>Command QR Code</strong> on their new phone to securely link the replacement device.
+                      </p>
+                      <div className="flex items-center gap-2 pt-1 flex-wrap">
+                        <button
+                          type="button"
+                          disabled={isPairingDevice}
+                          onClick={() => handleSingleUnlinkDevice(devicePairingTarget._id, "Phone Damaged / Broken")}
+                          className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-rose-800 text-[11px] font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                        >
+                          <span>💥 Broken / Damaged Phone</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPairingDevice}
+                          onClick={() => handleSingleUnlinkDevice(devicePairingTarget._id, "Phone Replaced / Upgraded")}
+                          className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-[11px] font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                        >
+                          <span>🔄 New / Upgraded Phone</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4 text-center">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-3">
+                    {(() => {
+                      const cleanPhone = devicePairingTarget.mobileNumber.replace(/\D/g, "");
+                      const authorizedQrUrl =
+                        (typeof window !== "undefined" ? window.location.origin : "https://rescom-alert.com") +
+                        `/download?verify=${encodeURIComponent(cleanPhone)}&soldierId=${devicePairingTarget._id}&auth=command_qr`;
+
+                      return (
+                        <>
+                          <QRCodeSVG
+                            value={authorizedQrUrl}
+                            size={160}
+                            level="H"
+                            className="rounded-xl bg-white p-2 border border-slate-200 shadow-xs"
+                          />
+                          <div className="space-y-1 max-w-xs text-center">
+                            <p className="text-xs font-bold text-slate-800">
+                              Scan with camera on soldier&apos;s phone
+                            </p>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              Pre-verified link automatically identifies <strong>{devicePairingTarget.rank} {devicePairingTarget.firstName} {devicePairingTarget.lastName}</strong> and bypasses public portal lockouts. Hardware device is detected and bound upon download.
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 w-full pt-1">
+                            <input
+                              type="text"
+                              readOnly
+                              value={authorizedQrUrl}
+                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-600 truncate"
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await navigator.clipboard.writeText(authorizedQrUrl);
+                                setCopiedPairLink(true);
+                                setTimeout(() => setCopiedPairLink(false), 2000);
+                              }}
+                              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5"
+                            >
+                              {copiedPairLink ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+              <div>
+                {(devicePairingTarget as any).fcmToken && activePairingTab === "DIRECT" ? (
+                  <button
+                    type="button"
+                    disabled={isPairingDevice}
+                    onClick={() => handleSingleUnlinkDevice(devicePairingTarget._id)}
+                    className="px-3 py-2 text-rose-700 hover:text-rose-800 hover:bg-rose-50 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Unlink Device
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDevicePairingTarget(null)}
+                  className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+                {activePairingTab === "DIRECT" && (
+                  <button
+                    type="button"
+                    disabled={isPairingDevice}
+                    onClick={handleConfirmPairDevice}
+                    className="px-4.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isPairingDevice ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Pairing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{(devicePairingTarget as any).fcmToken ? "Update Device" : "Pair Device Now"}</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* BATCH DEVICE PAIRING MODAL */}
+      {/* ========================================================= */}
+      {isBatchPairModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-100">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-800 to-slate-900 text-white flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 text-white flex items-center justify-center shrink-0">
+                  <Smartphone className="w-5 h-5 text-emerald-300" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold tracking-tight">
+                    Batch Pair RESCOM App
+                  </h3>
+                  <p className="text-[11px] text-emerald-200/80 font-mono">
+                    RAPID PROVISIONING FOR {selectedPersonnelIds.length} SOLDIERS
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBatchPairModalOpen(false)}
+                className="p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-4">
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                <p className="text-xs font-bold text-emerald-950">
+                  Ready for upcoming Mobilization Push Alerts
+                </p>
+                <p className="text-[11px] text-emerald-900 leading-relaxed">
+                  You are about to pair <strong>{selectedPersonnelIds.length} selected troops</strong>. This marks their profiles as Android App Push Capable (₱0 broadcast channel) and provisions their readiness tokens in the 10RCDG cloud.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Assigned Hardware Model Tag
+                </label>
+                <input
+                  type="text"
+                  value={batchDeviceModel}
+                  onChange={(e) => setBatchDeviceModel(e.target.value)}
+                  placeholder="e.g. Android Device (Bulk Provisioned)"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all"
+                />
+              </div>
+
+              {/* Quick Preview of Troops */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Troops to be Paired ({selectedPersonnelIds.length})
+                </label>
+                <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl p-2 bg-slate-50 text-xs">
+                  {personnelList
+                    .filter((p) => selectedPersonnelIds.includes(p._id))
+                    .map((p) => (
+                      <div key={p._id} className="py-1 flex items-center justify-between">
+                        <span className="font-bold text-slate-800">
+                          {p.rank} {p.firstName} {p.lastName}
+                        </span>
+                        <span className="font-mono text-slate-500 text-[11px]">
+                          {formatPhMobileDisplay(p.mobileNumber)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isBatchPairing}
+                onClick={() => setIsBatchPairModalOpen(false)}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isBatchPairing}
+                onClick={handleConfirmBatchPair}
+                className="px-4.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isBatchPairing ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Pairing {selectedPersonnelIds.length}...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Confirm & Pair ({selectedPersonnelIds.length})</span>
                   </>
                 )}
               </button>

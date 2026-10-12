@@ -10,6 +10,7 @@ import {
   BellRing,
   Volume2,
   Lock,
+  Unlock,
   CheckCircle2,
   AlertTriangle,
   QrCode,
@@ -25,17 +26,28 @@ import {
   Users,
   Activity,
   Siren,
+  ShieldAlert,
+  ShieldCheck,
+  Power,
+  Loader2,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import { useCurrentOfficer } from "@/components/officer-context";
+import { RankInsignia } from "@/components/rank-insignia";
 
 export default function MobileAppPage() {
+  const officer = useCurrentOfficer();
+  const { guardAction } = officer;
   const [copiedLink, setCopiedLink] = useState(false);
   const [activeTab, setActiveTab] = useState<"OVERVIEW" | "INSTALL_GUIDE" | "PROTOCOLS">("OVERVIEW");
   const [downloadPortalUrl, setDownloadPortalUrl] = useState("");
+  const [isUpdatingPortal, setIsUpdatingPortal] = useState(false);
 
   const stats = useQuery(api.downloads.getStats);
+  const portalSettings = useQuery(api.downloads.getPortalSettings);
+  const updatePortalSettings = useMutation(api.downloads.updatePortalSettings);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -44,14 +56,36 @@ export default function MobileAppPage() {
   }, []);
 
   const apkDownloadUrl =
-    process.env.NEXT_PUBLIC_SOLDIER_APK_URL ||
-    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/latest/download/rescom-alert.apk";
+    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.0.5/rescom-alert-v1.0.5.apk";
 
   const handleCopyLink = () => {
     const urlToCopy = downloadPortalUrl || `${window.location.origin}/download`;
     navigator.clipboard.writeText(urlToCopy);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleTogglePortal = async () => {
+    guardAction("Toggle Download Portal", async () => {
+      if (isUpdatingPortal) return;
+      setIsUpdatingPortal(true);
+      try {
+        const currentEnabled = portalSettings?.isDownloadPortalEnabled ?? true;
+        const nextState = !currentEnabled;
+        await updatePortalSettings({
+          isDownloadPortalEnabled: nextState,
+          allowRosterVerification: nextState,
+          lockdownReason:
+            "The mobile app download portal is currently offline for maintenance or restricted by unit administration. Please coordinate with your Administrators.",
+          updatedBy: officer.displayName || "Authorized Officer",
+          updatedByEmail: officer.email,
+        });
+      } catch (err) {
+        console.error("Failed to toggle portal:", err);
+      } finally {
+        setIsUpdatingPortal(false);
+      }
+    });
   };
 
   return (
@@ -80,7 +114,7 @@ export default function MobileAppPage() {
             className="flex items-center gap-2 px-4 py-2.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider"
           >
             <Download className="w-4 h-4" />
-            <span>Download Soldier APK (v1.0.4)</span>
+            <span>Download Soldier APK (v1.0.5)</span>
           </a>
         </div>
       </div>
@@ -130,6 +164,68 @@ export default function MobileAppPage() {
       {/* TAB 1: OVERVIEW & DOWNLOAD */}
       {activeTab === "OVERVIEW" && (
         <div className="space-y-6">
+          {/* Public Download Portal Access Control (Single Clean Toggle) */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div
+                className={`p-2.5 rounded-xl border shrink-0 ${
+                  portalSettings?.isDownloadPortalEnabled === false
+                    ? "bg-slate-100 border-slate-200 text-slate-500"
+                    : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                }`}
+              >
+                {portalSettings?.isDownloadPortalEnabled === false ? (
+                  <Lock className="w-5 h-5 text-slate-600" />
+                ) : (
+                  <ShieldCheck className="w-5 h-5 text-emerald-700" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-slate-900">
+                    Public Mobile App Download Portal
+                  </h3>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                      portalSettings?.isDownloadPortalEnabled === false
+                        ? "bg-slate-100 text-slate-600 border border-slate-200"
+                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                    }`}
+                  >
+                    {portalSettings?.isDownloadPortalEnabled === false
+                      ? "Disabled (Offline)"
+                      : "Enabled (Public)"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Controls public access to <code className="text-slate-700 font-mono">/download</code>. When disabled, the download page and troop lookup are completely offline.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={handleTogglePortal}
+                disabled={isUpdatingPortal}
+                aria-label="Toggle Public Download Portal"
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 ${
+                  portalSettings?.isDownloadPortalEnabled === false
+                    ? "bg-slate-300"
+                    : "bg-emerald-700"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    portalSettings?.isDownloadPortalEnabled === false
+                      ? "translate-x-0"
+                      : "translate-x-5"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           {/* Main White Hero Card with Emerald/Amber accents */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -255,7 +351,7 @@ export default function MobileAppPage() {
                     rel="noopener noreferrer"
                     className="block text-[11px] text-slate-500 hover:text-slate-800 underline transition-colors pt-1"
                   >
-                    Direct APK Binary (v1.0.4 .apk)
+                    Direct APK Binary (rescom-alert-v1.0.5.apk)
                   </a>
                 </div>
               </div>
@@ -322,41 +418,87 @@ export default function MobileAppPage() {
               </div>
             </div>
 
-            {/* Recent Device Installations */}
+            {/* Recent Device Installations with Soldier Identity & Hardware Telemetry */}
             {stats && stats.recentDownloads && stats.recentDownloads.length > 0 && (
               <div className="pt-2">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5">
-                  Recent Device Activity
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Recent Soldier Downloads & Hardware Tracking</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    Latest {stats.recentDownloads.length} downloads
+                  </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {stats.recentDownloads.map((d: any) => (
                     <div
                       key={d.id}
-                      className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1"
+                      className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2 hover:border-slate-300 transition-all shadow-2xs"
                     >
-                      <div className="font-bold text-slate-800 truncate flex items-center justify-between">
-                        <span>{d.deviceModel}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">
+                      {/* Top Row: Soldier Name / Rank or Unassigned */}
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="font-bold text-slate-900 truncate flex items-center gap-1.5">
+                          {d.soldierRank && (
+                            <RankInsignia rank={d.soldierRank} size={14} />
+                          )}
+                          <span className="truncate">
+                            {d.soldierName
+                              ? `${d.soldierRank ? `${d.soldierRank} ` : ""}${d.soldierName}`
+                              : "Troop Sideload"}
+                          </span>
+                        </div>
+                        {d.downloadCount > 1 && (
+                          <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100/80 px-1.5 py-0.2 rounded border border-emerald-200 shrink-0">
+                            {d.downloadCount}x
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Hardware and OS Row */}
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-700 bg-white p-2 rounded-lg border border-slate-200/80">
+                        <span className="font-bold text-slate-800 truncate pr-1" title={d.deviceModel}>
+                          {d.deviceModel}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold shrink-0">
                           {d.osVersion}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500 flex items-center justify-between">
-                        <span>
+
+                      {/* Previous Device Badge (if device switch or previous device recorded) */}
+                      {d.previousDeviceModel && (
+                        <div
+                          className={`p-1.5 rounded-lg text-[10px] flex items-center gap-1 border ${
+                            d.isDeviceSwitch
+                              ? "bg-amber-50 text-amber-900 border-amber-200"
+                              : "bg-slate-100 text-slate-600 border-slate-200"
+                          }`}
+                        >
+                          <span className="font-bold shrink-0">
+                            {d.isDeviceSwitch ? "🔄 Switched from:" : "Previously:"}
+                          </span>
+                          <span className="font-mono truncate" title={d.previousDeviceModel}>
+                            {d.previousDeviceModel}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Bottom Footer: Unit / Group and Timestamp */}
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200/60">
+                        <span className="truncate font-medium text-slate-500">
+                          {d.unit || d.groupName || "10RCDG"}
+                        </span>
+                        <span className="shrink-0 font-mono">
                           {new Date(d.lastDownloadedAt).toLocaleDateString([], {
                             month: "short",
                             day: "numeric",
                           })}{" "}
-                          •{" "}
                           {new Date(d.lastDownloadedAt).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
                         </span>
-                        {d.downloadCount > 1 && (
-                          <span className="text-[10px] text-emerald-700 font-bold">
-                            {d.downloadCount}x
-                          </span>
-                        )}
                       </div>
                     </div>
                   ))}

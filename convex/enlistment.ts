@@ -192,6 +192,9 @@ export const submitEnlistment = mutation({
     email: v.optional(v.string()),
     serialNumber: v.optional(v.string()),
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
+    deviceId: v.optional(v.string()),
+    deviceModel: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const cleanCode = args.campaignCode.toLowerCase().trim();
@@ -236,7 +239,7 @@ export const submitEnlistment = mutation({
     const existingPersonnel = allPersonnel.find((p) => normalizePh(p.mobileNumber) === cleanMobile);
     if (existingPersonnel) {
       throw new ConvexError(
-        `This mobile number (${cleanMobile}) is already registered in the official personnel directory as ${existingPersonnel.rank} ${existingPersonnel.firstName} ${existingPersonnel.lastName}.`
+        `This mobile number (${cleanMobile}) is already registered in the official 10RCDG personnel roster as ${existingPersonnel.rank} ${existingPersonnel.firstName} ${existingPersonnel.lastName}. You can download the app directly at the official download portal (/download).`
       );
     }
 
@@ -248,7 +251,7 @@ export const submitEnlistment = mutation({
 
     if (existingSubmission) {
       throw new ConvexError(
-        `This mobile number (${cleanMobile}) has already submitted registration in batch "${existingSubmission.campaignCode}". Multiple registrations with the same phone number are not permitted.`
+        `You have already submitted an enlistment request for this mobile number (${cleanMobile}). Please wait for administrator approval so you can download the app at the official download portal (/download).`
       );
     }
 
@@ -268,6 +271,9 @@ export const submitEnlistment = mutation({
       email: args.email?.trim() || undefined,
       serialNumber: args.serialNumber?.trim() || undefined,
       deviceType: args.deviceType || "ANDROID",
+      deviceId: args.deviceId?.trim() || undefined,
+      deviceModel: args.deviceModel?.trim() || undefined,
+      userAgent: args.userAgent?.trim() || undefined,
       status: "PENDING",
       submittedAt: new Date().toISOString(),
     });
@@ -334,11 +340,14 @@ export const approveSubmission = mutation({
         status: "ACTIVE",
         deviceType: sub.deviceType || existing.deviceType || "ANDROID",
         email: sub.email || existing.email,
+        boundDeviceId: sub.deviceId || existing.boundDeviceId,
+        deviceModel: sub.deviceModel || existing.deviceModel,
+        lastDownloadedDeviceModel: sub.deviceModel || existing.lastDownloadedDeviceModel,
         updatedBy: approverName,
         updatedAt: updateTimestamp,
       });
     } else {
-      // Insert new personnel
+      // Insert new personnel with bound hardware device from public enlistment
       await ctx.db.insert("personnel", {
         firstName: sub.firstName,
         lastName: sub.lastName,
@@ -348,6 +357,9 @@ export const approveSubmission = mutation({
         groupId: sub.groupId,
         groupName: sub.groupName,
         deviceType: sub.deviceType || "ANDROID",
+        boundDeviceId: sub.deviceId,
+        deviceModel: sub.deviceModel,
+        lastDownloadedDeviceModel: sub.deviceModel,
         status: "ACTIVE",
         email: sub.email,
         createdAt: new Date().toISOString().split("T")[0],
@@ -361,7 +373,7 @@ export const approveSubmission = mutation({
       userRole: "ADMIN",
       category: "PERSONNEL",
       action: "APPROVE_ENLISTMENT",
-      details: `Approved enlistment self-registration for ${sub.rank} ${sub.firstName} ${sub.lastName} (${sub.mobileNumber}) into ${sub.groupName}`,
+      details: `Approved enlistment self-registration for ${sub.rank} ${sub.firstName} ${sub.lastName} (${sub.mobileNumber}) into ${sub.groupName}${sub.deviceModel ? ` [Hardware Bound: ${sub.deviceModel}]` : ""}`,
       ipAddress: "127.0.0.1",
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
@@ -413,6 +425,9 @@ export const bulkApproveSubmissions = mutation({
           status: "ACTIVE",
           deviceType: sub.deviceType || existing.deviceType || "ANDROID",
           email: sub.email || existing.email,
+          boundDeviceId: sub.deviceId || existing.boundDeviceId,
+          deviceModel: sub.deviceModel || existing.deviceModel,
+          lastDownloadedDeviceModel: sub.deviceModel || existing.lastDownloadedDeviceModel,
           updatedBy: approverName,
           updatedAt: updateTimestamp,
         });
@@ -426,6 +441,9 @@ export const bulkApproveSubmissions = mutation({
           groupId: sub.groupId,
           groupName: sub.groupName,
           deviceType: sub.deviceType || "ANDROID",
+          boundDeviceId: sub.deviceId,
+          deviceModel: sub.deviceModel,
+          lastDownloadedDeviceModel: sub.deviceModel,
           status: "ACTIVE",
           email: sub.email,
           createdAt: nowStr.split("T")[0],

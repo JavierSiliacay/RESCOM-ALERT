@@ -14,6 +14,14 @@ export default defineSchema({
     status: v.union(v.literal("ACTIVE"), v.literal("INACTIVE")),
     email: v.optional(v.string()),
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
+    fcmToken: v.optional(v.string()),
+    deviceModel: v.optional(v.string()),
+    boundDeviceId: v.optional(v.string()), // Client UUID of the authorized soldier phone
+    lastDownloadedDeviceModel: v.optional(v.string()),
+    previousDeviceModel: v.optional(v.string()),
+    lastDownloadedAt: v.optional(v.string()),
+    appInstalledAt: v.optional(v.string()),
+    lastActiveAt: v.optional(v.string()),
     createdAt: v.string(),
     createdBy: v.optional(v.string()), // Officer name who registered the personnel
     updatedAt: v.optional(v.string()), // Timestamp of last edit
@@ -169,6 +177,9 @@ export default defineSchema({
     email: v.optional(v.string()),
     serialNumber: v.optional(v.string()),
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
+    deviceId: v.optional(v.string()), // Hardware client UUID captured at enlistment
+    deviceModel: v.optional(v.string()), // e.g. "Samsung Galaxy (SM-A546E)"
+    userAgent: v.optional(v.string()),
     status: v.union(v.literal("PENDING"), v.literal("APPROVED"), v.literal("REJECTED")),
     submittedAt: v.string(),
     reviewedAt: v.optional(v.string()),
@@ -189,7 +200,26 @@ export default defineSchema({
     firstDownloadedAt: v.string(),
     lastDownloadedAt: v.string(),
     downloadCount: v.number(), // Tracks repeat downloads without inflating device count
+    soldierId: v.optional(v.id("personnel")),
+    soldierName: v.optional(v.string()),
+    soldierRank: v.optional(v.string()),
+    mobileNumber: v.optional(v.string()),
+    unit: v.optional(v.string()),
+    groupName: v.optional(v.string()),
+    previousDeviceModel: v.optional(v.string()),
+    isDeviceSwitch: v.optional(v.boolean()),
   })
     .index("by_deviceId", ["deviceId"])
-    .index("by_lastDownloadedAt", ["lastDownloadedAt"]),
+    .index("by_lastDownloadedAt", ["lastDownloadedAt"])
+    .index("by_mobileNumber", ["mobileNumber"]),
+
+  // Mobile App & Public Download OPSEC Settings (Developer / Command Gatekeeper)
+  appPortalSettings: defineTable({
+    isDownloadPortalEnabled: v.boolean(), // Master toggle: allows or blocks /download page entirely
+    allowRosterVerification: v.boolean(), // Sub-toggle: allows or blocks mobile phone number queries
+    lockdownReason: v.optional(v.string()), // Custom broadcast reason shown to visitors when locked
+    updatedBy: v.optional(v.string()),
+    updatedByEmail: v.optional(v.string()),
+    updatedAt: v.string(),
+  }),
 });

@@ -225,3 +225,341 @@ export const remove = mutation({
     await ctx.db.delete(args.id);
   },
 });
+
+// Helper: Normalize Philippine mobile number core 10 digits (e.g. 9XXXXXXXXX)
+function normalizePhMobile(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("639")) return digits.slice(2);
+  if (digits.startsWith("09")) return digits.slice(1);
+  if (digits.startsWith("9")) return digits;
+  return digits;
+}
+
+// Mobile Device Query: Verify if phone number is in active roster or pending enlistment
+export const verifyMobile = query({
+  args: {
+    mobileNumber: v.string(),
+    deviceId: v.optional(v.string()),
+    isAuthorizedQr: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const searchCore = normalizePhMobile(args.mobileNumber);
+    if (searchCore.length < 7) {
+      return { status: "INVALID_INPUT", message: "Invalid phone number length." };
+    }
+
+    // 0. OPSEC Gatekeeper: Check if portal verification is disabled by Command
+    // Authorized individual Command QR codes bypass public portal lockout
+    const portalSettings = await ctx.db.query("appPortalSettings").first();
+    if (
+      !args.isAuthorizedQr &&
+      portalSettings &&
+      (!portalSettings.isDownloadPortalEnabled || !portalSettings.allowRosterVerification)
+    ) {
+      return {
+        status: "PORTAL_LOCKED",
+        message:
+          portalSettings.lockdownReason ||
+          "Mobile roster verification is currently restricted by Command Headquarters (10RCDG).",
+      };
+    }
+
+    // 1. Check Active Personnel Roster
+    const allPersonnel = await ctx.db.query("personnel").collect();
+    const matchedSoldier = allPersonnel.find((p) => {
+      const pCore = normalizePhMobile(p.mobileNumber);
+      return pCore === searchCore;
+    });
+
+    if (matchedSoldier) {
+      // 1.1 Anti-Impersonation Single-Device Binding Check
+      const isBound = Boolean(matchedSoldier.boundDeviceId);
+      const isSameDevice = Boolean(args.deviceId && matchedSoldier.boundDeviceId === args.deviceId);
+      const isQrBypass = Boolean(args.isAuthorizedQr);
+
+      // Block 1: Device mismatch (already bound to another physical phone)
+      // REDACTED FOR OPSEC: Never expose soldier rank, name, unit, or group to an unauthorized phone
+      if (isBound && !isSameDevice && !isQrBypass) {
+        return {
+          status: "DEVICE_MISMATCH",
+          boundDeviceModel:
+            matchedSoldier.lastDownloadedDeviceModel ||
+            matchedSoldier.deviceModel ||
+            "Registered Military Smartphone",
+          message: `This mobile number is already bound to an authorized hardware device. Access from this phone is blocked for operational security.`,
+        };
+      }
+
+      // Block 2: Identity Theft Protection (unbound numbers cannot be claimed on public /download)
+      // REDACTED FOR OPSEC: Do not leak military membership, rank, or unit assignment to unverified visitors
+      if (!isBound && !isQrBypass) {
+        return {
+          status: "DEVICE_UNBOUND",
+          message:
+            "This mobile number does not have an enrolled hardware device. For operational security, unbound numbers cannot be claimed on the public download portal. Hardware devices can only be enrolled through your unit's official Enlistment Link or directly paired by an authorized Unit Officer via Command QR code.",
+        };
+      }
+
+      return {
+        status: "REGISTERED",
+        isOwnerDevice: isSameDevice,
+        isDeviceBound: isBound,
+        isAuthorizedQr: isQrBypass,
+        soldier: {
+          id: matchedSoldier._id,
+          firstName: matchedSoldier.firstName,
+          lastName: matchedSoldier.lastName,
+          rank: matchedSoldier.rank,
+          unit: matchedSoldier.unit,
+          groupName: matchedSoldier.groupName,
+          mobileNumber: matchedSoldier.mobileNumber,
+          deviceType: matchedSoldier.deviceType || "ANDROID",
+          fcmToken: matchedSoldier.fcmToken,
+          deviceModel: matchedSoldier.deviceModel,
+          boundDeviceId: matchedSoldier.boundDeviceId,
+          lastDownloadedDeviceModel: matchedSoldier.lastDownloadedDeviceModel,
+          previousDeviceModel: matchedSoldier.previousDeviceModel,
+          lastDownloadedAt: matchedSoldier.lastDownloadedAt,
+          appInstalledAt: matchedSoldier.appInstalledAt,
+          lastActiveAt: matchedSoldier.lastActiveAt,
+        },
+      };
+    }
+
+    // 2. Check Enlistment Submissions (Pending applicants)
+    const allSubmissions = await ctx.db.query("enlistmentSubmissions").collect();
+    const matchedSubmission = allSubmissions.find((s) => {
+      const sCore = normalizePhMobile(s.mobileNumber);
+      return sCore === searchCore;
+    });
+
+    if (matchedSubmission) {
+      const isApplicantDevice = Boolean(args.deviceId && matchedSubmission.deviceId === args.deviceId);
+      return {
+        status: "PENDING_ENLISTMENT",
+        isOwnerDevice: isApplicantDevice,
+        submission: isApplicantDevice
+          ? {
+              id: matchedSubmission._id,
+              firstName: matchedSubmission.firstName,
+              lastName: matchedSubmission.lastName,
+              rank: matchedSubmission.rank,
+              unit: matchedSubmission.unit,
+              groupName: matchedSubmission.groupName,
+              mobileNumber: matchedSubmission.mobileNumber,
+              submissionStatus: matchedSubmission.status,
+              submittedAt: matchedSubmission.submittedAt,
+            }
+          : undefined,
+      };
+    }
+
+    return { status: "NOT_FOUND" };
+  },
+});
+
+// Mobile Device Mutation: Link Android device push token & hardware model
+export const linkDevice = mutation({
+  args: {
+    soldierId: v.id("personnel"),
+    fcmToken: v.optional(v.string()),
+    deviceModel: v.optional(v.string()),
+    officerEmail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.officerEmail) {
+      await assertCallerAuthorized(ctx, args.officerEmail, "link device");
+    }
+    const soldier = await ctx.db.get(args.soldierId);
+    if (!soldier) {
+      throw new Error("Soldier record not found");
+    }
+    if (args.officerEmail) {
+      await assertCallerAuthorizedGroup(ctx, args.officerEmail, [soldier.groupName], "link device");
+    }
+
+    const nowIso = new Date().toISOString();
+    const token = args.fcmToken || soldier.fcmToken || `fcm_prov_${args.soldierId.slice(-8)}_${Date.now().toString(36)}`;
+    const newModel = args.deviceModel || soldier.deviceModel || "Android Device";
+    const isHardwareSwitch = Boolean(soldier.deviceModel && args.deviceModel && soldier.deviceModel !== args.deviceModel);
+    const previousModel = isHardwareSwitch ? soldier.deviceModel : soldier.previousDeviceModel;
+
+    await ctx.db.patch(args.soldierId, {
+      fcmToken: token,
+      deviceModel: newModel,
+      deviceType: "ANDROID",
+      previousDeviceModel: previousModel,
+      lastDownloadedDeviceModel: newModel,
+      appInstalledAt: soldier.appInstalledAt || nowIso,
+      lastActiveAt: nowIso,
+    });
+
+    if (isHardwareSwitch) {
+      await ctx.db.insert("auditLogs", {
+        userName: `${soldier.rank} ${soldier.firstName} ${soldier.lastName}`,
+        userRole: "SOLDIER",
+        category: "SECURITY",
+        action: "DEVICE_TRANSFERRED",
+        details: `Soldier transferred RESCOM pairing to new device: ${newModel}. Previously paired: ${soldier.deviceModel}.`,
+        ipAddress: "127.0.0.1",
+        timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+      });
+    }
+
+    return {
+      success: true,
+      soldierId: args.soldierId,
+      rank: soldier.rank,
+      name: `${soldier.rank} ${soldier.firstName} ${soldier.lastName}`,
+    };
+  },
+});
+
+// Mobile Device Mutation: Batch Link Android devices for multiple troops
+export const batchLinkDevices = mutation({
+  args: {
+    soldierIds: v.array(v.id("personnel")),
+    deviceModel: v.optional(v.string()),
+    officerEmail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.officerEmail) {
+      await assertCallerAuthorized(ctx, args.officerEmail, "batch link devices");
+    }
+    const nowIso = new Date().toISOString();
+    let pairedCount = 0;
+
+    for (const id of args.soldierIds) {
+      const soldier = await ctx.db.get(id);
+      if (soldier) {
+        if (args.officerEmail) {
+          await assertCallerAuthorizedGroup(ctx, args.officerEmail, [soldier.groupName], "batch link devices");
+        }
+        await ctx.db.patch(id, {
+          fcmToken: soldier.fcmToken || `fcm_prov_${id.slice(-8)}_${Date.now().toString(36)}`,
+          deviceModel: args.deviceModel || soldier.deviceModel || "Android Device (Provisioned)",
+          deviceType: "ANDROID",
+          appInstalledAt: soldier.appInstalledAt || nowIso,
+          lastActiveAt: nowIso,
+        });
+        pairedCount++;
+      }
+    }
+
+    return { success: true, count: pairedCount };
+  },
+});
+
+// Mobile Device Mutation: Unlink device for damage, repair, or phone replacement
+export const unlinkDevice = mutation({
+  args: {
+    soldierId: v.id("personnel"),
+    reason: v.optional(v.string()),
+    officerName: v.optional(v.string()),
+    officerEmail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.officerEmail) {
+      await assertCallerAuthorized(ctx, args.officerEmail, "unlink device");
+    }
+    const soldier = await ctx.db.get(args.soldierId);
+    if (!soldier) {
+      throw new Error("Soldier record not found");
+    }
+    if (args.officerEmail) {
+      await assertCallerAuthorizedGroup(ctx, args.officerEmail, [soldier.groupName], "unlink device");
+    }
+
+    const prevDevice = soldier.deviceModel || soldier.lastDownloadedDeviceModel || soldier.previousDeviceModel;
+    const reasonText = args.reason || "Phone Damaged / Replacement Transfer";
+
+    await ctx.db.patch(args.soldierId, {
+      fcmToken: undefined,
+      deviceModel: undefined,
+      boundDeviceId: undefined,
+      lastActiveAt: undefined,
+      ...(prevDevice ? { previousDeviceModel: prevDevice } : {}),
+      lastDownloadedDeviceModel: undefined,
+    });
+
+    // Record OPSEC Audit Log
+    await ctx.db.insert("auditLogs", {
+      userName: args.officerName || "Authorized Officer",
+      userRole: "ADMIN",
+      category: "SECURITY",
+      action: "DEVICE_UNPAIRED_FOR_TRANSFER",
+      details: `Unpaired device (${prevDevice || "Android Phone"}) for ${soldier.rank} ${soldier.firstName} ${soldier.lastName} (${soldier.mobileNumber}). Reason: ${reasonText}. Ready for new phone replacement.`,
+      ipAddress: "127.0.0.1",
+      timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+    });
+
+    return {
+      success: true,
+      previousDevice: prevDevice,
+      soldierName: `${soldier.rank} ${soldier.firstName} ${soldier.lastName}`,
+    };
+  },
+});
+
+// Mobile Device Mutation: Batch Unlink devices
+export const batchUnlinkDevices = mutation({
+  args: {
+    soldierIds: v.array(v.id("personnel")),
+    reason: v.optional(v.string()),
+    officerName: v.optional(v.string()),
+    officerEmail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.officerEmail) {
+      await assertCallerAuthorized(ctx, args.officerEmail, "batch unlink devices");
+    }
+    let unlinkedCount = 0;
+
+    for (const id of args.soldierIds) {
+      const soldier = await ctx.db.get(id);
+      if (soldier) {
+        if (args.officerEmail) {
+          await assertCallerAuthorizedGroup(ctx, args.officerEmail, [soldier.groupName], "batch unlink devices");
+        }
+        const prev = soldier.deviceModel || soldier.lastDownloadedDeviceModel || soldier.previousDeviceModel;
+        await ctx.db.patch(id, {
+          fcmToken: undefined,
+          deviceModel: undefined,
+          boundDeviceId: undefined,
+          lastActiveAt: undefined,
+          ...(prev ? { previousDeviceModel: prev } : {}),
+          lastDownloadedDeviceModel: undefined,
+        });
+        unlinkedCount++;
+      }
+    }
+
+    // Record audit log
+    await ctx.db.insert("auditLogs", {
+      userName: args.officerName || "Authorized Officer",
+      userRole: "ADMIN",
+      category: "SECURITY",
+      action: "BATCH_DEVICE_UNPAIRED",
+      details: `Batch unlinked ${unlinkedCount} soldier devices. Reason: ${args.reason || "Troop phone replacements"}.`,
+      ipAddress: "127.0.0.1",
+      timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+    });
+
+    return { success: true, count: unlinkedCount };
+  },
+});
+
+// Mobile Device Mutation: Heartbeat ping
+export const heartbeat = mutation({
+  args: {
+    soldierId: v.id("personnel"),
+  },
+  handler: async (ctx, args) => {
+    const soldier = await ctx.db.get(args.soldierId);
+    if (soldier) {
+      await ctx.db.patch(args.soldierId, {
+        lastActiveAt: new Date().toISOString(),
+      });
+    }
+  },
+});

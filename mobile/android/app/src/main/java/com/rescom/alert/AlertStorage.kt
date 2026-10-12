@@ -93,6 +93,31 @@ object AlertStorage {
         return true
     }
 
+    private const val KEY_SOLDIER_PROFILE = "SOLDIER_PROFILE"
+
+    @Synchronized
+    fun saveSoldierProfile(context: Context, profileJson: String): Boolean {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putString(KEY_SOLDIER_PROFILE, profileJson).commit()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    @Synchronized
+    fun getSoldierProfile(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_SOLDIER_PROFILE, null)
+    }
+
+    @Synchronized
+    fun clearSoldierProfile(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.edit().remove(KEY_SOLDIER_PROFILE).commit()
+    }
+
     @Synchronized
     fun parseHistoryToJsonArray(raw: String): JSONArray {
         if (raw.isBlank()) return JSONArray()

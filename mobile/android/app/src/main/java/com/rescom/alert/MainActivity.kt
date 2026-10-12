@@ -22,6 +22,7 @@ class MainActivity : ReactActivity() {
 
   override fun onResume() {
       super.onResume()
+      SmsRetrieverReceiver.startListening(this)
       // If an emergency alarm siren is actively sounding, opening the app automatically silences it
       if (TacticalAlarmManager.isAlarmActive()) {
           TacticalAlarmManager.stop()

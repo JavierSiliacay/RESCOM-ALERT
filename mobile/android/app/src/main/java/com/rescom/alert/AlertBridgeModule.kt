@@ -181,13 +181,66 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
             }
 
             map.putBoolean("hasSmsPermission", hasSms)
+            map.putBoolean("smsRetrieverActive", true)
             map.putBoolean("isBatteryIgnored", isBatteryIgnored)
             map.putBoolean("canDrawOverlays", canDrawOverlays)
             map.putBoolean("canFullScreen", canFullScreen)
-            map.putBoolean("isFullyArmed", hasSms && isBatteryIgnored && canDrawOverlays && canFullScreen)
+            map.putBoolean("isFullyArmed", isBatteryIgnored && canDrawOverlays && canFullScreen)
             promise.resolve(map)
         } catch (e: Exception) {
             promise.reject("CHECK_PERMISSIONS_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun saveSoldierProfile(profileJson: String, promise: Promise) {
+        try {
+            val ok = AlertStorage.saveSoldierProfile(reactContext, profileJson)
+            promise.resolve(ok)
+        } catch (e: Exception) {
+            promise.reject("SAVE_PROFILE_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun getSoldierProfile(promise: Promise) {
+        try {
+            val profile = AlertStorage.getSoldierProfile(reactContext)
+            promise.resolve(profile)
+        } catch (e: Exception) {
+            promise.reject("GET_PROFILE_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun clearSoldierProfile(promise: Promise) {
+        try {
+            val ok = AlertStorage.clearSoldierProfile(reactContext)
+            promise.resolve(ok)
+        } catch (e: Exception) {
+            promise.reject("CLEAR_PROFILE_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun startSmsRetriever(promise: Promise) {
+        try {
+            SmsRetrieverReceiver.startListening(reactContext)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("START_RETRIEVER_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun getSmsRetrieverHash(promise: Promise) {
+        try {
+            val helper = AppSignatureHelper(reactContext)
+            val signatures = helper.appSignatures
+            val hash = if (signatures.isNotEmpty()) signatures[0] else "7V8UpW3jxbp"
+            promise.resolve(hash)
+        } catch (e: Exception) {
+            promise.resolve("7V8UpW3jxbp")
         }
     }
 }

@@ -25,7 +25,7 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     private val REQUEST_PICK_AUDIO = 9482
 
     private val activityEventListener = object : BaseActivityEventListener() {
-        override fun onActivityResult(activity: Activity?, requestCode: Int, resultCode: Int, data: Intent?) {
+        override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
             if (requestCode == REQUEST_PICK_AUDIO) {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
                     val uri = data.data!!
@@ -233,8 +233,8 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun pickAudioFile(promise: Promise) {
-        val currentActivity = currentActivity
-        if (currentActivity == null) {
+        val act = reactContext.currentActivity
+        if (act == null) {
             promise.reject("NO_ACTIVITY", "Cannot open file picker without an active window.")
             return
         }
@@ -245,7 +245,7 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
                 type = "audio/*"
                 putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/mp4"))
             }
-            currentActivity.startActivityForResult(intent, REQUEST_PICK_AUDIO)
+            act.startActivityForResult(intent, REQUEST_PICK_AUDIO)
         } catch (e: Exception) {
             pickAudioPromise = null
             promise.reject("PICK_AUDIO_FAILED", e.message, e)

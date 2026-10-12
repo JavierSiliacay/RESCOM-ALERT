@@ -1,14 +1,18 @@
 package com.rescom.alert
 
+import android.app.Activity
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import android.provider.OpenableColumns
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.BaseActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -16,6 +20,57 @@ import com.facebook.react.bridge.ReactMethod
 
 class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
+
+    private var pickAudioPromise: Promise? = null
+    private val REQUEST_PICK_AUDIO = 9482
+
+    private val activityEventListener = object : BaseActivityEventListener() {
+        override fun onActivityResult(activity: Activity?, requestCode: Int, resultCode: Int, data: Intent?) {
+            if (requestCode == REQUEST_PICK_AUDIO) {
+                if (resultCode == Activity.RESULT_OK && data?.data != null) {
+                    val uri = data.data!!
+                    try {
+                        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        reactContext.contentResolver.takePersistableUriPermission(uri, flags)
+                    } catch (e: Exception) {}
+
+                    var displayName = "Custom Audio (.mp3/.wav)"
+                    try {
+                        val cursor = reactContext.contentResolver.query(uri, null, null, null, null)
+                        cursor?.use {
+                            if (it.moveToFirst()) {
+                                val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                                if (nameIndex != -1) {
+                                    val name = it.getString(nameIndex)
+                                    if (!name.isNullOrBlank()) displayName = name
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {}
+
+                    AlertStorage.setCustomSound(reactContext, uri.toString(), displayName)
+                    val map = Arguments.createMap().apply {
+                        putBoolean("success", true)
+                        putString("uri", uri.toString())
+                        putString("title", displayName)
+                        putBoolean("isDefault", false)
+                    }
+                    pickAudioPromise?.resolve(map)
+                } else {
+                    val map = Arguments.createMap().apply {
+                        putBoolean("success", false)
+                        putString("error", "Selection cancelled")
+                    }
+                    pickAudioPromise?.resolve(map)
+                }
+                pickAudioPromise = null
+            }
+        }
+    }
+
+    init {
+        reactContext.addActivityEventListener(activityEventListener)
+    }
 
     override fun getName(): String {
         return "AlertBridge"
@@ -100,7 +155,7 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun stopAlarm(promise: Promise) {
         try {
-            TacticalAlarmManager.stop()
+            TacticalAlarmManager.stop(reactContext)
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("STOP_ALARM_FAILED", e.message, e)
@@ -117,9 +172,89 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun isFlashlightStrobeEnabled(promise: Promise) {
+        try {
+            promise.resolve(AlertStorage.isFlashlightStrobeEnabled(reactContext))
+        } catch (e: Exception) {
+            promise.resolve(true)
+        }
+    }
+
+    @ReactMethod
+    fun setFlashlightStrobe(enabled: Boolean, promise: Promise) {
+        try {
+            val ok = AlertStorage.setFlashlightStrobeEnabled(reactContext, enabled)
+            promise.resolve(ok)
+        } catch (e: Exception) {
+            promise.reject("SET_STROBE_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun getAlertSoundSettings(promise: Promise) {
+        try {
+            val uri = AlertStorage.getCustomSoundUri(reactContext)
+            val title = AlertStorage.getCustomSoundTitle(reactContext)
+            val map = Arguments.createMap().apply {
+                putBoolean("isDefault", uri.isNullOrBlank())
+                putString("title", if (uri.isNullOrBlank()) "10RCDG Tactical Klaxon (Default)" else (title ?: "Custom Siren Sound"))
+                putString("uri", uri ?: "")
+            }
+            promise.resolve(map)
+        } catch (e: Exception) {
+            promise.reject("GET_SOUND_SETTINGS_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun resetToDefaultAlertSound(promise: Promise) {
+        try {
+            AlertStorage.setCustomSound(reactContext, null, null)
+            val map = Arguments.createMap().apply {
+                putBoolean("isDefault", true)
+                putString("title", "10RCDG Tactical Klaxon (Default)")
+                putString("uri", "")
+            }
+            promise.resolve(map)
+        } catch (e: Exception) {
+            promise.reject("RESET_SOUND_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun previewAlertSound(promise: Promise) {
+        try {
+            TacticalAlarmManager.previewSound(reactContext)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("PREVIEW_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun pickAudioFile(promise: Promise) {
+        val currentActivity = currentActivity
+        if (currentActivity == null) {
+            promise.reject("NO_ACTIVITY", "Cannot open file picker without an active window.")
+            return
+        }
+        pickAudioPromise = promise
+        try {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "audio/*"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/mp4"))
+            }
+            currentActivity.startActivityForResult(intent, REQUEST_PICK_AUDIO)
+        } catch (e: Exception) {
+            pickAudioPromise = null
+            promise.reject("PICK_AUDIO_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
     fun requestOverlayPermission(promise: Promise) {
         try {
-            // Priority 1: "Display over other apps" (SYSTEM_ALERT_WINDOW) - required to break through while scrolling
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(reactContext)) {
                 val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
                     data = Uri.parse("package:${reactContext.packageName}")
@@ -128,7 +263,6 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
                 reactContext.startActivity(intent)
                 promise.resolve(true)
             } else if (Build.VERSION.SDK_INT >= 34) {
-                // Priority 2: Android 14+ Full-screen intent permission
                 val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
                     data = Uri.parse("package:${reactContext.packageName}")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -136,7 +270,6 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
                 reactContext.startActivity(intent)
                 promise.resolve(true)
             } else {
-                // Fallback to app details
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = Uri.parse("package:${reactContext.packageName}")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -145,48 +278,50 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
                 promise.resolve(true)
             }
         } catch (e: Exception) {
-            promise.reject("OVERLAY_FAILED", e.message, e)
+            promise.reject("OVERLAY_PERMISSION_FAILED", e.message, e)
         }
     }
 
     @ReactMethod
     fun checkPermissions(promise: Promise) {
         try {
-            val map = Arguments.createMap()
             val hasSms = ContextCompat.checkSelfPermission(
                 reactContext,
                 android.Manifest.permission.RECEIVE_SMS
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
-            var isBatteryIgnored = true
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val isBatteryIgnored = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val pm = reactContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
-                isBatteryIgnored = pm?.isIgnoringBatteryOptimizations(reactContext.packageName) ?: false
+                pm?.isIgnoringBatteryOptimizations(reactContext.packageName) == true
+            } else {
+                true
             }
 
-            var canDrawOverlays = true
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                canDrawOverlays = Settings.canDrawOverlays(reactContext)
+            val canDrawOverlays = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Settings.canDrawOverlays(reactContext)
+            } else {
+                true
             }
 
-            var canFullScreen = true
-            if (Build.VERSION.SDK_INT >= 34) {
+            val canFullScreen = if (Build.VERSION.SDK_INT >= 34) {
                 val nm = reactContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-                try {
-                    val method = NotificationManager::class.java.getMethod("canUseFullScreenIntent")
-                    canFullScreen = (method.invoke(nm) as? Boolean) ?: true
-                } catch (e: Exception) {
-                    canFullScreen = true
-                }
+                nm?.canUseFullScreenIntent() == true
+            } else {
+                true
             }
 
-            map.putBoolean("hasSmsPermission", hasSms)
-            map.putBoolean("smsRetrieverActive", true)
-            map.putBoolean("isBatteryIgnored", isBatteryIgnored)
-            map.putBoolean("canDrawOverlays", canDrawOverlays)
-            map.putBoolean("canFullScreen", canFullScreen)
-            map.putBoolean("isFullyArmed", isBatteryIgnored && canDrawOverlays && canFullScreen)
-            promise.resolve(map)
+            val isFullyArmed = hasSms && isBatteryIgnored && canDrawOverlays && canFullScreen
+
+            val result = Arguments.createMap().apply {
+                putBoolean("hasSmsPermission", hasSms)
+                putBoolean("isBatteryIgnored", isBatteryIgnored)
+                putBoolean("canDrawOverlays", canDrawOverlays)
+                putBoolean("canFullScreen", canFullScreen)
+                putBoolean("isFullyArmed", isFullyArmed)
+                putBoolean("smsRetrieverActive", true)
+            }
+
+            promise.resolve(result)
         } catch (e: Exception) {
             promise.reject("CHECK_PERMISSIONS_FAILED", e.message, e)
         }

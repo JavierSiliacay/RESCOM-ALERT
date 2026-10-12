@@ -118,6 +118,48 @@ object AlertStorage {
         return prefs.edit().remove(KEY_SOLDIER_PROFILE).commit()
     }
 
+    private const val KEY_FLASHLIGHT_STROBE = "FLASHLIGHT_STROBE_ENABLED"
+    private const val KEY_CUSTOM_SOUND_URI = "CUSTOM_SOUND_URI"
+    private const val KEY_CUSTOM_SOUND_TITLE = "CUSTOM_SOUND_TITLE"
+
+    @Synchronized
+    fun isFlashlightStrobeEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_FLASHLIGHT_STROBE, true)
+    }
+
+    @Synchronized
+    fun setFlashlightStrobeEnabled(context: Context, enabled: Boolean): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.edit().putBoolean(KEY_FLASHLIGHT_STROBE, enabled).commit()
+    }
+
+    @Synchronized
+    fun getCustomSoundUri(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_CUSTOM_SOUND_URI, null)
+    }
+
+    @Synchronized
+    fun getCustomSoundTitle(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_CUSTOM_SOUND_TITLE, null)
+    }
+
+    @Synchronized
+    fun setCustomSound(context: Context, uri: String?, title: String?): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        if (uri.isNullOrBlank()) {
+            editor.remove(KEY_CUSTOM_SOUND_URI)
+            editor.remove(KEY_CUSTOM_SOUND_TITLE)
+        } else {
+            editor.putString(KEY_CUSTOM_SOUND_URI, uri)
+            editor.putString(KEY_CUSTOM_SOUND_TITLE, title ?: "Custom Siren Sound")
+        }
+        return editor.commit()
+    }
+
     @Synchronized
     fun parseHistoryToJsonArray(raw: String): JSONArray {
         if (raw.isBlank()) return JSONArray()

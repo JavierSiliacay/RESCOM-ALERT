@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -21,10 +22,14 @@ import {
   UserCheck,
   Smartphone,
   Download,
+  ExternalLink,
+  ShieldCheck,
+  RefreshCw,
 } from "lucide-react";
 import { RankSearchSelect } from "@/components/rank-search-select";
 import { sanitizePhMobileInput, isValidPhMobileNumber, formatPhMobileDisplay } from "@/lib/sms";
 import { AndroidIcon, KeypadPhoneIcon } from "@/components/device-icons";
+import { getPersistentDeviceId, parseDeviceDetails } from "@/lib/device";
 
 function extractCleanErrorMessage(err: any): string {
   if (!err) return "Failed to submit enlistment.";
@@ -86,6 +91,20 @@ export default function PublicEnlistmentPage() {
   });
 
   const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  // Hardware Device Identification & Anti-Impersonation Binding State
+  const [deviceId, setDeviceId] = useState<string>("");
+  const [deviceInfo, setDeviceInfo] = useState({ model: "Android Phone", os: "Android" });
+  const [isHardwareBound, setIsHardwareBound] = useState(true);
+
+  // Initialize hardware device fingerprinting on mount
+  useEffect(() => {
+    const id = getPersistentDeviceId();
+    setDeviceId(id);
+    if (typeof navigator !== "undefined") {
+      setDeviceInfo(parseDeviceDetails(navigator.userAgent || ""));
+    }
+  }, []);
 
   // Restore failed attempts and active lockout from localStorage
   useEffect(() => {
@@ -299,6 +318,9 @@ export default function PublicEnlistmentPage() {
         groupId: isGroupLocked ? (campaign?.groupId || undefined) : (formData.groupId || undefined),
         groupName: isGroupLocked ? (campaign?.groupName || "All 10RCDG Personnel") : (formData.groupName || "All 10RCDG Personnel"),
         deviceType: formData.deviceType,
+        deviceId: isHardwareBound && formData.deviceType === "ANDROID" ? (deviceId || undefined) : undefined,
+        deviceModel: isHardwareBound && formData.deviceType === "ANDROID" ? (deviceInfo.model || undefined) : undefined,
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
       });
       setIsSubmitted(true);
     } catch (err: any) {
@@ -477,11 +499,33 @@ export default function PublicEnlistmentPage() {
                   )}
                 </span>
               </div>
+              {isHardwareBound && formData.deviceType === "ANDROID" && (
+                <div className="flex justify-between items-center pt-1.5 border-t border-slate-200">
+                  <span className="text-slate-500">Bound Device:</span>
+                  <span className="font-bold text-emerald-800 flex items-center gap-1.5 text-[11px] font-mono">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{deviceInfo.model}</span>
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Campaign Batch:</span>
                 <span className="text-amber-800 font-bold">{campaign.title}</span>
               </div>
             </div>
+
+            {/* Bound Hardware Lock Guidance */}
+            {isHardwareBound && formData.deviceType === "ANDROID" && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-left text-xs space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-slate-900">
+                  <Lock className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Hardware Anti-Impersonation Lock Active</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Your phone number is bound to this physical phone (<strong>{deviceInfo.model}</strong>). Once approved by Command, only this phone can download the app at <strong>/download</strong>. If you ever change or replace your phone, ask your unit administrators to re-pair your personal data.
+                </p>
+              </div>
+            )}
 
             <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-left text-xs space-y-1">
               <div className="font-bold flex items-center gap-1.5 text-emerald-950">
@@ -489,41 +533,35 @@ export default function PublicEnlistmentPage() {
                 <span>What Happens Next:</span>
               </div>
               <p className="text-[11px] text-emerald-800 leading-relaxed">
-                Once reviewed by S3 Operations, your mobile number will be activated to receive official 10RCDG SMS alerts and mobilization orders.
+                Once reviewed by the unit administrators, your mobile number will be activated to receive official 10RCDG SMS alerts and mobilization orders.
               </p>
             </div>
 
-            {/* Offline Siren Companion App Banner */}
-            <div className="p-4 rounded-xl bg-slate-50 border border-emerald-300 text-left space-y-3 shadow-xs">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-lg bg-emerald-100 border border-emerald-200 text-emerald-800 shrink-0">
-                  <Smartphone className="w-5 h-5" />
+            {/* Companion App Activation Info (No direct download until approved) */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>RESCOM ALERT Mobile App Access</span>
                 </div>
-                <div className="space-y-0.5">
-                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <span>Install RESCOM-ALERT Mobile App</span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      OFFLINE GSM
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Install the companion app on your phone so incoming Red Alerts will sound an emergency siren even on Silent mode.
-                  </p>
-                </div>
+                <Link
+                  href="/download"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-700 transition-colors"
+                >
+                  <span>Visit Portal</span>
+                  <ExternalLink className="w-3 h-3 text-emerald-700" />
+                </Link>
               </div>
-
-              <a
-                href={
-                  process.env.NEXT_PUBLIC_SOLDIER_APK_URL ||
-                  "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/latest/download/rescom-alert.apk"
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md active:scale-98 uppercase tracking-wider"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Android APK</span>
-              </a>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                App access requires an approved roster record. Once the administrators review and approve your enlistment, your mobile number will be unlocked to download and pair the companion app at the{" "}
+                <Link
+                  href="/download"
+                  className="font-bold text-emerald-800 underline underline-offset-2 hover:text-emerald-700"
+                >
+                  official download portal (/download)
+                </Link>
+                .
+              </p>
             </div>
           </div>
         ) : !isUnlocked ? (
@@ -889,11 +927,129 @@ export default function PublicEnlistmentPage() {
                 </div>
               </div>
 
-              {submissionError && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-                  <span>{submissionError}</span>
+              {/* Hardware Device Authorization & Anti-Impersonation Card */}
+              {formData.deviceType === "ANDROID" && (
+                <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 transition-all animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Shield className="w-4 h-4 text-emerald-700" />
+                      <span>Hardware Anti-Impersonation Protection</span>
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      MILITARY OPSEC
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-white border border-slate-200 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="w-4 h-4 text-slate-500 shrink-0" />
+                      <div>
+                        <div className="font-bold text-slate-900">{deviceInfo.model}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {deviceInfo.os} • ID: {deviceId ? `${deviceId.slice(0, 12)}...` : "Detecting..."}
+                        </div>
+                      </div>
+                    </div>
+                    {isHardwareBound ? (
+                      <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-300 flex items-center gap-1 shrink-0">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>BOUND</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 shrink-0">
+                        UNBOUND
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Dedicated Binding Button */}
+                  {isHardwareBound ? (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsHardwareBound(false)}
+                        className="w-full p-3 rounded-xl bg-emerald-50 border-2 border-emerald-600 hover:bg-emerald-100/70 text-emerald-950 font-bold text-xs flex items-center justify-between gap-2 shadow-xs transition-all text-left cursor-pointer group"
+                      >
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5">
+                            <span className="block font-black text-xs text-emerald-950 uppercase tracking-tight">
+                              ✓ Bound to This Hardware Device ({deviceInfo.model})
+                            </span>
+                            <span className="block text-[11px] text-emerald-800 font-normal leading-relaxed">
+                              Only your physical device can download and re-download the app. To change your hardware device ID later, you can ask the administrators to re-pair your personal data.
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-700 underline group-hover:text-emerald-900 shrink-0 pl-1">
+                          Change
+                        </span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsHardwareBound(true)}
+                      className="w-full p-3 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-white font-bold text-xs flex items-center justify-between gap-2 shadow-md transition-all text-left cursor-pointer"
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <Lock className="w-4 h-4 text-white shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <span className="block font-black text-xs text-white uppercase tracking-tight">
+                            Click to bound your hardware device id so only your device can re-download it
+                          </span>
+                          <span className="block text-[11px] text-amber-100 font-normal leading-relaxed">
+                            To change the hardware device ID you can ask the administrators to re-pairing your personal data.
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold bg-amber-700 text-white px-2.5 py-1 rounded-lg shrink-0">
+                        BIND NOW
+                      </span>
+                    </button>
+                  )}
+
+                  <p className="text-[10px] text-slate-500 leading-relaxed font-mono">
+                    🛡️ Prevents unauthorized users from stealing or using your fresh phone number on other devices.
+                  </p>
                 </div>
+              )}
+
+              {submissionError && (
+                submissionError.includes("/download") ||
+                submissionError.toLowerCase().includes("already submitted") ||
+                submissionError.toLowerCase().includes("already registered") ? (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-2.5 animate-in fade-in duration-200">
+                    <div className="flex items-start gap-2.5">
+                      <Clock className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                      <div className="space-y-1">
+                        <div className="font-bold text-amber-950 text-xs">
+                          {submissionError.toLowerCase().includes("already registered")
+                            ? "Already Registered in 10RCDG Roster"
+                            : "Enlistment Request Already Submitted"}
+                        </div>
+                        <p className="text-[11px] text-amber-900 leading-relaxed">
+                          {submissionError.replace(/\s*\(\/download\)/g, "")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-amber-200 flex items-center justify-between">
+                      <span className="text-[11px] text-amber-800 font-medium">Ready to download?</span>
+                      <Link
+                        href="/download"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-white px-2.5 py-1 rounded-lg border border-amber-300 hover:bg-emerald-50 hover:border-emerald-300 shadow-2xs transition-all"
+                      >
+                        <span>Official Download Portal</span>
+                        <ExternalLink className="w-3 h-3 text-emerald-700" />
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                    <span>{submissionError}</span>
+                  </div>
+                )
               )}
 
               {/* Submit Button */}

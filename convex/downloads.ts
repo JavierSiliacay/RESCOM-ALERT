@@ -79,7 +79,7 @@ export const record = mutation({
         });
 
         throw new Error(
-          "Device Not Enrolled: Unbound mobile numbers cannot be registered on the public download page. Please enroll your phone through your unit's official Enlistment link or coordinate with your Administrators immediately."
+          "Device Not Enrolled: Unbound mobile numbers cannot be registered on the public download page. Please enroll your phone through your unit's official Enlistment link or coordinate with your Administrators."
         );
       }
 

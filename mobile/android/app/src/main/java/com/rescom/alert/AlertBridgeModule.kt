@@ -383,21 +383,11 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun getFcmToken(promise: Promise) {
         try {
-            com.google.firebase.messaging.FirebaseMessaging.getInstance().token
-                .addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
-                        promise.resolve(task.result ?: "")
-                    } else {
-                        // Fallback to locally cached token if any
-                        val prefs = reactContext.getSharedPreferences("com.rescom.alert.prefs", Context.MODE_PRIVATE)
-                        val cached = prefs.getString("KEY_FCM_TOKEN", "") ?: ""
-                        promise.resolve(cached)
-                    }
-                }
-        } catch (e: Exception) {
             val prefs = reactContext.getSharedPreferences("com.rescom.alert.prefs", Context.MODE_PRIVATE)
             val cached = prefs.getString("KEY_FCM_TOKEN", "") ?: ""
             promise.resolve(cached)
+        } catch (e: Exception) {
+            promise.resolve("")
         }
     }
 

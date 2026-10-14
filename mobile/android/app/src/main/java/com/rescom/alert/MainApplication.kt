@@ -33,15 +33,7 @@ class MainApplication : Application(), ReactApplication {
       defaultHandler?.uncaughtException(thread, throwable)
     }
 
-    // 2. Explicit Firebase initialization check
-    try {
-      com.google.firebase.FirebaseApp.initializeApp(this)
-      android.util.Log.i("MainApplication", "FirebaseApp successfully initialized.")
-    } catch (e: Exception) {
-      android.util.Log.e("MainApplication", "FirebaseApp initialization handled: ${e.message}", e)
-    }
-
-    // 3. React Native load
+    // 2. React Native load
     try {
       loadReactNative(this)
     } catch (e: Exception) {

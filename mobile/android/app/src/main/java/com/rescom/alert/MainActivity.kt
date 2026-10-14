@@ -22,10 +22,18 @@ class MainActivity : ReactActivity() {
 
   override fun onResume() {
       super.onResume()
-      SmsRetrieverReceiver.startListening(this)
-      // If an emergency alarm siren is actively sounding, opening the app automatically silences it
-      if (TacticalAlarmManager.isAlarmActive()) {
-          TacticalAlarmManager.stop()
+      try {
+          SmsRetrieverReceiver.startListening(this)
+      } catch (e: Exception) {
+          android.util.Log.e("MainActivity", "Error starting SmsRetriever in onResume: ${e.message}", e)
+      }
+      try {
+          // If an emergency alarm siren is actively sounding, opening the app automatically silences it
+          if (TacticalAlarmManager.isAlarmActive()) {
+              TacticalAlarmManager.stop()
+          }
+      } catch (e: Exception) {
+          android.util.Log.e("MainActivity", "Error stopping alarm on resume: ${e.message}", e)
       }
   }
 }

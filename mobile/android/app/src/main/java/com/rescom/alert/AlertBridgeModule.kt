@@ -69,7 +69,11 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     }
 
     init {
-        reactContext.addActivityEventListener(activityEventListener)
+        try {
+            reactContext.addActivityEventListener(activityEventListener)
+        } catch (e: Exception) {
+            android.util.Log.e("AlertBridgeModule", "Error adding activity event listener: ${e.message}", e)
+        }
     }
 
     override fun getName(): String {

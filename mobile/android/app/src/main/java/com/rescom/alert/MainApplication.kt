@@ -21,7 +21,15 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
-    loadReactNative(this)
-    SmsRetrieverReceiver.startListening(this)
+    try {
+      loadReactNative(this)
+    } catch (e: Exception) {
+      android.util.Log.e("MainApplication", "Error during loadReactNative: ${e.message}", e)
+    }
+    try {
+      SmsRetrieverReceiver.startListening(this)
+    } catch (e: Exception) {
+      android.util.Log.e("MainApplication", "Error starting SmsRetriever: ${e.message}", e)
+    }
   }
 }

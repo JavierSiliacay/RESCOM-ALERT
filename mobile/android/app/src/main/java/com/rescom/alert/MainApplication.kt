@@ -21,11 +21,34 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+
+    // 1. Global crash protection to log uncaught errors instead of silently dying
+    val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+      android.util.Log.e("RESCOM_CRASH", "FATAL UNCAUGHT EXCEPTION on thread ${thread.name}: ${throwable.message}", throwable)
+      try {
+        val file = java.io.File(getExternalFilesDir(null), "rescom_crash.txt")
+        file.writeText("CRASH: ${throwable.stackTraceToString()}\n")
+      } catch (_: Exception) {}
+      defaultHandler?.uncaughtException(thread, throwable)
+    }
+
+    // 2. Explicit Firebase initialization check
+    try {
+      com.google.firebase.FirebaseApp.initializeApp(this)
+      android.util.Log.i("MainApplication", "FirebaseApp successfully initialized.")
+    } catch (e: Exception) {
+      android.util.Log.e("MainApplication", "FirebaseApp initialization handled: ${e.message}", e)
+    }
+
+    // 3. React Native load
     try {
       loadReactNative(this)
     } catch (e: Exception) {
       android.util.Log.e("MainApplication", "Error during loadReactNative: ${e.message}", e)
     }
+
+    // 4. Layer 2 SMS Retriever listener
     try {
       SmsRetrieverReceiver.startListening(this)
     } catch (e: Exception) {

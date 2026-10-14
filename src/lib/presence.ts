@@ -15,6 +15,8 @@ export function getPresenceStatus(lastSeenAt?: number): PresenceInfo {
       label: "Never logged in",
       status: "offline",
       dotColor: "bg-slate-400",
+
+
       badgeBg: "bg-slate-50",
       textColor: "text-slate-500",
       borderColor: "border-slate-200",

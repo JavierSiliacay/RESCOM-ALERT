@@ -76,7 +76,7 @@ export default function SoldierDownloadPage() {
   const recordDownload = useMutation(api.downloads.record);
   const stats = useQuery(api.downloads.getStats);
 
-  const apkUrl = "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.0.6/rescom-alert-v1.0.6.apk";
+  const apkUrl = "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.0.7/rescom-alert-v1.0.7.apk";
 
   const isVerifiedTroop =
     verificationResult?.status === "REGISTERED" ||
@@ -329,7 +329,7 @@ export default function SoldierDownloadPage() {
                 Release Package
               </div>
               <div className="text-lg font-extrabold text-slate-900">
-                RESCOM ALERT v1.0.6
+                RESCOM ALERT v1.0.7
               </div>
             </div>
             <div className="text-right">
@@ -704,7 +704,7 @@ export default function SoldierDownloadPage() {
                 ) : (
                   <>
                     <Download className="w-5 h-5" />
-                    <span>DOWNLOAD RESCOM ALERT (v1.0.6 APK)</span>
+                    <span>DOWNLOAD RESCOM ALERT (v1.0.7 APK)</span>
                   </>
                 )}
               </button>
@@ -1026,7 +1026,7 @@ export default function SoldierDownloadPage() {
                       <span>Built-in Android 15/16 Zero-Permission Engine:</span>
                     </div>
                     <p>
-                      RESCOM ALERT v1.0.6 features <strong>Google SMS Retriever (Layer 2)</strong>. Even if Android greys out SMS permissions or Samsung Auto Blocker hides the menu, <strong>emergency sirens will still trigger 100% offline</strong> with zero permissions needed!
+                      RESCOM ALERT v1.0.7 features <strong>Google SMS Retriever (Layer 2)</strong>. Even if Android greys out SMS permissions or Samsung Auto Blocker hides the menu, <strong>emergency sirens will still trigger 100% offline</strong> with zero permissions needed!
                     </p>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed">

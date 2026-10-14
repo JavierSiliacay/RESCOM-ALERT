@@ -82,8 +82,8 @@ android {
         applicationId "com.rescom.alert"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 6
-        versionName "1.0.5"
+        versionCode 8
+        versionName "1.0.7"
     }
     signingConfigs {
         debug {
@@ -114,9 +114,16 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("com.google.android.gms:play-services-auth-api-phone:18.1.0")
 
+    // Firebase Cloud Messaging (FCM) Native Engine
+    implementation(platform("com.google.firebase:firebase-bom:33.9.0"))
+    implementation("com.google.firebase:firebase-messaging")
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
     }
 }
+
+apply plugin: "com.google.gms.google-services"
+

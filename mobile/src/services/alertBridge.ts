@@ -188,6 +188,19 @@ export const alertBridgeService = {
   },
 
   /**
+   * Retrieves real Firebase Cloud Messaging device registration token
+   */
+  getFcmToken: async (): Promise<string> => {
+    if (Platform.OS !== "android" || !AlertBridge?.getFcmToken) return "";
+    try {
+      return (await AlertBridge.getFcmToken()) || "";
+    } catch (e) {
+      return "";
+    }
+  },
+
+
+  /**
    * Arms the Layer 2 Zero-Permission Google SMS Retriever
    */
   startSmsRetriever: async (): Promise<boolean> => {

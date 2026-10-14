@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { RankInsignia } from "./RankInsignia";
-import { colors } from "../theme";
+import { colors, radius, shadow } from "../theme";
 
 export interface SoldierHeaderCardProps {
   soldier: {
@@ -15,11 +15,6 @@ export interface SoldierHeaderCardProps {
   isArmed?: boolean;
 }
 
-/**
- * Mil-Spec Tactical Soldier Identity Header
- * Displays official Philippine Army rank insignia, soldier identity,
- * unit group affiliation, and real-time operational siren status.
- */
 export const SoldierHeaderCard: React.FC<SoldierHeaderCardProps> = ({
   soldier,
   isArmed = true,
@@ -27,71 +22,75 @@ export const SoldierHeaderCard: React.FC<SoldierHeaderCardProps> = ({
   if (!soldier) {
     return (
       <View style={styles.card}>
-        <View style={styles.statusBar}>
-          <View style={[styles.dot, { backgroundColor: colors.amber }]} />
-          <Text style={[styles.statusText, { color: colors.amber }]}>
-            DEVICE UNLINKED // STANDBY
-          </Text>
+        <View style={styles.unlinkedHeader}>
+          <View style={styles.statusBadgeStandby}>
+            <View style={styles.dotStandby} />
+            <Text style={styles.statusTextStandby}>STANDBY // UNPAIRED</Text>
+          </View>
+          <Text style={styles.actionHint}>TAP TO PAIR</Text>
         </View>
-        <Text style={styles.unlinkedTitle}>10RCDG RESCOM ALERT RECEIVER</Text>
+
+        <Text style={styles.unlinkedTitle}>No Military Phone Linked</Text>
         <Text style={styles.unlinkedSub}>
-          Tap &quot;Phone Setup&quot; below to pair your registered military mobile number.
+          Tap to connect your Philippine mobile number to receive emergency siren broadcasts.
         </Text>
       </View>
     );
   }
 
-  const fullName = `${soldier.firstName} ${soldier.lastName}`.toUpperCase().trim();
+  const fullName = `${soldier.firstName} ${soldier.lastName}`.trim();
   const unitLine = [soldier.groupName, soldier.unit].filter(Boolean).join(" • ");
 
   return (
     <View style={styles.card}>
-      {/* Top Telemetry & Siren Status Row */}
-      <View style={styles.statusBar}>
-        <View style={styles.statusLeft}>
-          <View style={[styles.dot, isArmed ? styles.dotArmed : styles.dotStandby]} />
-          <Text style={[styles.statusText, isArmed ? styles.textArmed : styles.textStandby]}>
-            {isArmed ? "ARMED & READY // SIREN ACTIVE" : "STANDBY // PERMISSION REQUIRED"}
+      {/* Top Status & Armed Telemetry */}
+      <View style={styles.topRow}>
+        <View style={isArmed ? styles.statusBadgeArmed : styles.statusBadgeStandby}>
+          <View style={isArmed ? styles.dotArmed : styles.dotStandby} />
+          <Text style={isArmed ? styles.statusTextArmed : styles.statusTextStandby}>
+            {isArmed ? "SIREN ACTIVE & ARMED" : "PERMISSIONS NEEDED"}
           </Text>
         </View>
-        <Text style={styles.telemetryTag}>10RCDG PA</Text>
+
+        <View style={styles.liveTag}>
+          <Text style={styles.liveTagText}>10RCDG READY</Text>
+        </View>
       </View>
 
-      {/* Greeting & Identity Section */}
-      <View style={styles.identitySection}>
-        <Text style={styles.greetingText}>Welcome Back!</Text>
-
-        <View style={styles.nameRow}>
-          <RankInsignia rank={soldier.rank} size={18} showBadgePill={true} />
-          <Text style={styles.soldierName} numberOfLines={1}>
-            {fullName}
-          </Text>
+      {/* Soldier Identity Block */}
+      <View style={styles.profileRow}>
+        <View style={styles.avatarWrap}>
+          <RankInsignia rank={soldier.rank} size={22} showBadgePill={false} />
         </View>
 
-        {unitLine ? (
-          <Text style={styles.unitText} numberOfLines={1}>
-            {unitLine}
-          </Text>
-        ) : null}
+        <View style={styles.profileTextWrap}>
+          <View style={styles.nameHeaderRow}>
+            <View style={styles.rankPill}>
+              <Text style={styles.rankPillText}>{soldier.rank || "PVT"}</Text>
+            </View>
+            <Text style={styles.soldierName} numberOfLines={1}>
+              {fullName}
+            </Text>
+          </View>
+
+          {unitLine ? (
+            <Text style={styles.unitText} numberOfLines={1}>
+              {unitLine}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
-      {/* Monospaced Hardware & Radio Telemetry Strip */}
-      <View style={styles.telemetryStrip}>
-        <View style={styles.telemetryItem}>
-          <Text style={styles.telemetryLabel}>REG NUMBER:</Text>
-          <Text style={styles.telemetryValue}>{soldier.mobileNumber}</Text>
+      {/* Clean Telemetry Footer */}
+      <View style={styles.telemetryFooter}>
+        <View style={styles.footerItem}>
+          <Text style={styles.footerLabel}>Mobile:</Text>
+          <Text style={styles.footerValue}>{soldier.mobileNumber}</Text>
         </View>
-        <View style={styles.telemetryDivider} />
-        <View style={styles.telemetryItem}>
-          <Text style={styles.telemetryLabel}>CHANNELS:</Text>
-          <Text style={styles.telemetryValue}>PUSH & SMS</Text>
-        </View>
-        <View style={styles.telemetryDivider} />
-        <View style={styles.telemetryItem}>
-          <Text style={styles.telemetryLabel}>LINK:</Text>
-          <Text style={[styles.telemetryValue, { color: "#10b981" }]}>
-            VERIFIED
-          </Text>
+        <View style={styles.footerDivider} />
+        <View style={styles.footerItem}>
+          <Text style={styles.footerLabel}>Siren Channel:</Text>
+          <Text style={styles.footerValue}>SMS & Retriever</Text>
         </View>
       </View>
     </View>
@@ -100,137 +99,181 @@ export const SoldierHeaderCard: React.FC<SoldierHeaderCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#0f172a", // Tactical Dark Slate
-    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
+    borderColor: colors.border,
     padding: 14,
     marginHorizontal: 16,
-    marginTop: 12,
+    marginTop: 10,
     marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadow,
   },
-  statusBar: {
+  topRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.06)",
+    marginBottom: 10,
   },
-  statusLeft: {
+  statusBadgeArmed: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    flex: 1,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
   },
   dotArmed: {
-    backgroundColor: "#10b981", // Emerald
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primaryText,
   },
-  dotStandby: {
-    backgroundColor: "#f59e0b", // Amber
-  },
-  statusText: {
-    fontFamily: "monospace",
+  statusTextArmed: {
     fontSize: 10,
     fontWeight: "800",
-    letterSpacing: 0.8,
-  },
-  textArmed: {
-    color: "#34d399",
-  },
-  textStandby: {
-    color: "#fbbf24",
-  },
-  telemetryTag: {
-    fontFamily: "monospace",
-    fontSize: 9,
-    fontWeight: "700",
-    color: "#64748b",
+    color: colors.primaryText,
     letterSpacing: 0.5,
   },
-  identitySection: {
-    paddingVertical: 10,
-  },
-  greetingText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#94a3b8",
-    marginBottom: 3,
-    letterSpacing: 0.3,
-  },
-  nameRow: {
+  statusBadgeStandby: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    flexWrap: "nowrap",
+    gap: 6,
+    backgroundColor: colors.amberSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.amberBorder,
+  },
+  dotStandby: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.amberDark,
+  },
+  statusTextStandby: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.amberDark,
+    letterSpacing: 0.5,
+  },
+  liveTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: colors.subtle,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  liveTagText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: colors.textMuted,
+    letterSpacing: 0.6,
+  },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 4,
+  },
+  avatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileTextWrap: {
+    flex: 1,
+  },
+  nameHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  rankPill: {
+    backgroundColor: colors.subtle,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  rankPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.textBody,
   },
   soldierName: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#ffffff",
-    letterSpacing: 0.4,
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.text,
     flex: 1,
   },
   unitText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#cbd5e1",
-    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.textMuted,
+    marginTop: 2,
   },
-  telemetryStrip: {
+  telemetryFooter: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.04)",
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSoft,
   },
-  telemetryItem: {
+  footerItem: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
-  telemetryLabel: {
-    fontFamily: "monospace",
-    fontSize: 8,
+  footerLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  footerValue: {
+    fontSize: 11,
     fontWeight: "700",
-    color: "#64748b",
+    color: colors.textBody,
   },
-  telemetryValue: {
-    fontFamily: "monospace",
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#e2e8f0",
-  },
-  telemetryDivider: {
+  footerDivider: {
     width: 1,
-    height: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    marginHorizontal: 4,
+    height: 12,
+    backgroundColor: colors.border,
+    marginHorizontal: 8,
+  },
+  unlinkedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  actionHint: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.primaryText,
+    letterSpacing: 0.5,
   },
   unlinkedTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800",
-    color: "#ffffff",
-    marginTop: 8,
+    color: colors.text,
+    marginBottom: 2,
   },
   unlinkedSub: {
-    fontSize: 11,
-    color: "#94a3b8",
-    marginTop: 2,
+    fontSize: 12,
+    color: colors.textMuted,
     lineHeight: 16,
   },
 });

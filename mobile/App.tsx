@@ -90,22 +90,31 @@ function Shell(): React.JSX.Element {
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header — same lockup as the web sidebar */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.seals}>
-          <View style={[styles.seal, { zIndex: 2 }]}>
-            <Image source={require("./src/assets/rescom-pa-seal.png")} style={styles.sealImg} />
+      {/* Clean Minimalist Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.headerLeft}>
+          <View style={styles.seals}>
+            <View style={[styles.seal, { zIndex: 2 }]}>
+              <Image source={require("./src/assets/rescom-pa-seal.png")} style={styles.sealImg} />
+            </View>
+            <View style={[styles.seal, { marginLeft: -10 }]}>
+              <Image source={require("./src/assets/rescom-emblem.jpg")} style={styles.sealImg} />
+            </View>
           </View>
-          <View style={[styles.seal, { marginLeft: -8 }]}>
-            <Image source={require("./src/assets/rescom-emblem.jpg")} style={styles.sealImg} />
+          <View>
+            <Text style={styles.brand}>
+              <Text style={{ color: colors.primaryDark }}>RESCOM </Text>
+              <Text style={{ color: colors.amber }}>ALERT</Text>
+            </Text>
+            <Text style={styles.brandSub}>10RCDG • RESERVE COMMAND, PA</Text>
           </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.brand}>
-            <Text style={{ color: colors.primaryDark }}>RESCOM </Text>
-            <Text style={{ color: colors.amber }}>ALERT</Text>
+
+        <View style={[styles.headerBadge, isArmed ? styles.headerBadgeArmed : styles.headerBadgeStandby]}>
+          <View style={[styles.headerDot, { backgroundColor: isArmed ? colors.primaryText : colors.amberDark }]} />
+          <Text style={[styles.headerBadgeText, { color: isArmed ? colors.primaryText : colors.amberDark }]}>
+            {isArmed ? "ARMED" : "STANDBY"}
           </Text>
-          <Text style={styles.brandSub}>10RCDG RESCOM, PA</Text>
         </View>
       </View>
 
@@ -177,26 +186,58 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 10,
     backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderSoft,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   seals: { flexDirection: "row" },
   seal: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 2,
-    borderColor: "#f59e0b",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: colors.border,
     backgroundColor: colors.card,
     overflow: "hidden",
   },
-  sealImg: { width: "100%", height: "100%" },
-  brand: { fontSize: 17, fontWeight: "800", letterSpacing: 0.6 },
-  brandSub: { fontSize: 11, color: colors.textMuted, fontWeight: "500", marginTop: 1 },
+  sealImg: { width: "100%", height: "100%", resizeMode: "contain" },
+  brand: { fontSize: 16, fontWeight: "900", letterSpacing: 0.5 },
+  brandSub: { fontSize: 10, color: colors.textMuted, fontWeight: "700", marginTop: 1, letterSpacing: 0.3 },
+  headerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  headerBadgeArmed: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryBorder,
+  },
+  headerBadgeStandby: {
+    backgroundColor: colors.amberSoft,
+    borderColor: colors.amberBorder,
+  },
+  headerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  headerBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
 
   strip: {
     flexDirection: "row",

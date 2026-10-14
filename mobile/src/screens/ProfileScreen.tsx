@@ -167,35 +167,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>PHONE SETUP &amp; CREDENTIALS</Text>
+      <Text style={styles.eyebrow}>PHONE SETUP</Text>
       <Text style={styles.h1}>Tactical Readiness</Text>
-      <Text style={styles.lead}>Verify your military identity and ensure all background permissions are green.</Text>
+      <Text style={styles.lead}>Ensure all background permissions and emergency siren hardware are green.</Text>
 
-      {/* Military Service & Identity Card */}
-      {soldier ? (
-        <View style={styles.soldierCard}>
-          <View style={styles.soldierCardHeader}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-              <RankInsignia rank={soldier.rank} size={22} showBadgePill />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.soldierCardName}>
-                  {soldier.firstName} {soldier.lastName}
-                </Text>
-                <Text style={styles.soldierCardUnit}>
-                  {soldier.groupName} • {soldier.unit || "10RCDG"}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.soldierCardTelemetry}>
-            <Text style={styles.soldierCardPhone}>📱 Reg: {soldier.mobileNumber}</Text>
-            <View style={styles.boundBadge}>
-              <Text style={styles.boundBadgeText}>ACTIVE &amp; BOUND</Text>
-            </View>
-          </View>
-        </View>
-      ) : (
+      {!soldier && (
         <TouchableOpacity
           style={styles.pairDeviceBanner}
           onPress={onOpenPairing}

@@ -170,9 +170,10 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
 
     setLoading(true);
     const hw = await alertBridgeService.getHardwareDeviceInfo();
+    const realFcmToken = (await alertBridgeService.getFcmToken()) || `fcm_${Date.now()}`;
     const result = await convexHttpService.linkDevice({
       soldierId: soldier.id,
-      fcmToken: `NATIVE_TOKEN_${Date.now()}`,
+      fcmToken: realFcmToken,
       deviceModel: getDeviceModel(hw),
       appDeviceId: hw.deviceId,
     });

@@ -358,6 +358,24 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun getHardwareDeviceInfo(promise: Promise) {
+        try {
+            val androidId = Settings.Secure.getString(
+                reactContext.contentResolver,
+                Settings.Secure.ANDROID_ID
+            ) ?: ""
+            val map = Arguments.createMap().apply {
+                putString("deviceId", if (androidId.isBlank()) "" else "and_$androidId")
+                putString("manufacturer", Build.MANUFACTURER ?: "")
+                putString("model", Build.MODEL ?: "")
+            }
+            promise.resolve(map)
+        } catch (e: Exception) {
+            promise.reject("DEVICE_INFO_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
     fun startSmsRetriever(promise: Promise) {
         try {
             SmsRetrieverReceiver.startListening(reactContext)

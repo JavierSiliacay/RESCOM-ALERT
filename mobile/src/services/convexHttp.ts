@@ -1,7 +1,15 @@
 const CONVEX_URL = "https://dazzling-whale-200.convex.cloud";
 
 export interface VerifyMobileResult {
-  status: "REGISTERED" | "PENDING_ENLISTMENT" | "NOT_FOUND" | "INVALID_INPUT";
+  status:
+    | "REGISTERED"
+    | "PENDING_ENLISTMENT"
+    | "NOT_FOUND"
+    | "INVALID_INPUT"
+    | "PORTAL_LOCKED"
+    | "DEVICE_MISMATCH"
+    | "DEVICE_UNBOUND"
+    | "NETWORK_ERROR";
   soldier?: {
     id: string;
     firstName: string;
@@ -34,14 +42,14 @@ export const convexHttpService = {
   /**
    * Queries Convex to verify if a mobile number is registered in personnel or enlistment
    */
-  verifyMobile: async (mobileNumber: string): Promise<VerifyMobileResult> => {
+  verifyMobile: async (mobileNumber: string, appDeviceId: string): Promise<VerifyMobileResult> => {
     try {
       const response = await fetch(`${CONVEX_URL}/api/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           path: "personnel:verifyMobile",
-          args: { mobileNumber },
+          args: { mobileNumber, isNativeApp: true, appDeviceId },
           format: "json",
         }),
       });
@@ -51,12 +59,16 @@ export const convexHttpService = {
       }
 
       const json = await response.json();
+      // Convex returns HTTP 200 with { status: "error" } when the function throws
+      if (json?.status === "error" || !json?.value) {
+        throw new Error(json?.errorMessage || "Empty response from Convex");
+      }
       return json.value as VerifyMobileResult;
     } catch (err) {
       console.error("Convex verifyMobile error:", err);
       return {
-        status: "NOT_FOUND",
-        message: "Failed to connect to 10RCDG cloud network.",
+        status: "NETWORK_ERROR",
+        message: "Unable to reach the 10RCDG server. Check your internet connection and try again.",
       };
     }
   },
@@ -68,26 +80,32 @@ export const convexHttpService = {
     soldierId,
     fcmToken,
     deviceModel,
+    appDeviceId,
   }: {
     soldierId: string;
     fcmToken: string;
     deviceModel?: string;
-  }): Promise<boolean> => {
+    appDeviceId?: string;
+  }): Promise<"OK" | "MISMATCH" | "FAILED"> => {
     try {
       const response = await fetch(`${CONVEX_URL}/api/mutation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           path: "personnel:linkDevice",
-          args: { soldierId, fcmToken, deviceModel },
+          args: { soldierId, fcmToken, deviceModel, appDeviceId },
           format: "json",
         }),
       });
 
-      return response.ok;
+      if (!response.ok) return "FAILED";
+      const json = await response.json().catch(() => null);
+      if (!json || json.status === "error") return "FAILED";
+      if (json.value?.success === false && json.value?.error === "DEVICE_MISMATCH") return "MISMATCH";
+      return "OK";
     } catch (err) {
       console.error("Convex linkDevice error:", err);
-      return false;
+      return "FAILED";
     }
   },
 

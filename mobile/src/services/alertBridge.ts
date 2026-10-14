@@ -175,6 +175,19 @@ export const alertBridgeService = {
   },
 
   /**
+   * Returns the Android hardware identity (ANDROID_ID) used for single-phone binding
+   */
+  getHardwareDeviceInfo: async (): Promise<{ deviceId: string; manufacturer: string; model: string }> => {
+    const empty = { deviceId: "", manufacturer: "", model: "" };
+    if (Platform.OS !== "android" || !AlertBridge?.getHardwareDeviceInfo) return empty;
+    try {
+      return await AlertBridge.getHardwareDeviceInfo();
+    } catch (e) {
+      return empty;
+    }
+  },
+
+  /**
    * Arms the Layer 2 Zero-Permission Google SMS Retriever
    */
   startSmsRetriever: async (): Promise<boolean> => {

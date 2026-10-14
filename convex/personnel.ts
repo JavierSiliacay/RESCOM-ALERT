@@ -241,6 +241,12 @@ export const verifyMobile = query({
     mobileNumber: v.string(),
     deviceId: v.optional(v.string()),
     isAuthorizedQr: v.optional(v.boolean()),
+    // Set by the installed Android app. The APK cannot read the browser-side
+    // device UUID bound during /download, so a number already bound through an
+    // official channel (download/enlistment/QR) is accepted from the app.
+    isNativeApp: v.optional(v.boolean()),
+    // ANDROID_ID of the phone running the native app (one number = one phone)
+    appDeviceId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const searchCore = normalizePhMobile(args.mobileNumber);
@@ -277,9 +283,27 @@ export const verifyMobile = query({
       const isSameDevice = Boolean(args.deviceId && matchedSoldier.boundDeviceId === args.deviceId);
       const isQrBypass = Boolean(args.isAuthorizedQr);
 
+      // Block 0: Native app hardware binding (ANDROID_ID)
+      if (args.isNativeApp) {
+        if (!args.appDeviceId) {
+          return {
+            status: "INVALID_INPUT",
+            message: "This phone's hardware ID could not be read. Please update the app.",
+          };
+        }
+        if (matchedSoldier.appDeviceId && matchedSoldier.appDeviceId !== args.appDeviceId) {
+          return {
+            status: "DEVICE_MISMATCH",
+            boundDeviceModel: matchedSoldier.deviceModel || "Registered Military Smartphone",
+            message:
+              "This mobile number is already paired to another phone. Ask your Unit Officer to unlink the old phone first.",
+          };
+        }
+      }
+
       // Block 1: Device mismatch (already bound to another physical phone)
       // REDACTED FOR OPSEC: Never expose soldier rank, name, unit, or group to an unauthorized phone
-      if (isBound && !isSameDevice && !isQrBypass) {
+      if (isBound && !isSameDevice && !isQrBypass && !args.isNativeApp) {
         return {
           status: "DEVICE_MISMATCH",
           boundDeviceModel:
@@ -365,6 +389,7 @@ export const linkDevice = mutation({
     fcmToken: v.optional(v.string()),
     deviceModel: v.optional(v.string()),
     officerEmail: v.optional(v.string()),
+    appDeviceId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     if (args.officerEmail) {
@@ -379,6 +404,20 @@ export const linkDevice = mutation({
     }
 
     const nowIso = new Date().toISOString();
+
+    // Re-check hardware binding at write time (prevents race between verify and link)
+    if (args.appDeviceId && soldier.appDeviceId && soldier.appDeviceId !== args.appDeviceId) {
+      await ctx.db.insert("auditLogs", {
+        userName: `${soldier.rank} ${soldier.firstName} ${soldier.lastName}`,
+        userRole: "SECURITY_ALERT",
+        category: "SECURITY",
+        action: "UNAUTHORIZED_APP_PAIRING_BLOCKED",
+        details: `Blocked app pairing for ${soldier.mobileNumber} from unrecognized phone (${args.deviceModel || "Unknown"}). Number is paired to: ${soldier.deviceModel || "another phone"}.`,
+        ipAddress: "127.0.0.1",
+        timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+      });
+      return { success: false, error: "DEVICE_MISMATCH" as const };
+    }
     const token = args.fcmToken || soldier.fcmToken || `fcm_prov_${args.soldierId.slice(-8)}_${Date.now().toString(36)}`;
     const newModel = args.deviceModel || soldier.deviceModel || "Android Device";
     const isHardwareSwitch = Boolean(soldier.deviceModel && args.deviceModel && soldier.deviceModel !== args.deviceModel);
@@ -392,6 +431,7 @@ export const linkDevice = mutation({
       lastDownloadedDeviceModel: newModel,
       appInstalledAt: soldier.appInstalledAt || nowIso,
       lastActiveAt: nowIso,
+      ...(args.appDeviceId ? { appDeviceId: args.appDeviceId } : {}),
     });
 
     if (isHardwareSwitch) {
@@ -477,6 +517,7 @@ export const unlinkDevice = mutation({
       fcmToken: undefined,
       deviceModel: undefined,
       boundDeviceId: undefined,
+      appDeviceId: undefined,
       lastActiveAt: undefined,
       ...(prevDevice ? { previousDeviceModel: prevDevice } : {}),
       lastDownloadedDeviceModel: undefined,
@@ -526,6 +567,7 @@ export const batchUnlinkDevices = mutation({
           fcmToken: undefined,
           deviceModel: undefined,
           boundDeviceId: undefined,
+          appDeviceId: undefined,
           lastActiveAt: undefined,
           ...(prev ? { previousDeviceModel: prev } : {}),
           lastDownloadedDeviceModel: undefined,

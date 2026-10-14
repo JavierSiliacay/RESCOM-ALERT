@@ -17,6 +17,7 @@ export default defineSchema({
     fcmToken: v.optional(v.string()),
     deviceModel: v.optional(v.string()),
     boundDeviceId: v.optional(v.string()), // Client UUID of the authorized soldier phone
+    appDeviceId: v.optional(v.string()), // ANDROID_ID of the phone running the paired native app
     lastDownloadedDeviceModel: v.optional(v.string()),
     previousDeviceModel: v.optional(v.string()),
     lastDownloadedAt: v.optional(v.string()),

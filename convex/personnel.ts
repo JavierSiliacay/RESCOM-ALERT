@@ -316,7 +316,7 @@ export const verifyMobile = query({
 
       // Block 2: Identity Theft Protection (unbound numbers cannot be claimed on public /download)
       // REDACTED FOR OPSEC: Do not leak military membership, rank, or unit assignment to unverified visitors
-      if (!isBound && !isQrBypass) {
+      if (!isBound && !isQrBypass && !args.isNativeApp) {
         return {
           status: "DEVICE_UNBOUND",
           message:
@@ -431,7 +431,7 @@ export const linkDevice = mutation({
       lastDownloadedDeviceModel: newModel,
       appInstalledAt: soldier.appInstalledAt || nowIso,
       lastActiveAt: nowIso,
-      ...(args.appDeviceId ? { appDeviceId: args.appDeviceId } : {}),
+      ...(args.appDeviceId ? { appDeviceId: args.appDeviceId, boundDeviceId: soldier.boundDeviceId || args.appDeviceId } : {}),
     });
 
     if (isHardwareSwitch) {

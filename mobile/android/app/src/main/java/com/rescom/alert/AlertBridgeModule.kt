@@ -224,7 +224,8 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun previewAlertSound(promise: Promise) {
         try {
-            TacticalAlarmManager.previewSound(reactContext)
+            val customUri = AlertStorage.getCustomSoundUri(reactContext)
+            TacticalAlarmManager.previewSound(reactContext, customUri)
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("PREVIEW_FAILED", e.message, e)

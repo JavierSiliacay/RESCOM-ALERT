@@ -290,7 +290,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 activeOpacity={0.8}
               >
                 <Text style={[styles.toneBtnText, isPreviewing && styles.toneBtnTextActive]}>
-                  {isPreviewing ? "PLAYING..." : "▶ PLAY SAMPLE"}
+                  {isPreviewing
+                    ? "PLAYING..."
+                    : soundSettings.isDefault
+                      ? "▶ PLAY SAMPLE"
+                      : "▶ PLAY YOUR OWN ALERT TONE"}
                 </Text>
               </TouchableOpacity>
 

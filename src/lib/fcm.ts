@@ -128,15 +128,6 @@ export async function dispatchFcmAlert(options: FcmDispatchOptions): Promise<Fcm
       android: {
         priority: "high",
         ttl: 60 * 60 * 24, // 24 hours
-        notification: {
-          title: `🚨 ${sender}`,
-          body,
-          channelId: "10RCDG_EMERGENCY_PUSH_CHANNEL",
-          priority: "max",
-          sound: "default",
-          defaultVibrateTimings: true,
-          visibility: "public",
-        },
       },
     };
 

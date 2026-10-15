@@ -1,5 +1,7 @@
 package com.rescom.alert
 
+import android.app.ActivityOptions
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -60,13 +62,18 @@ class FcmAlertReceiverService : FirebaseMessagingService() {
 
     private fun launchAlertActivity(context: Context, sender: String, message: String) {
         try {
+            // 1. Immediately start tactical siren & vibration (never wait for activity window to draw)
+            TacticalAlarmManager.start(context)
+
+            // 2. Acquire WakeLock to turn on screen immediately
             val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
             val wakeLock = pm?.newWakeLock(
-                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
                 "10RCDG:FcmAlertWakeLock"
             )
-            wakeLock?.acquire(20000)
+            wakeLock?.acquire(30000)
 
+            // 3. Prepare AlertActivity Intent
             val fullScreenIntent = Intent(context, AlertActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -77,62 +84,78 @@ class FcmAlertReceiverService : FirebaseMessagingService() {
                 putExtra("EXTRA_TIMESTAMP", System.currentTimeMillis())
             }
 
-            // High-priority full-screen intent notification (shows over lock screen on modern Android)
-            showFullScreenNotification(context, fullScreenIntent, sender, message)
+            // 4. Create Notification Channel
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    "10RCDG Emergency Cloud Alerts",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "High-priority push channel for emergency orders and sirens"
+                    enableVibration(true)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    setBypassDnd(true)
+                }
+                nm.createNotificationChannel(channel)
+            }
 
-            // Direct activity launch attempt
+            // 5. Build full-screen pending intent
+            val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                NOTIFICATION_ID,
+                fullScreenIntent,
+                pendingIntentFlags
+            )
+
+            // 6. Schedule AlarmClockInfo to bypass Android 10+ background activity launch restrictions
             try {
-                context.startActivity(fullScreenIntent)
+                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && alarmManager != null) {
+                    val alarmClockInfo = AlarmManager.AlarmClockInfo(System.currentTimeMillis(), pendingIntent)
+                    alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+                }
             } catch (e: Exception) {
-                Log.w(TAG, "Direct startActivity blocked by background restrictions, notification handles it: ${e.message}")
+                Log.w(TAG, "AlarmManager setAlarmClock error: ${e.message}")
+            }
+
+            // 7. Show high-priority notification with fullScreenIntent
+            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle("🚨 $sender")
+                .setContentText(message)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setFullScreenIntent(pendingIntent, true)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setOngoing(true)
+                .build()
+
+            nm?.notify(NOTIFICATION_ID, notification)
+
+            // 8. Direct activity launch attempt
+            try {
+                if (Build.VERSION.SDK_INT >= 34) {
+                    val options = ActivityOptions.makeBasic().apply {
+                        pendingIntentBackgroundActivityStartMode = ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                    }
+                    context.startActivity(fullScreenIntent, options.toBundle())
+                } else {
+                    context.startActivity(fullScreenIntent)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Direct startActivity blocked by background restrictions, fullScreenIntent handles it: ${e.message}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch AlertActivity from FCM: ${e.message}", e)
         }
-    }
-
-    private fun showFullScreenNotification(
-        context: Context,
-        fullScreenIntent: Intent,
-        sender: String,
-        message: String
-    ) {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "10RCDG Emergency Cloud Alerts",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "High-priority push channel for emergency orders and sirens"
-                enableVibration(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                setBypassDnd(true)
-            }
-            nm.createNotificationChannel(channel)
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            NOTIFICATION_ID,
-            fullScreenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-        )
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("🚨 $sender")
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setFullScreenIntent(pendingIntent, true)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setOngoing(true)
-            .build()
-
-        nm.notify(NOTIFICATION_ID, notification)
     }
 }

@@ -33,6 +33,7 @@ import {
   ArrowRight,
   Lock,
   ShieldAlert,
+  Bell,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useQuery, useMutation } from "convex/react";

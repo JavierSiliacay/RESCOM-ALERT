@@ -1327,196 +1327,278 @@ export default function PersonnelPage() {
             )}
           </div>
 
-          {/* Search & Filter Bar */}
-          <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
-            <div ref={searchContainerRef} className="relative w-full md:w-96">
-              <div className="relative">
-                <Search
-                  className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${
-                    isSearchFocused ? "text-emerald-600" : "text-slate-400"
-                  }`}
-                />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onFocus={() => setIsSearchFocused(true)}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name, rank, unit, or mobile..."
-                  className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all font-medium"
-                />
-                {searchQuery && (
+          {/* Two-Tier Search & Command Filter Toolbar */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs divide-y divide-slate-100 overflow-visible">
+            {/* Tier 1: Search & Filter Dropdowns */}
+            <div className="p-3.5 sm:p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              {/* Search Box */}
+              <div ref={searchContainerRef} className="relative flex-1 max-w-xl">
+                <div className="relative">
+                  <Search
+                    className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                      isSearchFocused ? "text-emerald-600" : "text-slate-400"
+                    }`}
+                  />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by name, rank, unit, or mobile..."
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 transition-all font-medium"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setIsSearchFocused(false);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-0.5 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
+                      title="Clear Search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Floating Instant Match Dropdown */}
+                {showSearchDropdown && (
+                  <div className="absolute z-50 left-0 top-full mt-2 w-full sm:w-[460px] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                    <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50/90 border-b border-slate-100 text-[11px]">
+                      <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+                        Instant String Match
+                      </span>
+                      <span className="font-bold text-slate-700 font-mono text-[10px] bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                        {totalMatches} {totalMatches === 1 ? "match" : "matches"}
+                      </span>
+                    </div>
+
+                    <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 p-2 space-y-2">
+                      {filteredPersonnel.length > 0 ? (
+                        <div>
+                          <div className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-50/80 rounded-md mb-1.5 flex items-center justify-between">
+                            <span>STORED MEMBERS ({filteredPersonnel.length})</span>
+                            <span className="text-[9px] font-normal normal-case text-slate-500">Tap to filter</span>
+                          </div>
+                          <div className="space-y-1">
+                            {filteredPersonnel.slice(0, 8).map((person) => {
+                              const badge = getRankBadgeStyle(person.rank);
+                              return (
+                                <button
+                                  key={person._id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSearchQuery(`${person.firstName} ${person.lastName}`);
+                                    setIsSearchFocused(false);
+                                  }}
+                                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl hover:bg-emerald-50/50 hover:border-emerald-200 border border-transparent transition-all text-left cursor-pointer group"
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold border font-mono shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}
+                                    >
+                                      <HighlightMatch text={person.rank} query={searchQuery} />
+                                    </span>
+                                    <div className="truncate">
+                                      <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 truncate">
+                                        <HighlightMatch
+                                          text={`${person.firstName} ${person.lastName}`}
+                                          query={searchQuery}
+                                        />
+                                      </div>
+                                      <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5">
+                                        <span>
+                                          <HighlightMatch
+                                            text={formatPhMobileDisplay(person.mobileNumber)}
+                                            query={searchQuery}
+                                          />
+                                        </span>
+                                        <span>•</span>
+                                        <span>
+                                          <HighlightMatch text={person.unit} query={searchQuery} />
+                                        </span>
+                                        <span>•</span>
+                                        <span className="text-slate-400">
+                                          {(person as any).updatedBy
+                                            ? `Last edited by: ${(person as any).updatedBy}`
+                                            : `Added by: ${(person as any).createdBy || "Command"}`}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
+                                      {person.groupName}
+                                    </span>
+                                    <span
+                                      className={`w-2 h-2 rounded-full ${
+                                        person.status === "ACTIVE" ? "bg-emerald-500" : "bg-slate-300"
+                                      }`}
+                                      title={person.status}
+                                    />
+                                  </div>
+                                </button>
+                              );
+                            })}
+                            {filteredPersonnel.length > 8 && (
+                              <div className="text-center py-1 text-[10px] text-slate-400 font-semibold">
+                                +{filteredPersonnel.length - 8} more matching members in table below
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-8 text-center text-xs text-slate-400">
+                          <p>No registered members found matching</p>
+                          <p className="font-bold text-slate-700 mt-1">&quot;{searchQuery}&quot;</p>
+                          <p className="text-[11px] text-slate-400 mt-2">
+                            Try searching by member name, mobile number, unit, or assigned group.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Filter Controls Cluster */}
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 pl-1 shrink-0">
+                  <Filter className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Filters:</span>
+                </div>
+
+                <select
+                  value={selectedDevice}
+                  onChange={(e) => setSelectedDevice(e.target.value as any)}
+                  className="px-3 py-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer transition-all"
+                >
+                  <option value="ALL">All Devices ({personnelList.length})</option>
+                  <option value="PAIRED">Paired App ({pairedAppCount})</option>
+                  <option value="UNPAIRED">Unpaired ({unpairedCount})</option>
+                  <option value="ANDROID">Android ({androidCount})</option>
+                  <option value="KEYPAD">Keypad ({keypadCount})</option>
+                </select>
+
+                <select
+                  value={selectedGroup}
+                  onChange={(e) => setSelectedGroup(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer transition-all max-w-[160px] truncate"
+                >
+                  <option value="ALL">All Groups</option>
+                  {groupsList.map((g) => (
+                    <option key={g._id} value={g._id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer transition-all"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="ACTIVE">Active Only</option>
+                  <option value="INACTIVE">Inactive</option>
+                </select>
+
+                {(selectedDevice !== "ALL" || selectedGroup !== "ALL" || selectedStatus !== "ALL" || searchQuery) && (
                   <button
                     type="button"
                     onClick={() => {
+                      setSelectedDevice("ALL");
+                      setSelectedGroup("ALL");
+                      setSelectedStatus("ALL");
                       setSearchQuery("");
-                      setIsSearchFocused(false);
                     }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-0.5 rounded-full hover:bg-slate-200 transition-colors cursor-pointer"
-                    title="Clear Search"
+                    className="px-2.5 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-all cursor-pointer shrink-0"
+                    title="Reset all active filters"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    Reset
                   </button>
                 )}
-              </div>  
-
-              {/* Floating Instant Match Dropdown */}
-              {showSearchDropdown && (
-                <div className="absolute z-50 left-0 top-full mt-2 w-full sm:w-[460px] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                  {/* Dropdown Header Bar */}
-                  <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50/90 border-b border-slate-100 text-[11px]">
-                    <span className="font-semibold text-slate-500 flex items-center gap-1.5">
-                      Instant String Match
-                    </span>
-                    <span className="font-bold text-slate-700 font-mono text-[10px] bg-white px-2 py-0.5 rounded-full border border-slate-200">
-                      {totalMatches} {totalMatches === 1 ? "match" : "matches"}
-                    </span>
-                  </div>
-
-                  <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 p-2 space-y-2">
-                    {/* Matching Stored Roster Personnel */}
-                    {filteredPersonnel.length > 0 ? (
-                      <div>
-                        <div className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-50/80 rounded-md mb-1.5 flex items-center justify-between">
-                          <span>STORED MEMBERS ({filteredPersonnel.length})</span>
-                          <span className="text-[9px] font-normal normal-case text-slate-500">Tap to filter</span>
-                        </div>
-                        <div className="space-y-1">
-                          {filteredPersonnel.slice(0, 8).map((person) => {
-                            const badge = getRankBadgeStyle(person.rank);
-                            return (
-                              <button
-                                key={person._id}
-                                type="button"
-                                onClick={() => {
-                                  setSearchQuery(`${person.firstName} ${person.lastName}`);
-                                  setIsSearchFocused(false);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl hover:bg-emerald-50/50 hover:border-emerald-200 border border-transparent transition-all text-left cursor-pointer group"
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold border font-mono shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}
-                                  >
-                                    <HighlightMatch text={person.rank} query={searchQuery} />
-                                  </span>
-                                  <div className="truncate">
-                                    <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 truncate">
-                                      <HighlightMatch
-                                        text={`${person.firstName} ${person.lastName}`}
-                                        query={searchQuery}
-                                      />
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5">
-                                      <span>
-                                        <HighlightMatch
-                                          text={formatPhMobileDisplay(person.mobileNumber)}
-                                          query={searchQuery}
-                                        />
-                                      </span>
-                                      <span>•</span>
-                                      <span>
-                                        <HighlightMatch text={person.unit} query={searchQuery} />
-                                      </span>
-                                      <span>•</span>
-                                      <span className="text-slate-400">
-                                        {(person as any).updatedBy
-                                          ? `Last edited by: ${(person as any).updatedBy}`
-                                          : `Added by: ${(person as any).createdBy || "Command"}`}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
-                                    {person.groupName}
-                                  </span>
-                                  <span
-                                    className={`w-2 h-2 rounded-full ${
-                                      person.status === "ACTIVE" ? "bg-emerald-500" : "bg-slate-300"
-                                    }`}
-                                    title={person.status}
-                                  />
-                                </div>
-                              </button>
-                            );
-                          })}
-                          {filteredPersonnel.length > 8 && (
-                            <div className="text-center py-1 text-[10px] text-slate-400 font-semibold">
-                              +{filteredPersonnel.length - 8} more matching members in table below
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="py-8 text-center text-xs text-slate-400">
-                        <p>No registered members found matching</p>
-                        <p className="font-bold text-slate-700 mt-1">"{searchQuery}"</p>
-                        <p className="text-[11px] text-slate-400 mt-2">
-                          Try searching by member name, mobile number, unit, or assigned group.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto pb-1 md:pb-0">
-              {/* Device Summary Ratio Badges */}
-              <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-                <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[11px] shadow-2xs">
-                  <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                  {pairedAppCount} Paired App ({Math.round((pairedAppCount / (personnelList.length || 1)) * 100)}%)
+            {/* Tier 2: Clickable Quick-Filter Segment Chips */}
+            <div className="px-3.5 sm:px-4 py-2.5 bg-slate-50/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+                  Quick View:
                 </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[11px] shadow-2xs">
-                  <Link2 className="w-3.5 h-3.5 text-amber-600" />
-                  {unpairedCount} Unpaired
-                </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 font-bold text-[11px] shadow-2xs">
-                  <Phone className="w-3.5 h-3.5 text-slate-500" />
-                  {keypadCount} Keypad
-                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDevice("ALL")}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    selectedDevice === "ALL"
+                      ? "bg-slate-900 text-white shadow-2xs"
+                      : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  All ({personnelList.length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDevice(selectedDevice === "PAIRED" ? "ALL" : "PAIRED")}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    selectedDevice === "PAIRED"
+                      ? "bg-emerald-700 text-white shadow-2xs"
+                      : "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100/70"
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Paired App</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    selectedDevice === "PAIRED" ? "bg-white/20 text-white" : "bg-emerald-200/70 text-emerald-900"
+                  }`}>
+                    {pairedAppCount} ({Math.round((pairedAppCount / (personnelList.length || 1)) * 100)}%)
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDevice(selectedDevice === "UNPAIRED" ? "ALL" : "UNPAIRED")}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    selectedDevice === "UNPAIRED"
+                      ? "bg-amber-600 text-white shadow-2xs"
+                      : "bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100/70"
+                  }`}
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Unpaired</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    selectedDevice === "UNPAIRED" ? "bg-white/20 text-white" : "bg-amber-200/70 text-amber-900"
+                  }`}>
+                    {unpairedCount}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDevice(selectedDevice === "KEYPAD" ? "ALL" : "KEYPAD")}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    selectedDevice === "KEYPAD"
+                      ? "bg-slate-700 text-white shadow-2xs"
+                      : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Keypad</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    selectedDevice === "KEYPAD" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
+                  }`}>
+                    {keypadCount}
+                  </span>
+                </button>
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 shrink-0">
-                <Filter className="w-3.5 h-3.5" />
-                <span>Filter:</span>
+              <div className="text-[11px] font-mono text-slate-500 font-medium">
+                Showing <strong className="text-slate-800">{filteredPersonnel.length}</strong> of <strong className="text-slate-800">{personnelList.length}</strong> troops
               </div>
-
-              <select
-                value={selectedDevice}
-                onChange={(e) => setSelectedDevice(e.target.value as any)}
-                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer"
-              >
-                <option value="ALL">All Devices ({personnelList.length})</option>
-                <option value="PAIRED">Paired App ({pairedAppCount})</option>
-                <option value="UNPAIRED">Unpaired ({unpairedCount})</option>
-                <option value="ANDROID">Android ({androidCount})</option>
-                <option value="KEYPAD">Keypad ({keypadCount})</option>
-              </select>
-
-              <select
-                value={selectedGroup}
-                onChange={(e) => setSelectedGroup(e.target.value)}
-                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer"
-              >
-                <option value="ALL">All Groups</option>
-                {groupsList.map((g) => (
-                  <option key={g._id} value={g._id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer"
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="ACTIVE">Active Only</option>
-                <option value="INACTIVE">Inactive</option>
-              </select>
             </div>
           </div>
 

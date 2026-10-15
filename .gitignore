@@ -25,6 +25,8 @@
 *.pem
 /public/downloads/
 *.apk
+*firebase-adminsdk*.json
+firebase-service-account.json
 
 # debug
 npm-debug.log*

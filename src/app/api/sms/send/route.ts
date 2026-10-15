@@ -62,13 +62,53 @@ export async function POST(req: NextRequest) {
       fullMessage = `[10RCDG ALERT]\n${fullMessage}`;
     }
 
+    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+    let pushResult: any = null;
+
+    // Layer 1: High-Priority FCM Push Notification Dispatch
+    if (convexUrl) {
+      try {
+        const convex = new ConvexHttpClient(convexUrl);
+        const allTroops = await convex.query(api.personnel.list);
+        
+        // Match recipient phone numbers to any paired troops with active fcmTokens
+        const cleanRecipientSet = new Set(
+          recipients.map((r: string) => r.replace(/\D/g, "").slice(-10))
+        );
+
+        const pushTokens: string[] = [];
+        allTroops.forEach((t: any) => {
+          const tDigits = (t.mobileNumber || "").replace(/\D/g, "").slice(-10);
+          if (cleanRecipientSet.has(tDigits) && t.fcmToken && t.appDeviceId) {
+            pushTokens.push(t.fcmToken);
+          }
+        });
+
+        if (pushTokens.length > 0) {
+          const { dispatchFcmAlert } = await import("@/lib/fcm");
+          pushResult = await dispatchFcmAlert({
+            tokens: pushTokens,
+            title: title ? `10RCDG: ${title}` : "10RCDG EMERGENCY ALERT",
+            body: message.trim(),
+            sender: "10RCDG Tactical HQ",
+            siren: true,
+          });
+        }
+      } catch (pushErr) {
+        console.error("FCM push broadcast dispatch failed (proceeding with SMS):", pushErr);
+      }
+    }
+
     const result = await dispatchSms({
       recipients,
       message: fullMessage,
       simSubscriptionId,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      pushResult,
+    });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
     return NextResponse.json(

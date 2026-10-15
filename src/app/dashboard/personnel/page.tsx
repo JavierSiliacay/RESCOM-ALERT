@@ -348,6 +348,7 @@ export default function PersonnelPage() {
   const [isBatchPairModalOpen, setIsBatchPairModalOpen] = useState(false);
   const [batchDeviceModel, setBatchDeviceModel] = useState("Android Device (Bulk Provisioned)");
   const [isBatchPairing, setIsBatchPairing] = useState(false);
+  const [isSendingTestPush, setIsSendingTestPush] = useState(false);
 
   // Manual Add/Edit Personnel Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -822,6 +823,42 @@ export default function PersonnelPage() {
       alert(err?.message || "Failed to unlink device");
     } finally {
       setIsPairingDevice(false);
+    }
+  };
+
+  const handleTestPushNotification = async (target: typeof devicePairingTarget) => {
+    if (!target) return;
+    const token = (target as any).fcmToken || customFcmToken;
+    if (!token || token.length < 20 || token.startsWith("fcm_prov_")) {
+      alert("No active FCM hardware push token found on this profile. Have the soldier pair the RESCOM Alert app on their phone first.");
+      return;
+    }
+
+    setIsSendingTestPush(true);
+    try {
+      const res = await fetch("/api/fcm/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          soldierName: `${target.rank} ${target.firstName} ${target.lastName}`,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || "Failed to transmit test push notification");
+      }
+
+      if (json.successCount > 0) {
+        alert(`✅ Test Push Dispatched!\n\nHigh-priority alert packet sent to Google FCM.\nTarget phone: ${(target as any).deviceModel || "Android Device"}\nSound siren and screen wake should trigger on the phone.`);
+      } else {
+        alert(`⚠️ Push could not be delivered to phone.\nToken might be expired or unregistered.`);
+      }
+    } catch (err: any) {
+      alert(`Error transmitting push ping: ${err?.message || "Unknown error"}`);
+    } finally {
+      setIsSendingTestPush(false);
     }
   };
 
@@ -3844,6 +3881,39 @@ export default function PersonnelPage() {
                           </span>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Layer 1 Live Push Siren Test */}
+                  {(devicePairingTarget as any).fcmToken && (
+                    <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/90 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-950">
+                          <Bell className="w-4 h-4 text-emerald-700 shrink-0" />
+                          <span>Layer 1 Cloud Push Siren Test</span>
+                        </div>
+                        <p className="text-[11px] text-emerald-800/90 leading-tight mt-0.5">
+                          Transmit an instant high-priority FCM test signal to trigger siren and screen wake.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isSendingTestPush}
+                        onClick={() => handleTestPushNotification(devicePairingTarget)}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer flex items-center gap-1.5"
+                      >
+                        {isSendingTestPush ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Pinging...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Bell className="w-3.5 h-3.5" />
+                            <span>Ping Phone</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   )}
 

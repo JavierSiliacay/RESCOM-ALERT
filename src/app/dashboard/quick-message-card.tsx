@@ -132,6 +132,26 @@ export function QuickMessageCard() {
 
     try {
       let data: any = { success: true };
+      
+      // 1. Dispatch Free Android Push Notifications (Layer 1)
+      if (pushNumbers.length > 0) {
+        try {
+          await fetch("/api/fcm/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              recipients: pushNumbers,
+              message: message,
+              title: broadcastTitle,
+              sender: currentOfficer.displayName || "10RCDG Tactical HQ",
+            }),
+          });
+        } catch (pushErr) {
+          console.error("FCM dispatch error:", pushErr);
+        }
+      }
+
+      // 2. Dispatch Cellular SMS (Layer 2)
       if (smsNumbers.length > 0) {
         const res = await fetch("/api/sms/send", {
           method: "POST",

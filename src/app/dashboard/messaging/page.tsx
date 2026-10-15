@@ -399,7 +399,25 @@ function MessagingContent() {
       let data: any = { success: true };
       let isOk = true;
 
-      // Only invoke SMS gateway if there are cellular SMS recipients
+      // 1. Dispatch Free Android Push Notifications (Layer 1)
+      if (pushNumbers.length > 0) {
+        try {
+          await fetch("/api/fcm/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              recipients: pushNumbers,
+              message: messageContent,
+              title: finalBroadcastTitle,
+              sender: currentOfficer.displayName || "10RCDG Tactical HQ",
+            }),
+          });
+        } catch (pushErr) {
+          console.error("FCM dispatch error:", pushErr);
+        }
+      }
+
+      // 2. Dispatch Cellular SMS (Layer 2)
       if (smsNumbers.length > 0) {
         const res = await fetch("/api/sms/send", {
           method: "POST",

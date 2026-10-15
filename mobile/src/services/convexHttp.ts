@@ -35,11 +35,40 @@ export interface VerifyMobileResult {
   message?: string;
 }
 
+export interface PairingStatusResult {
+  isPaired: boolean;
+  reason?: "UNPAIRED_BY_ADMIN" | "DEVICE_MISMATCH" | "NOT_FOUND" | "NETWORK_ERROR";
+}
+
 /**
  * Lightweight, zero-dependency Convex HTTP client for React Native mobile builds.
  * Communicates directly with cloud database without external SDK overhead.
  */
 export const convexHttpService = {
+  /**
+   * Queries Convex to check if this physical device is still actively bound to the soldier profile
+   */
+  checkDevicePairing: async (soldierId: string, appDeviceId: string): Promise<PairingStatusResult> => {
+    try {
+      const response = await fetch(`${CONVEX_URL}/api/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: "personnel:checkDevicePairing",
+          args: { soldierId, appDeviceId },
+          format: "json",
+        }),
+      });
+
+      if (!response.ok) return { isPaired: true }; // Don't unpair on network glitch
+      const json = await response.json();
+      if (json?.status === "error" || !json?.value) return { isPaired: true };
+      return json.value as PairingStatusResult;
+    } catch {
+      return { isPaired: true }; // Offline tolerance
+    }
+  },
+
   /**
    * Queries Convex to verify if a mobile number is registered in personnel or enlistment
    */

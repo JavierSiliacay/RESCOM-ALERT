@@ -291,14 +291,8 @@ export const verifyMobile = query({
             message: "This phone's hardware ID could not be read. Please update the app.",
           };
         }
-        // If the soldier had a paired appDeviceId, but the admin cleared/unpaired it:
-        if (!matchedSoldier.appDeviceId) {
-          return {
-            status: "DEVICE_UNPAIRED_BY_ADMIN",
-            message: "The administrator has unpaired this device. Please pair your mobile number again or contact your Unit Officer.",
-          };
-        }
-        if (matchedSoldier.appDeviceId !== args.appDeviceId) {
+        // If the soldier is already bound to a DIFFERENT phone
+        if (matchedSoldier.appDeviceId && matchedSoldier.appDeviceId !== args.appDeviceId) {
           return {
             status: "DEVICE_MISMATCH",
             boundDeviceModel: matchedSoldier.deviceModel || "Registered Military Smartphone",
@@ -598,6 +592,29 @@ export const batchUnlinkDevices = mutation({
   },
 });
 
+// Mobile Device Query: Check if a previously paired phone is still authorized and linked
+export const checkDevicePairing = query({
+  args: {
+    soldierId: v.id("personnel"),
+    appDeviceId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const soldier = await ctx.db.get(args.soldierId);
+    if (!soldier) {
+      return { isPaired: false, reason: "NOT_FOUND" as const };
+    }
+    // If the administrator has cleared appDeviceId via unlinkDevice
+    if (!soldier.appDeviceId) {
+      return { isPaired: false, reason: "UNPAIRED_BY_ADMIN" as const };
+    }
+    // If the soldier profile was transferred to another phone
+    if (soldier.appDeviceId !== args.appDeviceId) {
+      return { isPaired: false, reason: "DEVICE_MISMATCH" as const };
+    }
+    return { isPaired: true };
+  },
+});
+
 // Mobile Device Mutation: Heartbeat ping
 export const heartbeat = mutation({
   args: {
@@ -612,3 +629,4 @@ export const heartbeat = mutation({
     }
   },
 });
+

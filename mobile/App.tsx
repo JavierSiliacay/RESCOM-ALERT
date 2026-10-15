@@ -80,19 +80,16 @@ function Shell(): React.JSX.Element {
   const checkRemotePairingStatus = async (currentSoldier: any) => {
     try {
       const dev = await alertBridgeService.getHardwareDeviceInfo();
-      if (!dev?.deviceId || !currentSoldier?.mobileNumber) return;
+      const soldierId = currentSoldier?.id || currentSoldier?._id;
+      if (!dev?.deviceId || !soldierId) return;
 
-      const res = await convexHttpService.verifyMobile(
-        currentSoldier.mobileNumber,
+      const res = await convexHttpService.checkDevicePairing(
+        soldierId,
         dev.deviceId
       );
 
-      // If the admin unlinked the phone or bound another device
-      if (
-        res.status === "DEVICE_UNPAIRED_BY_ADMIN" ||
-        res.status === "DEVICE_MISMATCH" ||
-        res.status === "NOT_FOUND"
-      ) {
+      // If the admin unlinked the phone, cleared appDeviceId, or transferred to another device
+      if (!res.isPaired) {
         // 1. Clear local soldier profile immediately
         await alertBridgeService.clearSoldierProfile();
         setSoldier(null);
@@ -125,6 +122,14 @@ function Shell(): React.JSX.Element {
       }
     });
 
+    // Periodic live sync every 15 seconds while app is open so unpairing on web portal reacts in near real-time
+    const interval = setInterval(async () => {
+      const saved = await alertBridgeService.getSoldierProfile();
+      if (saved) {
+        checkRemotePairingStatus(saved).catch(() => {});
+      }
+    }, 15000);
+
     if (Platform.OS === "android") {
       const perms = [
         PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
@@ -137,7 +142,10 @@ function Shell(): React.JSX.Element {
       PermissionsAndroid.requestMultiple(perms).catch(() => {});
     }
 
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      clearInterval(interval);
+    };
   }, []);
 
   return (

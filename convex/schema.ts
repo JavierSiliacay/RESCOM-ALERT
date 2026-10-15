@@ -219,6 +219,9 @@ export default defineSchema({
     isDownloadPortalEnabled: v.boolean(), // Master toggle: allows or blocks /download page entirely
     allowRosterVerification: v.boolean(), // Sub-toggle: allows or blocks mobile phone number queries
     lockdownReason: v.optional(v.string()), // Custom broadcast reason shown to visitors when locked
+    requirePasscode: v.optional(v.boolean()), // Require unit command passcode to download
+    passcode: v.optional(v.string()), // Command download passcode (e.g. 10RCDG-2026)
+    passcodeExpiresAt: v.optional(v.number()), // Timestamp when the download window/passcode expires
     updatedBy: v.optional(v.string()),
     updatedByEmail: v.optional(v.string()),
     updatedAt: v.string(),

@@ -31,6 +31,7 @@ import {
   Phone,
   ShieldAlert,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useMutation, useQuery } from "convex/react";
@@ -62,9 +63,45 @@ export default function SoldierDownloadPage() {
   const portalSettings = useQuery(api.downloads.getPortalSettings);
   const isVerificationAllowed = portalSettings?.allowRosterVerification !== false;
 
+  // Passcode & 5-Attempt Rate Limiting State
+  const [passcodeInput, setPasscodeInput] = useState("");
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+
+  // Check if passcode is required and whether it has expired
+  const isPasscodeActive = Boolean(
+    portalSettings?.requirePasscode &&
+    portalSettings?.passcode &&
+    (!portalSettings.passcodeExpiresAt || portalSettings.passcodeExpiresAt > Date.now())
+  );
+
+  const isPortalExpired = Boolean(
+    portalSettings?.passcodeExpiresAt && portalSettings.passcodeExpiresAt <= Date.now()
+  );
+
+  const isPasscodeCorrect = !isPasscodeActive || (
+    portalSettings?.passcode &&
+    passcodeInput.trim().toUpperCase() === portalSettings.passcode.trim().toUpperCase()
+  );
+
+  // Lockout countdown timer effect
+  useEffect(() => {
+    if (!lockoutUntil) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining <= 0) {
+        setLockoutUntil(null);
+        setFailedAttempts(0);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutUntil]);
+
   const verificationResult = useQuery(
     api.personnel.verifyMobile,
-    isCompleteNumber && (isVerificationAllowed || isQrAuthorized)
+    isCompleteNumber && (isVerificationAllowed || isQrAuthorized) && !lockoutUntil && !isPortalExpired
       ? {
           mobileNumber: verifyInput,
           deviceId: deviceId || undefined,
@@ -79,8 +116,11 @@ export default function SoldierDownloadPage() {
   const apkUrl = "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.0.7/rescom-alert-v1.0.7.apk";
 
   const isVerifiedTroop =
-    verificationResult?.status === "REGISTERED" ||
-    verificationResult?.status === "PENDING_ENLISTMENT";
+    !isPortalExpired &&
+    !lockoutUntil &&
+    isPasscodeCorrect &&
+    (verificationResult?.status === "REGISTERED" ||
+      verificationResult?.status === "PENDING_ENLISTMENT");
 
   useEffect(() => {
     // 1. Persistent Device ID (Deduplication)
@@ -364,7 +404,27 @@ export default function SoldierDownloadPage() {
               Enter your registered 10RCDG mobile number (e.g. <strong>0912 345 6789</strong> or <strong>+63 912 345 6789</strong>) to verify your military identity and unlock the app download.
             </p>
 
-            {!isVerificationAllowed ? (
+            {lockoutUntil ? (
+              <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-300 text-rose-950 text-xs space-y-1.5 animate-in fade-in">
+                <div className="font-bold flex items-center gap-1.5 text-rose-900">
+                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Access Temporarily Locked (Brute-Force Protection)</span>
+                </div>
+                <p className="text-rose-800 text-[11px] leading-relaxed">
+                  Too many failed passcode attempts. For military operational security, download access is locked for <strong>{secondsLeft}s</strong>.
+                </p>
+              </div>
+            ) : isPortalExpired ? (
+              <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-1 animate-in fade-in">
+                <div className="font-bold flex items-center gap-1.5 text-amber-900">
+                  <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Download Window Closed</span>
+                </div>
+                <p className="text-amber-800 text-[11px] leading-relaxed">
+                  The active mobilization download window for this unit has expired. Please contact your Unit Officer for assistance.
+                </p>
+              </div>
+            ) : !isVerificationAllowed ? (
               <div className="p-3.5 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-950 text-xs space-y-1">
                 <div className="font-bold flex items-center gap-1.5 text-amber-900">
                   <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
@@ -376,28 +436,80 @@ export default function SoldierDownloadPage() {
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="tel"
-                      value={verifyInput}
-                      onChange={(e) => setVerifyInput(sanitizePhMobileInput(e.target.value))}
-                      placeholder="09XX XXX XXXX or +63 9XX XXX XXXX"
-                      maxLength={16}
-                      className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-medium text-slate-800"
-                    />
+                {/* 1. Mobile Number Input */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
+                    Registered Mobile Number
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="tel"
+                        value={verifyInput}
+                        onChange={(e) => setVerifyInput(sanitizePhMobileInput(e.target.value))}
+                        placeholder="09XX XXX XXXX or +63 9XX XXX XXXX"
+                        maxLength={16}
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-medium text-slate-800"
+                      />
+                    </div>
+                    {verifyInput ? (
+                      <button
+                        type="button"
+                        onClick={() => setVerifyInput("")}
+                        className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 cursor-pointer font-medium"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
                   </div>
-                  {verifyInput ? (
-                    <button
-                      type="button"
-                      onClick={() => setVerifyInput("")}
-                      className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 cursor-pointer font-medium"
-                    >
-                      Clear
-                    </button>
-                  ) : null}
                 </div>
+
+                {/* 2. Unit Passcode Input (If Enabled by Command) */}
+                {isPasscodeActive && (
+                  <div className="space-y-1 pt-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
+                        Command Download Passcode
+                      </label>
+                      {failedAttempts > 0 && failedAttempts < 5 && (
+                        <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                          {5 - failedAttempts} attempts left
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={passcodeInput}
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase();
+                          setPasscodeInput(val);
+                          if (val.trim() && portalSettings?.passcode && val.trim() !== portalSettings.passcode.trim().toUpperCase()) {
+                            if (val.length >= portalSettings.passcode.length) {
+                              const nextFailed = failedAttempts + 1;
+                              setFailedAttempts(nextFailed);
+                              if (nextFailed >= 5) {
+                                setLockoutUntil(Date.now() + 180 * 1000); // 3 minutes lockout
+                              }
+                            }
+                          } else if (val.trim() === portalSettings?.passcode?.trim().toUpperCase()) {
+                            setFailedAttempts(0);
+                          }
+                        }}
+                        placeholder="Enter unit command passcode"
+                        maxLength={20}
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-bold text-slate-800 uppercase tracking-wider"
+                      />
+                    </div>
+                    {passcodeInput && !isPasscodeCorrect && (
+                      <p className="text-[10px] text-rose-600 font-medium">
+                        Incorrect unit passcode. Please coordinate with your Unit Officer.
+                      </p>
+                    )}
+                  </div>
+                )}
 
             {verifyInput && !isCompleteNumber ? (
               <div className="text-[11px] text-slate-400 font-mono flex items-center justify-between px-1">
@@ -541,7 +653,7 @@ export default function SoldierDownloadPage() {
                       <p className="text-[11px] text-rose-900 leading-relaxed font-medium">
                         This mobile number is already linked to an authorized physical phone:
                         <strong className="block text-slate-900 font-mono mt-1 bg-white/90 p-2 rounded-lg border border-rose-200">
-                          📱 {verificationResult.boundDeviceModel}
+                          📱 {(verificationResult as any).boundDeviceModel || "Registered Military Smartphone"}
                         </strong>
                       </p>
                     </div>

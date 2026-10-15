@@ -340,14 +340,13 @@ export const approveSubmission = mutation({
         status: "ACTIVE",
         deviceType: sub.deviceType || existing.deviceType || "ANDROID",
         email: sub.email || existing.email,
-        boundDeviceId: sub.deviceId || existing.boundDeviceId,
         deviceModel: sub.deviceModel || existing.deviceModel,
         lastDownloadedDeviceModel: sub.deviceModel || existing.lastDownloadedDeviceModel,
         updatedBy: approverName,
         updatedAt: updateTimestamp,
       });
     } else {
-      // Insert new personnel with bound hardware device from public enlistment
+      // Insert new personnel from public enlistment
       await ctx.db.insert("personnel", {
         firstName: sub.firstName,
         lastName: sub.lastName,
@@ -357,7 +356,6 @@ export const approveSubmission = mutation({
         groupId: sub.groupId,
         groupName: sub.groupName,
         deviceType: sub.deviceType || "ANDROID",
-        boundDeviceId: sub.deviceId,
         deviceModel: sub.deviceModel,
         lastDownloadedDeviceModel: sub.deviceModel,
         status: "ACTIVE",

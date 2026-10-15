@@ -44,48 +44,9 @@ export const record = mutation({
       prevDevice && args.deviceModel && prevDevice !== args.deviceModel
     );
 
-    // 3. Anti-Impersonation Single-Device Binding Enforcement
+    // 3. Update personnel record with latest download telemetry
     if (matchedPersonnel) {
-      if (
-        matchedPersonnel.boundDeviceId &&
-        matchedPersonnel.boundDeviceId !== args.deviceId &&
-        !args.isAuthorizedQr
-      ) {
-        await ctx.db.insert("auditLogs", {
-          userName: `${matchedPersonnel.rank} ${matchedPersonnel.firstName} ${matchedPersonnel.lastName}`,
-          userRole: "SECURITY_ALERT",
-          category: "SECURITY",
-          action: "UNAUTHORIZED_DOWNLOAD_BLOCKED",
-          details: `Blocked download attempt for ${matchedPersonnel.rank} ${matchedPersonnel.firstName} ${matchedPersonnel.lastName} (${matchedPersonnel.mobileNumber}) from unrecognized hardware (${args.deviceModel || "Unknown"}). Mobile number is bound to: ${matchedPersonnel.lastDownloadedDeviceModel || "Authorized Military Device"}.`,
-          ipAddress: args.ipAddress || "127.0.0.1",
-          timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
-        });
-
-        throw new Error(
-          `Device Mismatch: This mobile number is already bound to another phone (${matchedPersonnel.lastDownloadedDeviceModel || "Authorized Device"}). Please coordinate directly with your Unit Adjutant or Officer.`
-        );
-      }
-
-      // Block unbound device registration attempts on public /download portal
-      if (!matchedPersonnel.boundDeviceId && !args.isAuthorizedQr) {
-        await ctx.db.insert("auditLogs", {
-          userName: `${matchedPersonnel.rank} ${matchedPersonnel.firstName} ${matchedPersonnel.lastName}`,
-          userRole: "SECURITY_ALERT",
-          category: "SECURITY",
-          action: "UNBOUND_DOWNLOAD_BLOCKED",
-          details: `Blocked download attempt for unbound mobile number ${matchedPersonnel.mobileNumber} on public download portal. Hardware must be enrolled via official Enlistment link or authorized Unit Officer.`,
-          ipAddress: args.ipAddress || "127.0.0.1",
-          timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
-        });
-
-        throw new Error(
-          "Device Not Enrolled: Unbound mobile numbers cannot be registered on the public download page. Please enroll your phone through your unit's official Enlistment link or coordinate with your Administrators."
-        );
-      }
-
-      // Update personnel record with latest download hardware telemetry & bind device ID
       await ctx.db.patch(matchedPersonnel._id, {
-        boundDeviceId: args.deviceId,
         lastDownloadedAt: now,
         lastDownloadedDeviceModel: args.deviceModel || matchedPersonnel.lastDownloadedDeviceModel,
         ...(isSwitch
@@ -95,15 +56,13 @@ export const record = mutation({
             : {}),
       });
 
-      // Insert audit log for OPSEC download & device switch tracking
+      // Insert audit log for OPSEC download tracking
       await ctx.db.insert("auditLogs", {
         userName: `${matchedPersonnel.rank} ${matchedPersonnel.firstName} ${matchedPersonnel.lastName}`,
         userRole: "SOLDIER",
         category: "SECURITY",
         action: isSwitch ? "DEVICE_SWITCH_DOWNLOAD" : "APP_DOWNLOAD",
-        details: isSwitch
-          ? `${matchedPersonnel.rank} ${matchedPersonnel.firstName} ${matchedPersonnel.lastName} (${matchedPersonnel.mobileNumber}) downloaded app using ${args.deviceModel || "new device"}. Previously downloaded using ${prevDevice}.`
-          : `${matchedPersonnel.rank} ${matchedPersonnel.firstName} ${matchedPersonnel.lastName} (${matchedPersonnel.mobileNumber}) downloaded app using ${args.deviceModel || "Android Device"}.`,
+        details: `${matchedPersonnel.rank} ${matchedPersonnel.firstName} ${matchedPersonnel.lastName} (${matchedPersonnel.mobileNumber}) downloaded app using ${args.deviceModel || "Android Device"}.`,
         ipAddress: args.ipAddress || "127.0.0.1",
         timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
       });
@@ -234,6 +193,9 @@ export const getPortalSettings = query({
         allowRosterVerification: true,
         lockdownReason:
           "Public application provisioning is temporarily restricted by Command Headquarters (10RCDG). Contact your unit communication officer for offline installation.",
+        requirePasscode: false,
+        passcode: undefined as string | undefined,
+        passcodeExpiresAt: undefined as number | undefined,
         updatedBy: "System Default",
         updatedAt: new Date().toISOString(),
       };
@@ -251,6 +213,9 @@ export const updatePortalSettings = mutation({
     isDownloadPortalEnabled: v.boolean(),
     allowRosterVerification: v.boolean(),
     lockdownReason: v.optional(v.string()),
+    requirePasscode: v.optional(v.boolean()),
+    passcode: v.optional(v.string()),
+    passcodeExpiresAt: v.optional(v.number()),
     updatedBy: v.optional(v.string()),
     updatedByEmail: v.optional(v.string()),
   },
@@ -263,6 +228,9 @@ export const updatePortalSettings = mutation({
         isDownloadPortalEnabled: args.isDownloadPortalEnabled,
         allowRosterVerification: args.allowRosterVerification,
         lockdownReason: args.lockdownReason ?? existing.lockdownReason,
+        requirePasscode: args.requirePasscode ?? existing.requirePasscode,
+        passcode: args.passcode ?? existing.passcode,
+        passcodeExpiresAt: args.passcodeExpiresAt ?? existing.passcodeExpiresAt,
         updatedBy: args.updatedBy ?? "Authorized Officer",
         updatedByEmail: args.updatedByEmail,
         updatedAt: now,
@@ -274,6 +242,9 @@ export const updatePortalSettings = mutation({
         lockdownReason:
           args.lockdownReason ??
           "Public application provisioning is temporarily restricted by Command Headquarters (10RCDG). Contact your unit communication officer for offline installation.",
+        requirePasscode: args.requirePasscode ?? false,
+        passcode: args.passcode,
+        passcodeExpiresAt: args.passcodeExpiresAt,
         updatedBy: args.updatedBy ?? "Authorized Officer",
         updatedByEmail: args.updatedByEmail,
         updatedAt: now,

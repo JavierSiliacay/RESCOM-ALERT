@@ -164,66 +164,166 @@ export default function MobileAppPage() {
       {/* TAB 1: OVERVIEW & DOWNLOAD */}
       {activeTab === "OVERVIEW" && (
         <div className="space-y-6">
-          {/* Public Download Portal Access Control (Single Clean Toggle) */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center gap-3.5">
-              <div
-                className={`p-2.5 rounded-xl border shrink-0 ${
-                  portalSettings?.isDownloadPortalEnabled === false
-                    ? "bg-slate-100 border-slate-200 text-slate-500"
-                    : "bg-emerald-50 border-emerald-200 text-emerald-700"
-                }`}
-              >
-                {portalSettings?.isDownloadPortalEnabled === false ? (
-                  <Lock className="w-5 h-5 text-slate-600" />
-                ) : (
-                  <ShieldCheck className="w-5 h-5 text-emerald-700" />
-                )}
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base font-bold text-slate-900">
-                    Public Mobile App Download Portal
-                  </h3>
-                  <span
-                    className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                      portalSettings?.isDownloadPortalEnabled === false
-                        ? "bg-slate-100 text-slate-600 border border-slate-200"
-                        : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                    }`}
-                  >
-                    {portalSettings?.isDownloadPortalEnabled === false
-                      ? "Disabled (Offline)"
-                      : "Enabled (Public)"}
-                  </span>
+          {/* Public Download Portal Access Control (Toggle + Passcode + Duration) */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div
+                  className={`p-2.5 rounded-xl border shrink-0 ${
+                    portalSettings?.isDownloadPortalEnabled === false
+                      ? "bg-slate-100 border-slate-200 text-slate-500"
+                      : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  }`}
+                >
+                  {portalSettings?.isDownloadPortalEnabled === false ? (
+                    <Lock className="w-5 h-5 text-slate-600" />
+                  ) : (
+                    <ShieldCheck className="w-5 h-5 text-emerald-700" />
+                  )}
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Controls public access to <code className="text-slate-700 font-mono">/download</code>. When disabled, the download page and troop lookup are completely offline.
-                </p>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-bold text-slate-900">
+                      Public Mobile App Download Portal
+                    </h3>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                        portalSettings?.isDownloadPortalEnabled === false
+                          ? "bg-slate-100 text-slate-600 border border-slate-200"
+                          : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      }`}
+                    >
+                      {portalSettings?.isDownloadPortalEnabled === false
+                        ? "Disabled (Offline)"
+                        : "Enabled (Active)"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Controls access to <code className="text-slate-700 font-mono">/download</code>. Require a unit passcode or set a timer window for security.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 self-end sm:self-center">
+                <button
+                  type="button"
+                  onClick={handleTogglePortal}
+                  disabled={isUpdatingPortal}
+                  aria-label="Toggle Public Download Portal"
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 ${
+                    portalSettings?.isDownloadPortalEnabled === false
+                      ? "bg-slate-300"
+                      : "bg-emerald-700"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                      portalSettings?.isDownloadPortalEnabled === false
+                        ? "translate-x-0"
+                        : "translate-x-5"
+                    }`}
+                  />
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 self-end sm:self-center">
-              <button
-                type="button"
-                onClick={handleTogglePortal}
-                disabled={isUpdatingPortal}
-                aria-label="Toggle Public Download Portal"
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 ${
-                  portalSettings?.isDownloadPortalEnabled === false
-                    ? "bg-slate-300"
-                    : "bg-emerald-700"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                    portalSettings?.isDownloadPortalEnabled === false
-                      ? "translate-x-0"
-                      : "translate-x-5"
-                  }`}
-                />
-              </button>
-            </div>
+            {/* Passcode & Expiration Config Box */}
+            {portalSettings?.isDownloadPortalEnabled !== false && (
+              <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-emerald-700" />
+                      Command Download Passcode
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const randomPin = Math.floor(100000 + Math.random() * 900000).toString();
+                        updatePortalSettings({
+                          isDownloadPortalEnabled: true,
+                          allowRosterVerification: true,
+                          requirePasscode: true,
+                          passcode: randomPin,
+                          updatedBy: officer.displayName || "Admin",
+                          updatedByEmail: officer.email || undefined,
+                        });
+                      }}
+                      className="text-[10px] font-bold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+                    >
+                      Generate 6-Digit PIN
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      defaultValue={portalSettings?.passcode || ""}
+                      placeholder="e.g. 10RCDG-2026 or leave blank for none"
+                      onBlur={(e) => {
+                        const val = e.target.value.trim().toUpperCase();
+                        updatePortalSettings({
+                          isDownloadPortalEnabled: true,
+                          allowRosterVerification: true,
+                          requirePasscode: val.length > 0,
+                          passcode: val || undefined,
+                          updatedBy: officer.displayName || "Admin",
+                          updatedByEmail: officer.email || undefined,
+                        });
+                      }}
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-bold text-slate-800 uppercase"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Troops must enter this code at <strong>/download</strong> before unlocking the APK.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Radio className="w-3.5 h-3.5 text-emerald-700" />
+                      Download Window Duration
+                    </span>
+                    {(portalSettings as any)?.passcodeExpiresAt && (portalSettings as any).passcodeExpiresAt > Date.now() ? (
+                      <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                        Closes in {Math.round(((portalSettings as any).passcodeExpiresAt - Date.now()) / (1000 * 60 * 60))}h
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono text-slate-500">No Expiration</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[
+                      { label: "2 Hours", hours: 2 },
+                      { label: "6 Hours", hours: 6 },
+                      { label: "24 Hours", hours: 24 },
+                      { label: "Always Open", hours: 0 },
+                    ].map((opt) => (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => {
+                          const exp = opt.hours > 0 ? Date.now() + opt.hours * 60 * 60 * 1000 : undefined;
+                          updatePortalSettings({
+                            isDownloadPortalEnabled: true,
+                            allowRosterVerification: true,
+                            passcodeExpiresAt: exp,
+                            updatedBy: officer.displayName || "Admin",
+                            updatedByEmail: officer.email || undefined,
+                          });
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg cursor-pointer transition-all"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Automatically locks the download portal when mobilization window closes.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Main White Hero Card with Emerald/Amber accents */}

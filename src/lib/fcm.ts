@@ -26,6 +26,9 @@ function getFirebaseAdmin(): { app: App; messaging: Messaging } | null {
     if (fs.existsSync(saPath)) {
       const raw = fs.readFileSync(saPath, "utf-8");
       credentialData = JSON.parse(raw);
+    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_B64) {
+      const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_B64, "base64").toString("utf-8");
+      credentialData = JSON.parse(decoded);
     } else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       credentialData = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
     } else if (

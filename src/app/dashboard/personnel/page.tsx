@@ -3107,7 +3107,7 @@ export default function PersonnelPage() {
 
       {/* Device Hardware Unpair Confirmation Modal */}
       {unlinkConfirmTarget && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl max-w-sm w-full border border-slate-200 shadow-xl overflow-hidden animate-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50/70">
@@ -3187,7 +3187,7 @@ export default function PersonnelPage() {
 
       {/* Batch Device Unpair Confirmation Modal */}
       {batchUnlinkConfirmOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl max-w-sm w-full border border-slate-200 shadow-xl overflow-hidden animate-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-slate-50/70">
@@ -3574,10 +3574,10 @@ export default function PersonnelPage() {
       {/* SINGLE SOLDIER DEVICE PAIRING MODAL */}
       {/* ========================================================= */}
       {devicePairingTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-100">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 to-emerald-950 text-white flex items-start justify-between gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-100">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header (fixed at top) */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 to-emerald-950 text-white flex items-start justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 flex items-center justify-center shrink-0">
                   <Smartphone className="w-5 h-5 text-emerald-400" />
@@ -3600,8 +3600,8 @@ export default function PersonnelPage() {
               </button>
             </div>
 
-            {/* Soldier Identity Banner */}
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
+            {/* Soldier Identity Banner (fixed) */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono border ${getRankBadgeStyle(devicePairingTarget.rank).bg} ${getRankBadgeStyle(devicePairingTarget.rank).text} ${getRankBadgeStyle(devicePairingTarget.rank).border}`}>
@@ -3631,8 +3631,8 @@ export default function PersonnelPage() {
               )}
             </div>
 
-            {/* Tab switch: Direct Provision vs QR Code */}
-            <div className="px-5 pt-3 flex items-center gap-2 border-b border-slate-100 text-xs font-bold">
+            {/* Tab switch (fixed) */}
+            <div className="px-5 pt-3 flex items-center gap-2 border-b border-slate-100 text-xs font-bold shrink-0">
               <button
                 type="button"
                 onClick={() => setActivePairingTab("DIRECT")}
@@ -3657,8 +3657,8 @@ export default function PersonnelPage() {
               </button>
             </div>
 
-            {/* Body */}
-            <div className="p-5 space-y-4">
+            {/* Body (scrollable) */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               {activePairingTab === "DIRECT" ? (
                 <div className="space-y-4">
                   {/* Preset chips */}
@@ -3858,8 +3858,8 @@ export default function PersonnelPage() {
               )}
             </div>
 
-            {/* Actions */}
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+            {/* Actions (fixed at bottom) */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
               <div>
                 {(devicePairingTarget as any).fcmToken && activePairingTab === "DIRECT" ? (
                   <button

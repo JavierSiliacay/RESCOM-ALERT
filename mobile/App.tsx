@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
+  AppState,
   Image,
   PermissionsAndroid,
   Platform,
@@ -15,10 +17,11 @@ import {
 } from "react-native-safe-area-context";
 import { AlertsScreen } from "./src/screens/AlertsScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
-import { colors } from "./src/theme";
+import { colors, radius } from "./src/theme";
 import { SoldierHeaderCard } from "./src/components/SoldierHeaderCard";
 import { DevicePairingModal } from "./src/components/DevicePairingModal";
 import { alertBridgeService } from "./src/services/alertBridge";
+import { convexHttpService } from "./src/services/convexHttp";
 
 type TabKey = "ALERTS" | "SETUP";
 
@@ -59,6 +62,10 @@ function Shell(): React.JSX.Element {
       const saved = await alertBridgeService.getSoldierProfile();
       if (saved) {
         setSoldier(saved);
+
+        // Background Cloud Audit: Check if Headquarters administrator unpaired this device
+        // Only executes silently if the phone has active internet; never blocks offline alerts
+        checkRemotePairingStatus(saved).catch(() => {});
       } else {
         // First install / unlinked: prompt soldier to pair mobile number
         setTimeout(() => setPairingModalOpen(true), 600);
@@ -70,8 +77,53 @@ function Shell(): React.JSX.Element {
     }
   };
 
+  const checkRemotePairingStatus = async (currentSoldier: any) => {
+    try {
+      const dev = await alertBridgeService.getHardwareDeviceInfo();
+      if (!dev?.deviceId || !currentSoldier?.mobileNumber) return;
+
+      const res = await convexHttpService.verifyMobile(
+        currentSoldier.mobileNumber,
+        dev.deviceId
+      );
+
+      // If the admin unlinked the phone or bound another device
+      if (
+        res.status === "DEVICE_UNPAIRED_BY_ADMIN" ||
+        res.status === "DEVICE_MISMATCH" ||
+        res.status === "NOT_FOUND"
+      ) {
+        // 1. Clear local soldier profile immediately
+        await alertBridgeService.clearSoldierProfile();
+        setSoldier(null);
+
+        // 2. Alert the soldier with official 10RCDG notice
+        Alert.alert(
+          "Device Unpaired by Command",
+          "The administrator has unpaired this device from 10RCDG RESCOM. To re-link this phone, please pair your mobile number again or contact your Unit Officer.",
+          [
+            {
+              text: "Pair Phone",
+              onPress: () => setPairingModalOpen(true),
+            },
+            { text: "Dismiss", style: "cancel" },
+          ]
+        );
+      }
+    } catch {
+      // Offline / network failure: preserve local profile for emergency sirens
+    }
+  };
+
   useEffect(() => {
     refreshProfileAndPerms();
+
+    // Re-verify whenever app returns to foreground from background
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        refreshProfileAndPerms();
+      }
+    });
 
     if (Platform.OS === "android") {
       const perms = [
@@ -84,6 +136,8 @@ function Shell(): React.JSX.Element {
       }
       PermissionsAndroid.requestMultiple(perms).catch(() => {});
     }
+
+    return () => sub.remove();
   }, []);
 
   return (

@@ -291,7 +291,14 @@ export const verifyMobile = query({
             message: "This phone's hardware ID could not be read. Please update the app.",
           };
         }
-        if (matchedSoldier.appDeviceId && matchedSoldier.appDeviceId !== args.appDeviceId) {
+        // If the soldier had a paired appDeviceId, but the admin cleared/unpaired it:
+        if (!matchedSoldier.appDeviceId) {
+          return {
+            status: "DEVICE_UNPAIRED_BY_ADMIN",
+            message: "The administrator has unpaired this device. Please pair your mobile number again or contact your Unit Officer.",
+          };
+        }
+        if (matchedSoldier.appDeviceId !== args.appDeviceId) {
           return {
             status: "DEVICE_MISMATCH",
             boundDeviceModel: matchedSoldier.deviceModel || "Registered Military Smartphone",

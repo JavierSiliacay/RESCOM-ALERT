@@ -9,6 +9,7 @@ export interface VerifyMobileResult {
     | "PORTAL_LOCKED"
     | "DEVICE_MISMATCH"
     | "DEVICE_UNBOUND"
+    | "DEVICE_UNPAIRED_BY_ADMIN"
     | "NETWORK_ERROR";
   soldier?: {
     id: string;

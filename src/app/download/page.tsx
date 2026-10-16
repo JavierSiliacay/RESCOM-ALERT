@@ -108,11 +108,6 @@ export default function SoldierDownloadPage() {
       if (storedAttempts) {
         setFailedAttempts(parseInt(storedAttempts, 10) || 0);
       }
-      // Check if previously unlocked in this session
-      const storedSession = sessionStorage.getItem("rescom_download_unlocked");
-      if (storedSession === "true") {
-        setIsUnlocked(true);
-      }
     }
   }, []);
 
@@ -171,7 +166,7 @@ export default function SoldierDownloadPage() {
       setPasscodeError("");
       setFailedAttempts(0);
       if (typeof window !== "undefined") {
-        sessionStorage.setItem("rescom_download_unlocked", "true");
+        sessionStorage.removeItem("rescom_download_unlocked");
         localStorage.removeItem("rescom_download_failed_attempts");
       }
     } else {

@@ -108,6 +108,25 @@ export default function SoldierDownloadPage() {
     }
   }, []);
 
+  // Reset lockout automatically whenever the Commander/Admin starts or renews a new download window (sessionId changed)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const currentServerSession = (portalSettings as any)?.sessionId;
+    if (currentServerSession) {
+      const lastKnownSession = localStorage.getItem("rescom_download_session_id");
+      if (lastKnownSession && lastKnownSession !== currentServerSession) {
+        // A new window was launched: immediately forgive previous lockouts and attempts!
+        localStorage.removeItem("rescom_download_lockout_until");
+        localStorage.removeItem("rescom_download_failed_attempts");
+        setLockoutUntil(null);
+        setFailedAttempts(0);
+        setSecondsLeft(0);
+        setPasscodeError("");
+      }
+      localStorage.setItem("rescom_download_session_id", currentServerSession);
+    }
+  }, [(portalSettings as any)?.sessionId]);
+
   // Lockout countdown timer effect
   useEffect(() => {
     if (!lockoutUntil) return;
@@ -330,7 +349,72 @@ export default function SoldierDownloadPage() {
     );
   }
 
-  // PASSCODE & LOCKOUT GATE SCREEN (Exactly like Enlistment Link - blocks full download page until unlocked)
+  // EXPIRED DOWNLOAD WINDOW SCREEN (Mobilization Window Closed)
+  if (portalSettings && isPortalExpired && !isQrAuthorized) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-800 antialiased selection:bg-slate-200 selection:text-slate-900">
+        <main className="max-w-md w-full mx-auto px-4 py-16 sm:py-24 my-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center space-y-5">
+            {/* Army & RESCOM Insignia */}
+            <div className="flex items-center justify-center gap-3">
+              <div className="w-12 h-12 rounded-full border border-slate-200 overflow-hidden bg-white p-0.5 shadow-2xs">
+                <Image
+                  src="/rescom-pa-seal.png"
+                  alt="Philippine Army RESCOM"
+                  width={48}
+                  height={48}
+                  className="w-full h-full object-contain"
+                  priority
+                />
+              </div>
+              <div className="w-12 h-12 rounded-full border border-slate-200 overflow-hidden bg-white p-0.5 shadow-2xs">
+                <Image
+                  src="/rescom-emblem.jpg"
+                  alt="10RCDG Emblem"
+                  width={48}
+                  height={48}
+                  className="w-full h-full object-contain"
+                  priority
+                />
+              </div>
+            </div>
+
+            {/* Clean Status & Notice */}
+            <div className="space-y-2">
+              <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 text-amber-600 mx-auto flex items-center justify-center">
+                <Clock className="w-5 h-5 text-amber-600" />
+              </div>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                Mobilization Download Window Closed
+              </h1>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+                The scheduled mobilization window for downloading the soldier application has concluded or was closed early by Headquarters. Please coordinate directly with your unit coordinator.
+              </p>
+            </div>
+
+            {/* Clean External Unit Page Link */}
+            <div className="pt-2">
+              <a
+                href="https://www.facebook.com/profile.php?id=61586365277137"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 py-2 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
+              >
+                <span>10RCDG Facebook Page</span>
+                <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+              </a>
+            </div>
+          </div>
+        </main>
+
+        <footer className="py-6 text-center text-[11px] text-slate-400 font-mono">
+          10th Regional Community Defense Group (10RCDG), RESCOM, Philippine Army
+        </footer>
+      </div>
+    );
+  }
+
+  // PASSCODE & LOCKOUT GATE SCREEN (Blocks full download page until unlocked)
   if (portalSettings && isPasscodeActive && !isUnlocked && !isQrAuthorized) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900">

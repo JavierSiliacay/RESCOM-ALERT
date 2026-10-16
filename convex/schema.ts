@@ -222,6 +222,8 @@ export default defineSchema({
     requirePasscode: v.optional(v.boolean()), // Require unit command passcode to download
     passcode: v.optional(v.string()), // Command download passcode (e.g. 10RCDG-2026)
     passcodeExpiresAt: v.optional(v.number()), // Timestamp when the download window/passcode expires
+    sessionId: v.optional(v.string()), // Unique window session token; increments to wipe all locked-out devices on new window creation
+    windowTitle: v.optional(v.string()), // Optional mobilization window title (e.g. "10RCDG Troop Mobilization")
     updatedBy: v.optional(v.string()),
     updatedByEmail: v.optional(v.string()),
     updatedAt: v.string(),

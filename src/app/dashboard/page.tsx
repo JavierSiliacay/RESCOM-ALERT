@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -37,6 +38,69 @@ export default function DashboardPage() {
   const deliveryPctOverall = totalSentRecipients > 0
     ? `${Math.round((totalDeliveredRecipients / totalSentRecipients) * 100)}%`
     : "100%";
+
+  // Highlight state for newly dispatched messages (5-second soft green fade)
+  const [highlightedBroadcastId, setHighlightedBroadcastId] = useState<string | null>(null);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+  const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previousTopBroadcastRef = useRef<string | null>(null);
+  const isInitialMountRef = useRef(true);
+  const recentMessagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const triggerHighlight = (id?: string, shouldScroll: boolean = false) => {
+    if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current);
+    if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+
+    const targetId = id || (broadcasts[0]?._id ? String(broadcasts[0]._id) : null);
+    if (!targetId) return;
+
+    setHighlightedBroadcastId(targetId);
+    setIsFadingOut(false);
+
+    // Smoothly scroll to Recent Messages when explicitly triggered by sending an alert
+    if (shouldScroll && typeof window !== "undefined" && recentMessagesContainerRef.current) {
+      recentMessagesContainerRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+
+    // After 2.5 seconds, start the smooth 2.5-second fade-out transition
+    fadeTimeoutRef.current = setTimeout(() => {
+      setIsFadingOut(true);
+    }, 2500);
+
+    // After 5 seconds total, clean up the highlight completely
+    resetTimeoutRef.current = setTimeout(() => {
+      setHighlightedBroadcastId(null);
+      setIsFadingOut(false);
+    }, 5000);
+  };
+
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current);
+      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+    };
+  }, []);
+
+  // Automatically trigger highlight (without interrupting scroll) when a new broadcast arrives from any admin
+  useEffect(() => {
+    if (!broadcastsData) return;
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      previousTopBroadcastRef.current = broadcastsData[0]?._id ? String(broadcastsData[0]._id) : null;
+      return;
+    }
+
+    const currentTopId = broadcastsData[0]?._id ? String(broadcastsData[0]._id) : null;
+    if (currentTopId && currentTopId !== previousTopBroadcastRef.current) {
+      previousTopBroadcastRef.current = currentTopId;
+      triggerHighlight(currentTopId, false);
+    }
+  }, [broadcastsData]);
 
   return (
     <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6">
@@ -123,11 +187,14 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Quick Send Alert Card (Interactive) */}
         <div className="lg:col-span-7">
-          <QuickMessageCard />
+          <QuickMessageCard onBroadcastSent={(id) => triggerHighlight(id, true)} />
         </div>
 
         {/* Recent Messages Sent */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
+        <div
+          ref={recentMessagesContainerRef}
+          className="scroll-mt-20 lg:scroll-mt-24 lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between"
+        >
           <div>
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -163,22 +230,43 @@ export default function DashboardPage() {
                     ? Math.round((msg.deliveredCount / msg.totalRecipients) * 100)
                     : 100;
                   const { title: displayTitle, isTemplate } = formatBroadcastTitle(msg.title);
+                  const isHighlighted = highlightedBroadcastId === String(msg._id);
+
                   return (
                     <div
                       key={msg._id}
-                      className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 hover:bg-slate-100/80 transition-all space-y-1.5"
+                      className={`p-3 rounded-xl border transition-all duration-1000 ease-out space-y-1.5 ${
+                        isHighlighted
+                          ? isFadingOut
+                            ? "bg-emerald-50/40 border-emerald-300 ring-1 ring-emerald-300/30 shadow-xs"
+                            : "bg-emerald-50/95 border-emerald-500 ring-2 ring-emerald-400/50 shadow-md scale-[1.01]"
+                          : "bg-slate-50 border-slate-200/80 hover:bg-slate-100/80"
+                      }`}
                     >
-                      <div className="flex items-center justify-between">
-                        {isTemplate ? (
-                          <h3 className="text-xs font-bold text-slate-900 truncate pr-2 flex items-center gap-1.5">
-                            <Bookmark className="w-3 h-3 text-emerald-700 shrink-0" />
-                            <span>{displayTitle}</span>
-                          </h3>
-                        ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase font-mono bg-slate-100 text-slate-500 border border-slate-200">
-                            NO SMS TEMPLATE
-                          </span>
-                        )}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 truncate pr-1 min-w-0">
+                          {isTemplate ? (
+                            <h3 className="text-xs font-bold text-slate-900 truncate flex items-center gap-1.5">
+                              <Bookmark className="w-3 h-3 text-emerald-700 shrink-0" />
+                              <span className="truncate">{displayTitle}</span>
+                            </h3>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase font-mono bg-slate-100 text-slate-500 border border-slate-200 shrink-0">
+                              NO SMS TEMPLATE
+                            </span>
+                          )}
+                          {isHighlighted && (
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase font-mono tracking-wider transition-opacity duration-1000 shrink-0 ${
+                                isFadingOut
+                                  ? "opacity-40 bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  : "opacity-100 bg-emerald-600 text-white shadow-2xs"
+                              }`}
+                            >
+                              <span>Just Sent</span>
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 font-mono">
                           {deliveryPct}% Delivered
                         </span>

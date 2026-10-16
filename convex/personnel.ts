@@ -228,10 +228,15 @@ export const remove = mutation({
 
 // Helper: Normalize Philippine mobile number core 10 digits (e.g. 9XXXXXXXXX)
 function normalizePhMobile(raw: string): string {
+  if (!raw) return "";
   const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("639")) return digits.slice(2);
-  if (digits.startsWith("09")) return digits.slice(1);
-  if (digits.startsWith("9")) return digits;
+  if (digits.startsWith("6309")) return digits.slice(3); // 9XXXXXXXXX
+  if (digits.startsWith("639")) return digits.slice(2);  // 9XXXXXXXXX
+  if (digits.startsWith("09")) return digits.slice(1);   // 9XXXXXXXXX
+  if (digits.startsWith("9") && digits.length === 10) return digits;
+  if (digits.length >= 10 && digits.slice(-10).startsWith("9")) {
+    return digits.slice(-10);
+  }
   return digits;
 }
 
@@ -278,6 +283,33 @@ export const verifyMobile = query({
     });
 
     if (matchedSoldier) {
+      // OPSEC & Anti-Impersonation Guard:
+      // If the soldier already has an enrolled physical phone (appDeviceId or active hardware fcmToken)
+      // and this verification attempt is NOT from their owner phone and NOT via an authorized Command QR:
+      const isAlreadyBound = Boolean(
+        matchedSoldier.appDeviceId ||
+        (matchedSoldier.fcmToken && !matchedSoldier.fcmToken.startsWith("fcm_prov_"))
+      );
+
+      const isMismatchedDevice = Boolean(
+        matchedSoldier.appDeviceId &&
+        args.appDeviceId &&
+        matchedSoldier.appDeviceId !== args.appDeviceId
+      );
+
+      // If already bound to another phone, immediately reject without exposing ANY soldier identity
+      if (
+        !args.isAuthorizedQr &&
+        isAlreadyBound &&
+        (isMismatchedDevice || (matchedSoldier.appDeviceId && !args.appDeviceId))
+      ) {
+        return {
+          status: "DEVICE_MISMATCH",
+          message:
+            "This number is registered with an existing device. For security, personnel details are protected. Do not use a number if it's not your own. If this is your number and you changed your phone, contact your Unit Officer to unlink your old device.",
+        };
+      }
+
       return {
         status: "REGISTERED",
         isOwnerDevice: true,

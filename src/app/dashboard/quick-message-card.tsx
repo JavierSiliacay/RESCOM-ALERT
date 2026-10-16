@@ -10,7 +10,11 @@ import { PersonnelRecipientCombobox, RecipientChip } from "@/components/personne
 import { AndroidIcon, KeypadPhoneIcon, HybridIcon, ForceSmsIcon } from "@/components/device-icons";
 import { isSamePhMobileNumber } from "@/lib/sms";
 
-export function QuickMessageCard() {
+export interface QuickMessageCardProps {
+  onBroadcastSent?: (broadcastId?: string) => void;
+}
+
+export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}) {
   const currentOfficer = useCurrentOfficer();
   const { isViewer, guardAction, isGlobalAdmin, isScopedAdmin, isGroupAuthorized } = currentOfficer;
   const groupsData = useQuery(api.groups.list);
@@ -191,7 +195,7 @@ export function QuickMessageCard() {
 
       // Record history to Convex DB in background
       try {
-        await recordBroadcast({
+        const newBroadcastId = await recordBroadcast({
           title: broadcastTitle,
           content: message,
           senderName: currentOfficer.displayName || "Duty Officer",
@@ -230,6 +234,9 @@ export function QuickMessageCard() {
             })),
           ],
         });
+        if (newBroadcastId) {
+          onBroadcastSent?.(String(newBroadcastId));
+        }
       } catch (dbErr) {
         console.error("Warning: Failed to save broadcast history to Convex database:", dbErr);
       }

@@ -2,13 +2,14 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { convexHttpService, VerifyMobileResult } from "../services/convexHttp";
@@ -93,7 +94,9 @@ function noticeFor(res: VerifyMobileResult): Notice {
       return {
         tone: "error",
         title: "Number linked to another phone",
-        body: res.message || "This number is already bound to a different phone. Coordinate with your Unit Adjutant.",
+        body:
+          res.message ||
+          "This number is registered with an existing device. For security, personnel details are protected. Do not use a number if it's not your own. If this is your number and you changed your phone, contact your Unit Officer to unlink your old device.",
       };
     case "PORTAL_LOCKED":
       return {
@@ -122,11 +125,33 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [verificationResult, setVerificationResult] = useState<VerifyMobileResult | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => {
+        setKeyboardOffset(e.endCoordinates.height);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardOffset(0);
+      }
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) {
       setNotice(null);
       setLoading(false);
+      setKeyboardOffset(0);
     }
   }, [visible]);
 
@@ -213,11 +238,23 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.backdrop}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <View style={styles.sheet}>
+      <View style={styles.backdrop}>
+        <TouchableWithoutFeedback
+          onPress={() => {
+            Keyboard.dismiss();
+          }}
+        >
+          <View style={StyleSheet.absoluteFill} />
+        </TouchableWithoutFeedback>
+
+        <View
+          style={[
+            styles.sheet,
+            {
+              paddingBottom: Math.max(28, keyboardOffset + (Platform.OS === "android" ? 14 : 0)),
+            },
+          ]}
+        >
           <View style={styles.handle} />
 
           {/* Header */}
@@ -323,7 +360,7 @@ export const DevicePairingModal: React.FC<DevicePairingModalProps> = ({
             </>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 };

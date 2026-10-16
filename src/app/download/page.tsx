@@ -330,6 +330,131 @@ export default function SoldierDownloadPage() {
     );
   }
 
+  // PASSCODE & LOCKOUT GATE SCREEN (Exactly like Enlistment Link - blocks full download page until unlocked)
+  if (portalSettings && isPasscodeActive && !isUnlocked && !isQrAuthorized) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900">
+        <main className="max-w-md w-full mx-auto px-4 py-12 sm:py-20 my-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 sm:p-8 text-center space-y-6">
+            {/* Dual Military Insignia Lockup */}
+            <div className="flex items-center justify-center gap-2.5">
+              <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 bg-white p-0.5 shadow-xs">
+                <Image
+                  src="/rescom-pa-seal.png"
+                  alt="PA Seal"
+                  width={48}
+                  height={48}
+                  className="w-full h-full object-contain"
+                  priority
+                />
+              </div>
+              <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 bg-white p-0.5 shadow-xs">
+                <Image
+                  src="/rescom-emblem.jpg"
+                  alt="10RCDG Emblem"
+                  width={48}
+                  height={48}
+                  className="w-full h-full object-contain"
+                  priority
+                />
+              </div>
+            </div>
+
+            {/* Header Lockup */}
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10.5px] font-mono font-bold tracking-wider uppercase">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Command Security Gate</span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                10RCDG RESCOM APP
+              </h1>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+                Official emergency siren & mobilization companion app. Enter your unit&apos;s Command Passcode to access the download package.
+              </p>
+            </div>
+
+            {/* Active Lockout State (15-Minute Cooldown Screen) */}
+            {lockoutUntil ? (
+              <div className="p-4 sm:p-5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-950 space-y-3 text-left animate-in fade-in">
+                <div className="flex items-center gap-2 text-rose-900 font-bold text-xs sm:text-sm">
+                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Access Temporarily Locked</span>
+                </div>
+                <p className="text-xs text-rose-800 leading-relaxed">
+                  Too many failed passcode attempts. For military operational security, download access is locked for{" "}
+                  <strong className="font-mono text-rose-950 font-extrabold">
+                    {Math.floor(secondsLeft / 60)}m {secondsLeft % 60}s
+                  </strong>.
+                </p>
+                <div className="pt-2 border-t border-rose-200 flex items-center justify-between text-[11px] text-rose-700 font-mono">
+                  <span>Authorized 10RCDG troops only</span>
+                  <span className="font-bold bg-rose-100 px-2 py-0.5 rounded border border-rose-300">
+                    {secondsLeft}s remaining
+                  </span>
+                </div>
+              </div>
+            ) : (
+              /* Passcode Unlock Form */
+              <form onSubmit={handleVerifyPasscode} className="space-y-4 text-left">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
+                      Command Passcode
+                    </label>
+                    {failedAttempts > 0 && failedAttempts < 5 && (
+                      <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                        {5 - failedAttempts} {5 - failedAttempts === 1 ? "attempt left" : "attempts left"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      autoFocus
+                      value={passcodeInput}
+                      onChange={(e) => {
+                        setPasscodeInput(e.target.value.toUpperCase());
+                        if (passcodeError) setPasscodeError("");
+                      }}
+                      placeholder="ENTER UNIT PASSCODE"
+                      maxLength={20}
+                      className="w-full pl-10 pr-4 py-3 text-sm sm:text-base bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 font-mono font-extrabold text-slate-900 tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400 uppercase shadow-2xs"
+                    />
+                  </div>
+                  {passcodeError && (
+                    <p className="text-[11px] text-rose-600 font-medium flex items-center gap-1 mt-1">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{passcodeError}</span>
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!passcodeInput.trim()}
+                  className="w-full py-3.5 px-5 rounded-xl bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-md active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider"
+                >
+                  <Unlock className="w-4 h-4" />
+                  <span>Unlock Download Portal</span>
+                </button>
+              </form>
+            )}
+
+            <p className="text-[10.5px] text-slate-400 leading-relaxed">
+              Authorized 10RCDG personnel only. Coordinate with your Unit Communications Officer if you need authorization.
+            </p>
+          </div>
+        </main>
+
+        <footer className="py-6 text-center text-[11px] text-slate-400 font-mono">
+          10th Regional Community Defense Group (10RCDG), RESCOM, Philippine Army
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900">
       {/* Top Banner for In-App Browsers */}
@@ -975,123 +1100,6 @@ export default function SoldierDownloadPage() {
             >
               Close Presentation View
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* COMMAND PASSCODE GATEWAY MODAL (Blocks access to /download until passcode is entered) */}
-      {isPasscodeActive && !isUnlocked && !isQrAuthorized && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div
-            className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 text-center space-y-6 animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Insignia Lockup */}
-            <div className="flex items-center justify-center gap-2.5">
-              <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 bg-white p-0.5 shadow-xs">
-                <Image
-                  src="/rescom-pa-seal.png"
-                  alt="PA Seal"
-                  width={48}
-                  height={48}
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 bg-white p-0.5 shadow-xs">
-                <Image
-                  src="/rescom-emblem.jpg"
-                  alt="10RCDG Emblem"
-                  width={48}
-                  height={48}
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            </div>
-
-            {/* Title & Guidance */}
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10.5px] font-mono font-bold tracking-wider uppercase">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Command Security Gate</span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                Enter Command Passcode
-              </h2>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
-                Access to the 10RCDG Soldier APK download portal is restricted. Enter your unit&apos;s authorization passcode to enter.
-              </p>
-            </div>
-
-            {/* Lockout Warning State (15 Minutes) */}
-            {lockoutUntil ? (
-              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-300 text-rose-950 space-y-2 text-left">
-                <div className="flex items-center gap-2 text-rose-900 font-bold text-xs">
-                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>Portal Locked (Brute-Force Lockout)</span>
-                </div>
-                <p className="text-[11.5px] text-rose-800 leading-relaxed">
-                  You have exceeded the maximum of 5 failed passcode attempts. Download access has been locked for{" "}
-                  <strong className="font-mono text-rose-950">
-                    {Math.floor(secondsLeft / 60)}m {secondsLeft % 60}s
-                  </strong>.
-                </p>
-                <div className="pt-1 flex items-center justify-between text-[10.5px] text-rose-700 font-mono">
-                  <span>Co-ordinate with Unit Officer</span>
-                  <span className="font-bold">{secondsLeft}s left</span>
-                </div>
-              </div>
-            ) : (
-              /* Passcode Form */
-              <form onSubmit={handleVerifyPasscode} className="space-y-4 text-left">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
-                      Passcode
-                    </label>
-                    {failedAttempts > 0 && failedAttempts < 5 && (
-                      <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                        {5 - failedAttempts} {5 - failedAttempts === 1 ? "attempt left" : "attempts left"}
-                      </span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      autoFocus
-                      value={passcodeInput}
-                      onChange={(e) => {
-                        setPasscodeInput(e.target.value.toUpperCase());
-                        if (passcodeError) setPasscodeError("");
-                      }}
-                      placeholder="ENTER UNIT PASSCODE"
-                      maxLength={20}
-                      className="w-full pl-10 pr-4 py-3 text-sm sm:text-base bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 font-mono font-extrabold text-slate-900 tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400 uppercase shadow-2xs"
-                    />
-                  </div>
-                  {passcodeError && (
-                    <p className="text-[11px] text-rose-600 font-medium flex items-center gap-1 mt-1">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      <span>{passcodeError}</span>
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={!passcodeInput.trim()}
-                  className="w-full py-3.5 px-5 rounded-xl bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-md active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider"
-                >
-                  <Unlock className="w-4 h-4" />
-                  <span>Unlock Download Portal</span>
-                </button>
-              </form>
-            )}
-
-            {/* Footer Notice */}
-            <p className="text-[10.5px] text-slate-400 leading-relaxed">
-              Authorized 10RCDG personnel only. Contact your communication officer if you do not know the command passcode.
-            </p>
           </div>
         </div>
       )}

@@ -81,8 +81,8 @@ export default function SoldierDownloadPage() {
   );
 
   const isPasscodeCorrect = !isPasscodeActive || (
-    portalSettings?.passcode &&
-    passcodeInput.trim().toUpperCase() === portalSettings.passcode.trim().toUpperCase()
+    Boolean(portalSettings?.passcode) &&
+    passcodeInput.trim().toUpperCase() === (portalSettings?.passcode || "").trim().toUpperCase()
   );
 
   // Lockout countdown timer effect
@@ -99,28 +99,19 @@ export default function SoldierDownloadPage() {
     return () => clearInterval(interval);
   }, [lockoutUntil]);
 
-  const verificationResult = useQuery(
-    api.personnel.verifyMobile,
-    isCompleteNumber && (isVerificationAllowed || isQrAuthorized) && !lockoutUntil && !isPortalExpired
-      ? {
-          mobileNumber: verifyInput,
-          deviceId: deviceId || undefined,
-          isAuthorizedQr: isQrAuthorized,
-        }
-      : "skip"
-  );
+  // Clean, zero-impersonation download authorization:
+  // Authorized if portal is not expired, visitor is not locked out, and:
+  // - Authorized via command QR, OR
+  // - Command passcode is verified (or no passcode required by admin)
+  const isDownloadAuthorized =
+    !isPortalExpired &&
+    !lockoutUntil &&
+    (isQrAuthorized || isPasscodeCorrect);
 
   const recordDownload = useMutation(api.downloads.record);
   const stats = useQuery(api.downloads.getStats);
 
   const apkUrl = "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.0.7/rescom-alert-v1.0.7.apk";
-
-  const isVerifiedTroop =
-    !isPortalExpired &&
-    !lockoutUntil &&
-    isPasscodeCorrect &&
-    (verificationResult?.status === "REGISTERED" ||
-      verificationResult?.status === "PENDING_ENLISTMENT");
 
   useEffect(() => {
     // 1. Persistent Device ID (Deduplication)
@@ -180,31 +171,20 @@ export default function SoldierDownloadPage() {
 
   const handleDownload = async () => {
     if (portalSettings?.isDownloadPortalEnabled === false && !isQrAuthorized) return;
-    if (!isVerifiedTroop) return;
+    if (!isDownloadAuthorized) return;
     if (isRecording) return;
     setIsRecording(true);
 
-    const soldier = verificationResult?.status === "REGISTERED" ? verificationResult.soldier : null;
-    const submission = verificationResult?.status === "PENDING_ENLISTMENT" ? verificationResult.submission : null;
-
     try {
-      // Record download in Convex database with verified soldier identity & hardware telemetry
+      // Record download in Convex database with telemetry
       if (deviceId) {
         await recordDownload({
           deviceId,
           userAgent: navigator.userAgent || "Unknown",
           deviceModel: deviceInfo.model,
           osVersion: deviceInfo.os,
-          soldierId: soldier ? (soldier.id as any) : qrSoldierId ? (qrSoldierId as any) : undefined,
-          soldierName: soldier
-            ? `${soldier.firstName} ${soldier.lastName}`
-            : submission
-              ? `${submission.firstName} ${submission.lastName}`
-              : undefined,
-          soldierRank: soldier?.rank || submission?.rank,
-          mobileNumber: soldier?.mobileNumber || submission?.mobileNumber,
-          unit: soldier?.unit || submission?.unit,
-          groupName: soldier?.groupName || submission?.groupName,
+          soldierId: qrSoldierId ? (qrSoldierId as any) : undefined,
+          soldierName: isQrAuthorized ? "Verified via QR / Command" : "Command Passcode Authorized",
         });
       }
     } catch (e) {
@@ -382,27 +362,27 @@ export default function SoldierDownloadPage() {
             </div>
           </div>
 
-          {/* Troop Mobile Number Verification Card */}
+          {/* Command Passcode & Authorization Card */}
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <UserCheck className="w-4 h-4 text-emerald-700" />
-                <span>Verify Troop Identity to Download</span>
+                <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                <span>Command Authorization</span>
               </span>
-              {isVerifiedTroop ? (
+              {isDownloadAuthorized ? (
                 <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
-                  VERIFIED
+                  AUTHORIZED
+                </span>
+              ) : isPasscodeActive ? (
+                <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
+                  PASSCODE REQUIRED
                 </span>
               ) : (
-                <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
-                  REQUIRED
+                <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                  OPEN PORTAL
                 </span>
               )}
             </div>
-
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Enter your registered 10RCDG mobile number (e.g. <strong>0912 345 6789</strong> or <strong>+63 912 345 6789</strong>) to verify your military identity and unlock the app download.
-            </p>
 
             {lockoutUntil ? (
               <div className="p-3.5 rounded-lg bg-rose-50 border border-rose-300 text-rose-950 text-xs space-y-1.5 animate-in fade-in">
@@ -421,385 +401,88 @@ export default function SoldierDownloadPage() {
                   <span>Download Window Closed</span>
                 </div>
                 <p className="text-amber-800 text-[11px] leading-relaxed">
-                  The active mobilization download window for this unit has expired. Please contact your Unit Officer for assistance.
+                  The active mobilization download window has closed. Please coordinate with your Unit Officer or Commander.
                 </p>
               </div>
-            ) : !isVerificationAllowed ? (
-              <div className="p-3.5 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-950 text-xs space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-amber-900">
-                  <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                  <span>Roster Verification Restricted (OPSEC Protocol)</span>
-                </div>
-                <p className="text-amber-800 text-[11px] leading-relaxed">
-                  Public phone number lookups are currently restricted by Command Headquarters for troop privacy and operational security.
+            ) : isPasscodeActive ? (
+              <div className="space-y-2">
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Enter the command download passcode provided by your 10RCDG unit officer to unlock the APK package.
                 </p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
+                      Command Passcode
+                    </label>
+                    {failedAttempts > 0 && failedAttempts < 5 && (
+                      <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                        {5 - failedAttempts} attempts left
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={passcodeInput}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setPasscodeInput(val);
+                        if (val.trim() && portalSettings?.passcode && val.trim() !== portalSettings.passcode.trim().toUpperCase()) {
+                          if (val.length >= portalSettings.passcode.length) {
+                            const nextFailed = failedAttempts + 1;
+                            setFailedAttempts(nextFailed);
+                            if (nextFailed >= 5) {
+                              setLockoutUntil(Date.now() + 180 * 1000); // 3 minutes lockout
+                            }
+                          }
+                        } else if (val.trim() === (portalSettings?.passcode || "").trim().toUpperCase()) {
+                          setFailedAttempts(0);
+                        }
+                      }}
+                      placeholder="ENTER PASSCODE (E.G. 10RCDG-2026)"
+                      maxLength={20}
+                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-bold text-slate-800 uppercase tracking-wider"
+                    />
+                  </div>
+                  {passcodeInput && !isPasscodeCorrect ? (
+                    <p className="text-[10px] text-rose-600 font-medium">
+                      Incorrect command passcode. Please verify with your Unit Officer.
+                    </p>
+                  ) : isPasscodeCorrect && passcodeInput ? (
+                    <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      Passcode verified. Download unlocked below.
+                    </p>
+                  ) : null}
+                </div>
               </div>
             ) : (
-              <>
-                {/* 1. Mobile Number Input */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
-                    Registered Mobile Number
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="tel"
-                        value={verifyInput}
-                        onChange={(e) => setVerifyInput(sanitizePhMobileInput(e.target.value))}
-                        placeholder="09XX XXX XXXX or +63 9XX XXX XXXX"
-                        maxLength={16}
-                        className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-medium text-slate-800"
-                      />
-                    </div>
-                    {verifyInput ? (
-                      <button
-                        type="button"
-                        onClick={() => setVerifyInput("")}
-                        className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 cursor-pointer font-medium"
-                      >
-                        Clear
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                {/* 2. Unit Passcode Input (If Enabled by Command) */}
-                {isPasscodeActive && (
-                  <div className="space-y-1 pt-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
-                        Command Download Passcode
-                      </label>
-                      {failedAttempts > 0 && failedAttempts < 5 && (
-                        <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
-                          {5 - failedAttempts} attempts left
-                        </span>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={passcodeInput}
-                        onChange={(e) => {
-                          const val = e.target.value.toUpperCase();
-                          setPasscodeInput(val);
-                          if (val.trim() && portalSettings?.passcode && val.trim() !== portalSettings.passcode.trim().toUpperCase()) {
-                            if (val.length >= portalSettings.passcode.length) {
-                              const nextFailed = failedAttempts + 1;
-                              setFailedAttempts(nextFailed);
-                              if (nextFailed >= 5) {
-                                setLockoutUntil(Date.now() + 180 * 1000); // 3 minutes lockout
-                              }
-                            }
-                          } else if (val.trim() === portalSettings?.passcode?.trim().toUpperCase()) {
-                            setFailedAttempts(0);
-                          }
-                        }}
-                        placeholder="Enter unit command passcode"
-                        maxLength={20}
-                        className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-bold text-slate-800 uppercase tracking-wider"
-                      />
-                    </div>
-                    {passcodeInput && !isPasscodeCorrect && (
-                      <p className="text-[10px] text-rose-600 font-medium">
-                        Incorrect unit passcode. Please coordinate with your Unit Officer.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-            {verifyInput && !isCompleteNumber ? (
-              <div className="text-[11px] text-slate-400 font-mono flex items-center justify-between px-1">
-                <span>
-                  {verifyInput.startsWith("+")
-                    ? "Enter 10 digits after +63 (e.g. +63 9XX XXX XXXX)"
-                    : "Enter 11-digit mobile number (e.g. 09XX XXX XXXX)"}
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  {verifyInput.startsWith("+")
-                    ? `${cleanDigits.startsWith("63") ? cleanDigits.slice(2).length : cleanDigits.length}/10`
-                    : `${cleanDigits.length}/11`}
+              <div className="p-3 rounded-lg bg-emerald-50/80 border border-emerald-200 text-emerald-950 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-medium">
+                  Official 10RCDG Release is unlocked and ready for deployment.
                 </span>
               </div>
-            ) : null}
-
-            {isCompleteNumber ? (
-              <div className="animate-in fade-in duration-150">
-                {verificationResult === undefined ? (
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600 shrink-0" />
-                    <span className="font-medium">Verifying troop roster status...</span>
-                  </div>
-                ) : verificationResult.status === "REGISTERED" && verificationResult.soldier ? (
-                  <div className="p-3.5 sm:p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-950 space-y-2.5">
-                    {/* Top status bar: Verified badge & Tactical Rank Pill */}
-                    <div className="flex items-center justify-between gap-2 border-b border-emerald-200/60 pb-2">
-                      <span className="flex items-center gap-1.5 text-emerald-800 font-extrabold text-[11px] uppercase tracking-wider">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>Identity Verified</span>
-                      </span>
-                      <RankInsignia rank={verificationResult.soldier.rank} size={13} showBadgePill />
-                    </div>
-
-                    {/* Soldier Identity: Rank & Name prominent, zero mobile truncation */}
-                    <div className="space-y-0.5">
-                      <div className="text-sm sm:text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5 flex-wrap">
-                        <RankInsignia rank={verificationResult.soldier.rank} size={16} />
-                        <span>
-                          {verificationResult.soldier.rank} {verificationResult.soldier.firstName} {verificationResult.soldier.lastName}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-emerald-800 font-semibold">
-                        Group: {verificationResult.soldier.groupName} • {verificationResult.soldier.unit || "10RCDG"}
-                      </div>
-                    </div>
-
-                    {/* Soldier Device History & Telemetry */}
-                    {((verificationResult.soldier as any).lastDownloadedDeviceModel || verificationResult.soldier.deviceModel) ? (
-                      <div className="p-2.5 rounded-lg bg-white/80 border border-emerald-200/80 text-[11px] text-slate-700 space-y-1.5">
-                        <div className="flex items-start gap-2">
-                          <Smartphone className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                          <div className="space-y-0.5 flex-1">
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <span className="text-slate-600 font-medium">Previous Device:</span>
-                              <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-mono text-[10px]">
-                                {(verificationResult.soldier as any).lastDownloadedDeviceModel || verificationResult.soldier.deviceModel}
-                              </span>
-                            </div>
-                            {(verificationResult.soldier as any).lastDownloadedAt && (
-                              <div className="text-[10px] text-slate-500">
-                                Previously downloaded on {new Date((verificationResult.soldier as any).lastDownloadedAt).toLocaleDateString("en-US", {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric"
-                                })} ({new Date((verificationResult.soldier as any).lastDownloadedAt).toLocaleTimeString("en-US", {
-                                  hour: "2-digit",
-                                  minute: "2-digit"
-                                })})
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Device Switch Notice if current phone differs from previous */}
-                        {deviceInfo.model &&
-                          deviceInfo.model !== "Android Phone" &&
-                          ((verificationResult.soldier as any).lastDownloadedDeviceModel || verificationResult.soldier.deviceModel) !== deviceInfo.model && (
-                            <div className="pt-1.5 border-t border-emerald-200/60 flex items-start gap-1.5 text-[10px] text-amber-900 bg-amber-50/80 p-2 rounded-lg border border-amber-200">
-                              <span className="font-bold shrink-0">🔄 Device Switch:</span>
-                              <span>
-                                Previously downloaded using <strong>{((verificationResult.soldier as any).lastDownloadedDeviceModel || verificationResult.soldier.deviceModel)}</strong>. Downloading now on <strong>{deviceInfo.model}</strong> will record hardware transition for {verificationResult.soldier.firstName}&apos;s profile.
-                              </span>
-                            </div>
-                        )}
-                      </div>
-                    ) : (verificationResult.soldier as any).previousDeviceModel ? (
-                      <div className="p-2.5 rounded-lg bg-amber-50/90 border border-amber-300 text-[11px] text-amber-950 space-y-1.5">
-                        <div className="flex items-center gap-1.5 font-bold text-amber-900">
-                          <RefreshCw className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                          <span>Device Transfer Authorized (Replacement Phone)</span>
-                        </div>
-                        <p className="text-amber-800 text-[10px] leading-relaxed">
-                          Previous phone (<strong>{(verificationResult.soldier as any).previousDeviceModel}</strong>) was unlinked.
-                          Downloading on this new <strong>{deviceInfo.model}</strong> will link this device to your 10RCDG emergency mobilization alerts.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="p-2 rounded-lg bg-white/70 border border-emerald-200/70 text-[10px] text-slate-600 flex items-center justify-between font-mono">
-                        <span>Target Hardware:</span>
-                        <span className="font-bold text-slate-800">{deviceInfo.model} ({deviceInfo.os})</span>
-                      </div>
-                    )}
-
-                    {/* First-Time Device Binding Info */}
-                    {!(verificationResult.soldier as any).boundDeviceId && (
-                      <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-300 text-[11px] text-emerald-950 space-y-1">
-                        <div className="font-bold flex items-center gap-1.5 text-emerald-900">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                          <span>Hardware Device Authorization</span>
-                        </div>
-                        <p className="text-[10px] text-emerald-800 leading-relaxed">
-                          Downloading now will bind your hardware device ID (<strong>{deviceInfo.model}</strong>) so only your device can re-download it. To change the hardware device ID later, you can ask the administrators to re-pair your personal data.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Pairing telemetry note */}
-                    <div className="text-[10px] text-slate-500 pt-1 border-t border-emerald-200/50 font-mono leading-relaxed">
-                      Your phone will pair automatically when you enter this number upon first opening the app.
-                    </div>
-                  </div>
-                ) : verificationResult.status === "DEVICE_MISMATCH" ? (
-                  <div className="p-3.5 sm:p-4 rounded-xl bg-rose-50 border-2 border-rose-300 text-xs text-rose-950 space-y-2.5 shadow-xs animate-in fade-in duration-200">
-                    {/* Top status bar: Device Mismatch Lock */}
-                    <div className="flex items-center justify-between gap-2 border-b border-rose-200/80 pb-2">
-                      <span className="flex items-center gap-1.5 text-rose-900 font-extrabold text-[11px] uppercase tracking-wider">
-                        <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-                        <span>Download Blocked — Linked to Another Phone</span>
-                      </span>
-                      <span className="px-2 py-0.5 rounded font-mono font-bold text-[9px] bg-rose-200 text-rose-900 border border-rose-300">
-                        DEVICE MISMATCH
-                      </span>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                        <ShieldAlert className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                        <span>Registered Profile • Identity Protected</span>
-                      </div>
-                      <p className="text-[11px] text-rose-900 leading-relaxed font-medium">
-                        This mobile number is already linked to an authorized physical phone:
-                        <strong className="block text-slate-900 font-mono mt-1 bg-white/90 p-2 rounded-lg border border-rose-200">
-                          📱 {(verificationResult as any).boundDeviceModel || "Registered Military Smartphone"}
-                        </strong>
-                      </p>
-                    </div>
-
-                    <div className="p-2.5 rounded-lg bg-white/90 border border-rose-200 text-[11px] text-slate-700 space-y-1 leading-relaxed">
-                      <div className="font-bold text-slate-900 flex items-center gap-1">
-                        <Lock className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                        <span>Need to transfer to this new phone?</span>
-                      </div>
-                      <p className="text-[10px] text-slate-600">
-                        If you lost, damaged, or upgraded your phone, <strong>ask your Unit Admin or Officer</strong> to re-pair your record or scan your authorized <strong>Command QR Code</strong> to transfer access.
-                      </p>
-                    </div>
-                  </div>
-                ) : verificationResult.status === "DEVICE_UNBOUND" ? (
-                  <div className="p-3.5 sm:p-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-xs text-amber-950 space-y-2.5 shadow-xs animate-in fade-in duration-200">
-                    {/* Top status bar: Device Not Linked */}
-                    <div className="flex items-center justify-between gap-2 border-b border-amber-200 pb-2">
-                      <span className="flex items-center gap-1.5 text-amber-900 font-extrabold text-[11px] uppercase tracking-wider">
-                        <Lock className="w-4 h-4 text-amber-700 shrink-0" />
-                        <span>Phone Not Yet Linked to This Account</span>
-                      </span>
-                      <span className="px-2 py-0.5 rounded font-mono font-bold text-[9px] bg-amber-200 text-amber-900 border border-amber-300">
-                        DEVICE NOT LINKED
-                      </span>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                        <Shield className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                        <span>Registered Profile • Identity Protected</span>
-                      </div>
-                      <p className="text-[11px] text-slate-600 leading-relaxed">
-                        This mobile number is in the 10RCDG roster, but has no linked device yet. Profile details are masked for operational security.
-                      </p>
-                    </div>
-
-                    <div className="p-2.5 rounded-lg bg-white/90 border border-amber-200 text-[11px] text-slate-700 space-y-1.5 leading-relaxed">
-                      <p className="text-slate-800 font-medium">
-                        🛡️ <strong>Security & Privacy Notice:</strong> For your protection, this app can only be downloaded on phones officially linked to your military profile.
-                      </p>
-                      <div className="pt-1 border-t border-amber-100 text-[10px] text-slate-600 space-y-1">
-                        <div className="font-bold text-amber-900">How to get your phone linked:</div>
-                        <div>1. If you are newly enlisting: Register your phone via your unit&apos;s official <strong>Enlistment Link</strong>.</div>
-                        <div>2. If you are already in the roster: Coordinate with your <strong>Unit Admin or Officer</strong> to scan your official <strong>Command QR Code</strong>.</div>
-                      </div>
-                    </div>
-                  </div>
-                ) : verificationResult.status === "PENDING_ENLISTMENT" ? (
-                  <div className="p-3.5 sm:p-4 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-950 space-y-2.5">
-                    {/* Top status bar: Enlistment badge & Tactical Rank Pill */}
-                    <div className="flex items-center justify-between gap-2 border-b border-amber-200/60 pb-2">
-                      <span className="flex items-center gap-1.5 text-amber-900 font-extrabold text-[11px] uppercase tracking-wider">
-                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>Enlistment Submission Found</span>
-                      </span>
-                      {verificationResult.submission && (
-                        <RankInsignia rank={verificationResult.submission.rank} size={13} showBadgePill />
-                      )}
-                    </div>
-
-                    {verificationResult.submission ? (
-                      <div className="space-y-0.5">
-                        <div className="text-sm sm:text-base font-black text-slate-900 tracking-tight flex items-center gap-1.5 flex-wrap">
-                          <RankInsignia rank={verificationResult.submission.rank} size={16} />
-                          <span>
-                            {verificationResult.submission.rank} {verificationResult.submission.firstName} {verificationResult.submission.lastName}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-amber-800 font-semibold">
-                          Target Group: {verificationResult.submission.groupName} (Pending Command Approval)
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-2 rounded-lg bg-white/80 border border-amber-200 text-slate-700 text-xs font-medium">
-                        🛡️ Enlistment registration found for this number. Details masked until approved by Command.
-                      </div>
-                    )}
-
-                    {/* Activation note */}
-                    <div className="text-[10px] text-amber-700 pt-1.5 border-t border-amber-200/50 leading-relaxed">
-                      Download will activate once reviewed and approved by Command.
-                    </div>
-                  </div>
-                ) : verificationResult.status === "NOT_FOUND" ? (
-                  <div className="p-3 rounded-lg bg-amber-50/70 border border-amber-200 text-xs text-amber-900 space-y-1">
-                    <div className="font-bold text-amber-900 flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>Mobile Number Not in 10RCDG Roster</span>
-                    </div>
-                    <div className="text-[11px] text-slate-600 leading-relaxed">
-                      Access is restricted to authorized military personnel. If you are an active reservist or recruit, ensure your mobile number is encoded in the 10RCDG personnel roster.
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-              </>
             )}
           </div>
 
           {/* Download Action Button */}
           <div className="space-y-3">
-            {!isVerifiedTroop ? (
+            {!isDownloadAuthorized ? (
               <button
                 type="button"
                 disabled
-                className={`w-full flex items-center justify-center gap-2.5 py-4 px-6 rounded-xl font-bold text-sm cursor-not-allowed border transition-all ${
-                  verificationResult?.status === "DEVICE_MISMATCH"
-                    ? "bg-rose-50 text-rose-800 border-rose-300"
-                    : verificationResult?.status === "DEVICE_UNBOUND"
-                      ? "bg-amber-50 text-amber-900 border-amber-300"
-                      : "bg-slate-100 text-slate-400 border-slate-200"
-                }`}
+                className="w-full flex items-center justify-center gap-2.5 py-4 px-6 rounded-xl font-bold text-sm cursor-not-allowed border bg-slate-100 text-slate-400 border-slate-200"
               >
-                {!verifyInput ? (
-                  <>
-                    <Lock className="w-4 h-4 text-slate-400" />
-                    <span>ENTER MOBILE NUMBER TO UNLOCK DOWNLOAD</span>
-                  </>
-                ) : !isCompleteNumber ? (
-                  <>
-                    <Lock className="w-4 h-4 text-slate-400" />
-                    <span>ENTER COMPLETE NUMBER (09XX / +63 9XX)</span>
-                  </>
-                ) : verificationResult === undefined ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                    <span>VERIFYING TROOP ROSTER STATUS...</span>
-                  </>
-                ) : verificationResult.status === "DEVICE_MISMATCH" ? (
-                  <>
-                    <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span className="font-extrabold text-rose-800">DOWNLOAD LOCKED — LINKED TO ANOTHER PHONE</span>
-                  </>
-                ) : verificationResult.status === "DEVICE_UNBOUND" ? (
-                  <>
-                    <Lock className="w-4 h-4 text-amber-700 shrink-0" />
-                    <span className="font-extrabold text-amber-800">DOWNLOAD LOCKED — PHONE NOT YET LINKED</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-4 h-4 text-slate-400" />
-                    <span>ACCESS RESTRICTED — NOT IN 10RCDG ROSTER</span>
-                  </>
-                )}
+                <Lock className="w-4 h-4 text-slate-400" />
+                <span>
+                  {isPortalExpired
+                    ? "DOWNLOAD WINDOW CLOSED"
+                    : lockoutUntil
+                      ? `LOCKED (${secondsLeft}s)`
+                      : "ENTER PASSCODE TO UNLOCK DOWNLOAD"}
+                </span>
               </button>
             ) : (
               <button
@@ -822,32 +505,14 @@ export default function SoldierDownloadPage() {
               </button>
             )}
 
-            {isVerifiedTroop && !downloadStarted && (
-              <div className="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-[11px] text-slate-600">
-                <span className="flex items-center gap-1.5">
-                  <Smartphone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Target Hardware:</span>
-                  <strong className="text-slate-800 font-mono">{deviceInfo.model}</strong>
-                </span>
-                <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  Hardware Logged
-                </span>
-              </div>
-            )}
-
             {downloadStarted ? (
               <div className="space-y-2 animate-in fade-in duration-200">
                 <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <div>
-                      <strong>Download started!</strong> Logged for{" "}
-                      <strong>
-                        {verificationResult?.soldier?.rank || verificationResult?.submission?.rank || ""}{" "}
-                        {verificationResult?.soldier?.firstName || verificationResult?.submission?.firstName || ""}{" "}
-                        {verificationResult?.soldier?.lastName || verificationResult?.submission?.lastName || "Troop"}
-                      </strong>{" "}
-                      using <strong>{deviceInfo.model}</strong>.
+                      <strong>Download started!</strong> Authorized package for{" "}
+                      <strong>{deviceInfo.model}</strong>.
                     </div>
                     <div className="text-[11px] text-emerald-800">
                       Open your phone notifications or Downloads folder to tap and install.
@@ -858,13 +523,13 @@ export default function SoldierDownloadPage() {
                   <strong>Tip:</strong> If download shows 100% and pauses while your phone performs security scanning, open your phone&apos;s <strong>My Files</strong> &gt; <strong>Downloads</strong> folder to tap and install immediately.
                 </div>
               </div>
-            ) : isVerifiedTroop ? (
+            ) : isDownloadAuthorized ? (
               <p className="text-center text-[11px] text-emerald-700 font-medium">
-                ✓ Identity confirmed. Compatible with all Android devices (Android 7.0 to Android 15+)
+                ✓ Access authorized. Compatible with all Android devices (Android 7.0 to Android 15+)
               </p>
             ) : (
               <p className="text-center text-[11px] text-slate-400">
-                Authorized 10RCDG personnel only · Roster verification required
+                Authorized 10RCDG personnel only · Command Passcode verification required
               </p>
             )}
           </div>

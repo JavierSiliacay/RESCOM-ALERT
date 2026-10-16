@@ -286,37 +286,55 @@ export default function MobileAppPage() {
                     </span>
                     {(portalSettings as any)?.passcodeExpiresAt && (portalSettings as any).passcodeExpiresAt > Date.now() ? (
                       <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
-                        Closes in {Math.round(((portalSettings as any).passcodeExpiresAt - Date.now()) / (1000 * 60 * 60))}h
+                        {(() => {
+                          const diffMs = (portalSettings as any).passcodeExpiresAt - Date.now();
+                          const hours = Math.floor(diffMs / (1000 * 60 * 60));
+                          const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                          if (hours > 0) return `Closes in ${hours}h ${mins}m`;
+                          return `Closes in ${mins}m`;
+                        })()}
                       </span>
                     ) : (
-                      <span className="text-[10px] font-mono text-slate-500">No Expiration</span>
+                      <span className="text-[10px] font-mono font-semibold text-slate-500 bg-slate-200/70 px-2 py-0.5 rounded">
+                        Always Open
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {[
+                      { label: "1 Hour", hours: 1 },
                       { label: "2 Hours", hours: 2 },
                       { label: "6 Hours", hours: 6 },
                       { label: "24 Hours", hours: 24 },
                       { label: "Always Open", hours: 0 },
-                    ].map((opt) => (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        onClick={() => {
-                          const exp = opt.hours > 0 ? Date.now() + opt.hours * 60 * 60 * 1000 : undefined;
-                          updatePortalSettings({
-                            isDownloadPortalEnabled: true,
-                            allowRosterVerification: true,
-                            passcodeExpiresAt: exp,
-                            updatedBy: officer.displayName || "Admin",
-                            updatedByEmail: officer.email || undefined,
-                          });
-                        }}
-                        className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg cursor-pointer transition-all"
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                    ].map((opt) => {
+                      const isAlwaysOpen = opt.hours === 0 && !(portalSettings as any)?.passcodeExpiresAt;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onClick={() => {
+                            const exp = opt.hours > 0 ? Date.now() + opt.hours * 60 * 60 * 1000 : undefined;
+                            updatePortalSettings({
+                              isDownloadPortalEnabled: true,
+                              allowRosterVerification: true,
+                              requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
+                              passcode: (portalSettings as any)?.passcode,
+                              passcodeExpiresAt: exp,
+                              updatedBy: officer.displayName || "Admin",
+                              updatedByEmail: officer.email || undefined,
+                            });
+                          }}
+                          className={`px-2.5 py-1 text-[11px] font-bold rounded-lg cursor-pointer transition-all border ${
+                            isAlwaysOpen
+                              ? "bg-emerald-800 text-white border-emerald-900 shadow-xs"
+                              : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
                   <p className="text-[10px] text-slate-500">
                     Automatically locks the download portal when mobilization window closes.

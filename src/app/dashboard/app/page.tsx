@@ -30,12 +30,110 @@ import {
   ShieldCheck,
   Power,
   Loader2,
+  Clock,
+  KeyRound,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useCurrentOfficer } from "@/components/officer-context";
 import { RankInsignia } from "@/components/rank-insignia";
+
+// Smart Duration preview helper exactly like in Enlistment Campaign Generator
+function getDurationPreview(inputStr: string): {
+  type: "empty" | "valid" | "unrecognized";
+  normalizedLabel?: string;
+  expiryDateFormatted?: string;
+  ms?: number;
+} {
+  let d = inputStr.toLowerCase().trim();
+  if (!d) return { type: "empty" };
+
+  const wordToNum: Record<string, string> = {
+    "a ": "1 ",
+    "an ": "1 ",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "twelve": "12",
+    "fourteen": "14",
+    "twenty": "20",
+    "thirty": "30",
+    "sixty": "60",
+    "ninety": "90",
+  };
+  for (const [w, n] of Object.entries(wordToNum)) {
+    d = d.replace(new RegExp(`\\b${w}\\b`, "g"), n);
+  }
+
+  let ms = 0;
+  let normalizedLabel = "";
+
+  if (d === "tomorrow") {
+    ms = 24 * 60 * 60 * 1000;
+    normalizedLabel = "1 Day (Tomorrow)";
+  } else if (d === "next week") {
+    ms = 7 * 24 * 60 * 60 * 1000;
+    normalizedLabel = "1 Week (7 Days)";
+  } else if (d === "next month") {
+    ms = 30 * 24 * 60 * 60 * 1000;
+    normalizedLabel = "1 Month (30 Days)";
+  } else {
+    const matchMinutes = d.match(/(\d+)\s*(minute|min|m\b)/);
+    const matchHours = d.match(/(\d+)\s*(hour|hr|h\b)/);
+    const matchWeeks = d.match(/(\d+)\s*(week|wk|w\b)/);
+    const matchMonths = d.match(/(\d+)\s*(month|mo\b)/);
+    const matchDays = d.match(/(\d+)\s*(day|d\b)?/);
+
+    if (matchMinutes) {
+      const val = parseInt(matchMinutes[1], 10);
+      ms = val * 60 * 1000;
+      normalizedLabel = `${val} Minute${val > 1 ? "s" : ""}`;
+    } else if (matchHours) {
+      const val = parseInt(matchHours[1], 10);
+      ms = val * 60 * 60 * 1000;
+      normalizedLabel = `${val} Hour${val > 1 ? "s" : ""}`;
+    } else if (matchWeeks) {
+      const val = parseInt(matchWeeks[1], 10);
+      ms = val * 7 * 24 * 60 * 60 * 1000;
+      normalizedLabel = `${val} Week${val > 1 ? "s" : ""}`;
+    } else if (matchMonths) {
+      const val = parseInt(matchMonths[1], 10);
+      ms = val * 30 * 24 * 60 * 60 * 1000;
+      normalizedLabel = `${val} Month${val > 1 ? "s" : ""}`;
+    } else if (matchDays && matchDays[1]) {
+      const val = parseInt(matchDays[1], 10);
+      ms = val * 24 * 60 * 60 * 1000;
+      normalizedLabel = `${val} Day${val > 1 ? "s" : ""}`;
+    }
+  }
+
+  if (ms > 0) {
+    const targetDate = new Date(Date.now() + ms);
+    return {
+      type: "valid",
+      ms,
+      normalizedLabel,
+      expiryDateFormatted: targetDate.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
+    };
+  }
+
+  return { type: "unrecognized" };
+}
 
 export default function MobileAppPage() {
   const officer = useCurrentOfficer();
@@ -49,6 +147,8 @@ export default function MobileAppPage() {
   const [hasPasscodeEdits, setHasPasscodeEdits] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [saveStatus, setSaveStatus] = useState<{ message: string; type: "success" | "info" } | null>(null);
+  const [durationPreset, setDurationPreset] = useState("Always Open");
+  const [customDurationInput, setCustomDurationInput] = useState("");
 
   const showConfirmation = (message: string, type: "success" | "info" = "success") => {
     setSaveStatus({ message, type });
@@ -65,6 +165,29 @@ export default function MobileAppPage() {
       setLocalPasscode(portalSettings.passcode || "");
     }
   }, [portalSettings?.passcode]);
+
+  // Sync server duration with preset selector
+  useEffect(() => {
+    const expAt = (portalSettings as any)?.passcodeExpiresAt;
+    if (!expAt || expAt <= Date.now()) {
+      if (expAt && expAt <= Date.now()) {
+        setDurationPreset("Expired (Locked)");
+      } else {
+        setDurationPreset("Always Open");
+      }
+    } else {
+      const diffHrs = Math.round((expAt - Date.now()) / (1000 * 60 * 60));
+      if (diffHrs === 1) setDurationPreset("1 Hour");
+      else if (diffHrs === 6) setDurationPreset("6 Hours");
+      else if (diffHrs === 12) setDurationPreset("12 Hours");
+      else if (diffHrs === 24) setDurationPreset("24 Hours (1 Day)");
+      else if (diffHrs === 72) setDurationPreset("3 Days");
+      else if (diffHrs === 168) setDurationPreset("7 Days (1 Week)");
+      else if (diffHrs === 336) setDurationPreset("14 Days");
+      else if (diffHrs === 720) setDurationPreset("30 Days");
+      else setDurationPreset("Custom Duration");
+    }
+  }, [portalSettings]);
 
   // Keep live countdown refreshed every 10 seconds
   useEffect(() => {
@@ -451,12 +574,12 @@ export default function MobileAppPage() {
                   </p>
                 </div>
 
-                {/* 2. Download Window Duration Card */}
+                {/* 2. Download Window Duration Card (Enlistment Style) */}
                 <div className="p-4 rounded-2xl bg-gradient-to-b from-white to-slate-50/80 border border-slate-200/90 shadow-2xs space-y-3.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/70">
-                        <Radio className="w-3.5 h-3.5" />
+                        <Clock className="w-3.5 h-3.5" />
                       </div>
                       <div>
                         <span className="text-xs font-bold text-slate-900 block leading-tight">
@@ -468,7 +591,7 @@ export default function MobileAppPage() {
                       </div>
                     </div>
 
-                    {/* Expiration Badge */}
+                    {/* Expiration Status Badge */}
                     {(portalSettings as any)?.passcodeExpiresAt && (portalSettings as any).passcodeExpiresAt > currentTime ? (
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-900 shadow-2xs">
                         <span className="relative flex h-2 w-2">
@@ -477,11 +600,14 @@ export default function MobileAppPage() {
                         </span>
                         <span className="text-[11px] font-mono font-extrabold">
                           {(() => {
-                            const diffMs = (portalSettings as any).passcodeExpiresAt - currentTime;
-                            const hours = Math.floor(diffMs / (1000 * 60 * 60));
-                            const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-                            if (hours > 0) return `Closes in ${hours}h ${mins}m`;
-                            return `Closes in ${mins}m`;
+                            const diff = (portalSettings as any).passcodeExpiresAt - currentTime;
+                            const totalSec = Math.floor(diff / 1000);
+                            const days = Math.floor(totalSec / 86400);
+                            const hours = Math.floor((totalSec % 86400) / 3600);
+                            const mins = Math.floor((totalSec % 3600) / 60);
+                            if (days > 0) return `${days}d ${hours}h left`;
+                            if (hours > 0) return `${hours}h ${mins}m left`;
+                            return `${mins}m left`;
                           })()}
                         </span>
                       </div>
@@ -497,35 +623,39 @@ export default function MobileAppPage() {
                     )}
                   </div>
 
-                  {/* Preset Duration Buttons */}
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {[
-                      { label: "1 Hour", hours: 1 },
-                      { label: "2 Hours", hours: 2 },
-                      { label: "6 Hours", hours: 6 },
-                      { label: "24 Hours", hours: 24 },
-                      { label: "Always Open", hours: 0 },
-                    ].map((opt) => {
-                      const expAt = (portalSettings as any)?.passcodeExpiresAt;
-                      let isSelected = false;
+                  {/* Enlistment-style Duration Select Dropdown */}
+                  <div className="space-y-2">
+                    <select
+                      value={durationPreset}
+                      onChange={async (e) => {
+                        const selectedVal = e.target.value;
+                        setDurationPreset(selectedVal);
 
-                      if (opt.hours === 0) {
-                        isSelected = !expAt || expAt <= 0;
-                      } else if (expAt && expAt > currentTime) {
-                        const remainingHours = (expAt - currentTime) / (1000 * 60 * 60);
-                        // Highlight matching range
-                        if (opt.hours === 1 && remainingHours > 0 && remainingHours <= 1.1) isSelected = true;
-                        if (opt.hours === 2 && remainingHours > 1.1 && remainingHours <= 2.2) isSelected = true;
-                        if (opt.hours === 6 && remainingHours > 2.2 && remainingHours <= 6.5) isSelected = true;
-                        if (opt.hours === 24 && remainingHours > 6.5) isSelected = true;
-                      }
-
-                      return (
-                        <button
-                          key={opt.label}
-                          type="button"
-                          onClick={async () => {
-                            const exp = opt.hours > 0 ? Date.now() + opt.hours * 60 * 60 * 1000 : undefined;
+                        if (selectedVal === "Always Open") {
+                          await updatePortalSettings({
+                            isDownloadPortalEnabled: true,
+                            allowRosterVerification: true,
+                            requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
+                            passcode: (portalSettings as any)?.passcode,
+                            passcodeExpiresAt: undefined,
+                            updatedBy: officer.displayName || "Admin",
+                            updatedByEmail: officer.email || undefined,
+                          });
+                          showConfirmation("Download window set to Always Open (No time limit)");
+                        } else if (selectedVal !== "Custom Duration") {
+                          const presetHoursMap: Record<string, number> = {
+                            "1 Hour": 1,
+                            "6 Hours": 6,
+                            "12 Hours": 12,
+                            "24 Hours (1 Day)": 24,
+                            "3 Days": 72,
+                            "7 Days (1 Week)": 168,
+                            "14 Days": 336,
+                            "30 Days": 720,
+                          };
+                          const hrs = presetHoursMap[selectedVal];
+                          if (hrs) {
+                            const exp = Date.now() + hrs * 60 * 60 * 1000;
                             await updatePortalSettings({
                               isDownloadPortalEnabled: true,
                               allowRosterVerification: true,
@@ -535,22 +665,109 @@ export default function MobileAppPage() {
                               updatedBy: officer.displayName || "Admin",
                               updatedByEmail: officer.email || undefined,
                             });
-                            showConfirmation(
-                              opt.hours > 0
-                                ? `Download window set to ${opt.label} (auto-locks after)`
-                                : "Download window set to Always Open"
-                            );
-                          }}
-                          className={`py-2 px-1 text-center rounded-xl cursor-pointer transition-all border flex flex-col items-center justify-center gap-0.5 ${
-                            isSelected
-                              ? "bg-emerald-800 text-white border-emerald-950 shadow-sm font-bold ring-2 ring-emerald-600/30"
-                              : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200 text-xs font-medium hover:border-slate-300"
-                          }`}
-                        >
-                          <span className="text-[11px] leading-tight block font-semibold">{opt.label}</span>
-                        </button>
+                            showConfirmation(`Download window set to ${selectedVal}`);
+                          }
+                        }
+                      }}
+                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 font-semibold text-slate-800 cursor-pointer shadow-2xs"
+                    >
+                      <option value="Always Open">Always Open (No Auto-Lockout)</option>
+                      <option value="1 Hour">1 Hour</option>
+                      <option value="6 Hours">6 Hours</option>
+                      <option value="12 Hours">12 Hours</option>
+                      <option value="24 Hours (1 Day)">24 Hours (1 Day)</option>
+                      <option value="3 Days">3 Days</option>
+                      <option value="7 Days (1 Week)">7 Days (1 Week)</option>
+                      <option value="14 Days">14 Days</option>
+                      <option value="30 Days">30 Days</option>
+                      <option value="Custom Duration">Custom Duration (Specify Below)...</option>
+                    </select>
+
+                    {/* Custom Duration Input Box & Live Preview (Identical to Enlistment Form) */}
+                    {durationPreset === "Custom Duration" && (() => {
+                      const preview = getDurationPreview(customDurationInput);
+                      return (
+                        <div className="space-y-2 animate-in fade-in duration-150 pt-1">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={customDurationInput}
+                              onChange={(e) => setCustomDurationInput(e.target.value)}
+                              placeholder="e.g. 2 Hours, 45 Days, 3 Weeks, 90m..."
+                              className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 font-medium text-slate-900 shadow-2xs"
+                            />
+                            <button
+                              type="button"
+                              disabled={preview.type !== "valid"}
+                              onClick={async () => {
+                                if (preview.type === "valid" && preview.ms) {
+                                  const exp = Date.now() + preview.ms;
+                                  await updatePortalSettings({
+                                    isDownloadPortalEnabled: true,
+                                    allowRosterVerification: true,
+                                    requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
+                                    passcode: (portalSettings as any)?.passcode,
+                                    passcodeExpiresAt: exp,
+                                    updatedBy: officer.displayName || "Admin",
+                                    updatedByEmail: officer.email || undefined,
+                                  });
+                                  showConfirmation(`Download window set to ${preview.normalizedLabel}`);
+                                }
+                              }}
+                              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white transition-all cursor-pointer shrink-0 shadow-xs"
+                            >
+                              Apply
+                            </button>
+                          </div>
+
+                          {/* Quick Duration Suggestion Chips */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mr-1">Quick Select:</span>
+                            {["2 Hours", "4 Hours", "45 Days", "60 Days", "3 Months"].map((preset) => (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => setCustomDurationInput(preset)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                                  customDurationInput === preset
+                                    ? "bg-emerald-100 text-emerald-950 border-emerald-300 ring-1 ring-emerald-300"
+                                    : "bg-slate-100/80 hover:bg-slate-200 text-slate-700 border-slate-200"
+                                }`}
+                              >
+                                +{preset}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Live Smart Auto-Correction & Expiry Preview */}
+                          {preview.type === "valid" && (
+                            <div className="p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200 text-xs text-emerald-950 flex items-start gap-2 animate-in fade-in duration-150 shadow-2xs">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold flex items-center gap-1.5 flex-wrap text-emerald-900">
+                                  <span>Portal auto-closes in:</span>
+                                  <span className="px-1.5 py-0.2 bg-emerald-200/80 text-emerald-950 rounded text-[10px] font-mono font-extrabold">
+                                    {preview.normalizedLabel}
+                                  </span>
+                                </div>
+                                <div className="text-[10.5px] text-emerald-700 font-mono mt-0.5">
+                                  Exact Auto-Lock: {preview.expiryDateFormatted}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {preview.type === "unrecognized" && customDurationInput.trim().length > 0 && (
+                            <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-300 text-xs text-amber-950 flex items-start gap-2 animate-in fade-in duration-150">
+                              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                              <div className="text-[11px] leading-relaxed">
+                                <span className="font-bold text-amber-900">Custom Duration Format:</span> Type e.g. <code className="bg-amber-200/60 px-1 py-0.5 rounded font-mono font-bold text-[10px]">2 Weeks</code>, <code className="bg-amber-200/60 px-1 py-0.5 rounded font-mono font-bold text-[10px]">45 Days</code>, or <code className="bg-amber-200/60 px-1 py-0.5 rounded font-mono font-bold text-[10px]">3 Hours</code>.
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       );
-                    })}
+                    })()}
                   </div>
 
                   <p className="text-[10.5px] text-slate-500 leading-relaxed">

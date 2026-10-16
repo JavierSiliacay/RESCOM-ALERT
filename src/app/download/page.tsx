@@ -184,6 +184,7 @@ export default function SoldierDownloadPage() {
         setIsVerifying(false);
       }, 650);
     } else {
+      setPasscodeInput(""); // Clear input on incorrect attempt so user can immediately re-enter
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
       if (typeof window !== "undefined") {

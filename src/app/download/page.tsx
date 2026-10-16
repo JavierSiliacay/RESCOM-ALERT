@@ -71,6 +71,7 @@ export default function SoldierDownloadPage() {
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const [currentTime, setCurrentTime] = useState(Date.now());
 
@@ -162,13 +163,18 @@ export default function SoldierDownloadPage() {
     }
 
     if (inputClean === correctPasscode) {
-      setIsUnlocked(true);
+      setIsVerifying(true);
       setPasscodeError("");
       setFailedAttempts(0);
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("rescom_download_unlocked");
         localStorage.removeItem("rescom_download_failed_attempts");
       }
+      // Dramatic, high-engagement military verification sequence (600ms)
+      setTimeout(() => {
+        setIsUnlocked(true);
+        setIsVerifying(false);
+      }, 650);
     } else {
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
@@ -529,6 +535,7 @@ export default function SoldierDownloadPage() {
                     <input
                       type="text"
                       autoFocus
+                      disabled={isVerifying}
                       value={passcodeInput}
                       onChange={(e) => {
                         setPasscodeInput(e.target.value.toUpperCase());
@@ -536,7 +543,11 @@ export default function SoldierDownloadPage() {
                       }}
                       placeholder="ENTER UNIT PASSCODE"
                       maxLength={20}
-                      className="w-full pl-10 pr-4 py-3 text-sm sm:text-base bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 font-mono font-extrabold text-slate-900 tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400 uppercase shadow-2xs"
+                      className={`w-full pl-10 pr-4 py-3 text-sm sm:text-base bg-white border rounded-xl focus:outline-none font-mono font-extrabold tracking-widest uppercase shadow-2xs transition-all ${
+                        isVerifying
+                          ? "border-emerald-500 bg-emerald-50/50 text-emerald-950 ring-2 ring-emerald-500/30"
+                          : "border-slate-300 text-slate-900 focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400"
+                      }`}
                     />
                   </div>
                   {passcodeError && (
@@ -549,11 +560,24 @@ export default function SoldierDownloadPage() {
 
                 <button
                   type="submit"
-                  disabled={!passcodeInput.trim()}
-                  className="w-full py-3.5 px-5 rounded-xl bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow-md active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider"
+                  disabled={!passcodeInput.trim() || isVerifying}
+                  className={`w-full py-3.5 px-5 rounded-xl font-extrabold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider ${
+                    isVerifying
+                      ? "bg-emerald-600 text-white scale-[1.02] shadow-emerald-500/25 shadow-lg animate-pulse"
+                      : "bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white active:scale-[0.98]"
+                  }`}
                 >
-                  <Unlock className="w-4 h-4" />
-                  <span>Unlock Download Portal</span>
+                  {isVerifying ? (
+                    <>
+                      <ShieldCheck className="w-5 h-5 text-emerald-200 animate-bounce" />
+                      <span className="tracking-widest">ACCESS GRANTED · UNLOCKING...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Unlock className="w-4 h-4" />
+                      <span>Unlock Download Portal</span>
+                    </>
+                  )}
                 </button>
               </form>
             )}
@@ -585,8 +609,8 @@ export default function SoldierDownloadPage() {
         </div>
       )}
 
-      {/* Main Content Container */}
-      <main className="max-w-xl w-full mx-auto px-4 py-8 sm:py-12 space-y-6">
+      {/* Main Content Container with smooth military entrance animation */}
+      <main className="max-w-xl w-full mx-auto px-4 py-8 sm:py-12 space-y-6 animate-in fade-in zoom-in-95 duration-300">
         {/* Header Lockup (Dual Military Insignia) */}
         <div className="text-center space-y-3">
           <div className="flex items-center justify-center gap-3">

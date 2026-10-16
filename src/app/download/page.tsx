@@ -561,16 +561,16 @@ export default function SoldierDownloadPage() {
                 <button
                   type="submit"
                   disabled={!passcodeInput.trim() || isVerifying}
-                  className={`w-full py-3.5 px-5 rounded-xl font-extrabold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider ${
+                  className={`w-full py-3.5 px-5 rounded-xl font-extrabold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2.5 uppercase tracking-wider ${
                     isVerifying
-                      ? "bg-emerald-600 text-white scale-[1.02] shadow-emerald-500/25 shadow-lg animate-pulse"
+                      ? "bg-emerald-700 text-white shadow-emerald-700/20 shadow-lg cursor-wait"
                       : "bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white active:scale-[0.98]"
                   }`}
                 >
                   {isVerifying ? (
                     <>
-                      <ShieldCheck className="w-5 h-5 text-emerald-200 animate-bounce" />
-                      <span className="tracking-widest">ACCESS GRANTED · UNLOCKING...</span>
+                      <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      <span>Verifying & Unlocking...</span>
                     </>
                   ) : (
                     <>

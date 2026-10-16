@@ -391,7 +391,7 @@ export default function SoldierDownloadPage() {
                 Mobilization Download Window Closed
               </h1>
               <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
-                The scheduled mobilization window for downloading the soldier application has concluded or was closed early by Headquarters. Please coordinate directly with your unit coordinator.
+                The scheduled mobilization window for downloading the soldier application has concluded or was closed early by Headquarters. Please coordinate directly with your unit coordinator or system admnistrators.
               </p>
             </div>
 

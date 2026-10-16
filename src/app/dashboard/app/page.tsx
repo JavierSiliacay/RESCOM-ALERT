@@ -457,10 +457,26 @@ export default function MobileAppPage() {
                           }
                         }}
                         placeholder="e.g. 10RCDG or leave blank for none"
-                        className="w-full pl-3 pr-28 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 font-mono font-extrabold text-slate-900 uppercase tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400 shadow-2xs transition-all"
+                        className="w-full pl-3 pr-10 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 font-mono font-extrabold text-slate-900 uppercase tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400 shadow-2xs transition-all"
+                        onBlur={async () => {
+                          if (hasPasscodeEdits) {
+                            const val = localPasscode.trim().toUpperCase();
+                            setHasPasscodeEdits(false);
+                            await updatePortalSettings({
+                              isDownloadPortalEnabled: true,
+                              allowRosterVerification: true,
+                              requirePasscode: val.length > 0,
+                              passcode: val || undefined,
+                              passcodeExpiresAt: (portalSettings as any)?.passcodeExpiresAt,
+                              updatedBy: officer.displayName || "Admin",
+                              updatedByEmail: officer.email || undefined,
+                            });
+                            showConfirmation(val ? `Passcode saved as "${val}"` : "Passcode cleared (open access)");
+                          }
+                        }}
                       />
-                      <div className="absolute right-1.5 flex items-center gap-1">
-                        {localPasscode && (
+                      {localPasscode && (
+                        <div className="absolute right-1.5 flex items-center">
                           <button
                             type="button"
                             onClick={() => {
@@ -477,32 +493,8 @@ export default function MobileAppPage() {
                               <Copy className="w-3.5 h-3.5" />
                             )}
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const val = localPasscode.trim().toUpperCase();
-                            setHasPasscodeEdits(false);
-                            await updatePortalSettings({
-                              isDownloadPortalEnabled: true,
-                              allowRosterVerification: true,
-                              requirePasscode: val.length > 0,
-                              passcode: val || undefined,
-                              passcodeExpiresAt: (portalSettings as any)?.passcodeExpiresAt,
-                              updatedBy: officer.displayName || "Admin",
-                              updatedByEmail: officer.email || undefined,
-                            });
-                            showConfirmation(val ? `Passcode saved as "${val}"` : "Passcode cleared (open access)");
-                          }}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                            hasPasscodeEdits
-                              ? "bg-emerald-800 hover:bg-emerald-700 text-white shadow-xs"
-                              : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                          }`}
-                        >
-                          Save
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Quick suggestion tags */}

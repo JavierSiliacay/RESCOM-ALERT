@@ -237,6 +237,10 @@ export const updatePortalSettings = mutation({
         passcodeExpiresAt: args.passcodeExpiresAt !== undefined ? args.passcodeExpiresAt : undefined,
         sessionId: args.sessionId !== undefined ? args.sessionId : existing.sessionId,
         windowTitle: args.windowTitle !== undefined ? args.windowTitle : existing.windowTitle,
+        // When a new sessionId is created for a fresh window, reset the session unlock count and devices
+        ...(args.sessionId && args.sessionId !== existing.sessionId
+          ? { sessionUnlockCount: 0, sessionUnlockDevices: [] }
+          : {}),
         updatedBy: args.updatedBy ?? "Authorized Officer",
         updatedByEmail: args.updatedByEmail,
         updatedAt: now,
@@ -253,6 +257,8 @@ export const updatePortalSettings = mutation({
         passcodeExpiresAt: args.passcodeExpiresAt,
         sessionId: args.sessionId,
         windowTitle: args.windowTitle,
+        sessionUnlockCount: 0,
+        sessionUnlockDevices: [],
         updatedBy: args.updatedBy ?? "Authorized Officer",
         updatedByEmail: args.updatedByEmail,
         updatedAt: now,
@@ -273,4 +279,35 @@ export const updatePortalSettings = mutation({
     return { success: true };
   },
 });
+
+/**
+ * Records a successful passcode unlock event for the active mobilization window session.
+ * Deduplicates by deviceId so refreshing or entering twice does not inflate the count.
+ */
+export const recordSessionUnlock = mutation({
+  args: {
+    deviceId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("appPortalSettings").first();
+    if (!existing) return { recorded: false, count: 0 };
+
+    const currentDevices = existing.sessionUnlockDevices ?? [];
+    if (currentDevices.includes(args.deviceId)) {
+      // Device already counted in this session
+      return { recorded: false, count: existing.sessionUnlockCount ?? currentDevices.length };
+    }
+
+    const updatedDevices = [...currentDevices, args.deviceId];
+    const newCount = updatedDevices.length;
+
+    await ctx.db.patch(existing._id, {
+      sessionUnlockCount: newCount,
+      sessionUnlockDevices: updatedDevices,
+    });
+
+    return { recorded: true, count: newCount };
+  },
+});
+
 

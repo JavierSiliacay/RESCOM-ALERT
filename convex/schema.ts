@@ -224,6 +224,8 @@ export default defineSchema({
     passcodeExpiresAt: v.optional(v.number()), // Timestamp when the download window/passcode expires
     sessionId: v.optional(v.string()), // Unique window session token; increments to wipe all locked-out devices on new window creation
     windowTitle: v.optional(v.string()), // Optional mobilization window title (e.g. "10RCDG Troop Mobilization")
+    sessionUnlockCount: v.optional(v.number()), // Number of unique soldiers who unlocked the gate this session
+    sessionUnlockDevices: v.optional(v.array(v.string())), // Device IDs for deduplication in current session
     updatedBy: v.optional(v.string()),
     updatedByEmail: v.optional(v.string()),
     updatedAt: v.string(),

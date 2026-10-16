@@ -170,7 +170,15 @@ export default function SoldierDownloadPage() {
         sessionStorage.removeItem("rescom_download_unlocked");
         localStorage.removeItem("rescom_download_failed_attempts");
       }
-      // Dramatic, high-engagement military verification sequence (600ms)
+
+      // Record successful unlock telemetry for current session (deduplicated by deviceId)
+      if (deviceId) {
+        recordSessionUnlock({ deviceId }).catch((err) =>
+          console.error("Failed to record session unlock:", err)
+        );
+      }
+
+      // Clean, professional military verification sequence (600ms)
       setTimeout(() => {
         setIsUnlocked(true);
         setIsVerifying(false);
@@ -203,6 +211,7 @@ export default function SoldierDownloadPage() {
     (isQrAuthorized || !isPasscodeActive || isUnlocked);
 
   const recordDownload = useMutation(api.downloads.record);
+  const recordSessionUnlock = useMutation(api.downloads.recordSessionUnlock);
   const stats = useQuery(api.downloads.getStats);
 
   const apkUrl = "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.0.7/rescom-alert-v1.0.7.apk";

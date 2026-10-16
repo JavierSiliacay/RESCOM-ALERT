@@ -574,8 +574,22 @@ export default function MobileAppPage() {
                       </div>
                     </div>
 
-                    {/* Expiration Status Badge & Close Early Action */}
+                    {/* Expiration Status Badge, Session Unlock Counter, & Close Early Action */}
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {/* Live Window Session Authorized Troops Counter */}
+                      <div
+                        title="Troops who have successfully entered the command passcode during this active window"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 shadow-2xs text-[11px] font-mono font-bold"
+                      >
+                        <Users className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>
+                          <strong className="text-emerald-800">
+                            {(portalSettings as any)?.sessionUnlockCount ?? 0}
+                          </strong>{" "}
+                          Authorized
+                        </span>
+                      </div>
+
                       {(portalSettings as any)?.passcodeExpiresAt && (portalSettings as any).passcodeExpiresAt > currentTime ? (
                         <>
                           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-900 shadow-2xs">
@@ -999,17 +1013,30 @@ export default function MobileAppPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/80 space-y-1">
                 <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
+                  <span>ACTIVE WINDOW UNLOCKED</span>
+                  <KeyRound className="w-4 h-4 text-emerald-700" />
+                </div>
+                <div className="text-3xl font-black text-emerald-950">
+                  {(portalSettings as any)?.sessionUnlockCount ?? 0}
+                </div>
+                <p className="text-[11px] text-emerald-700">
+                  Soldiers successfully authenticated this window
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700">
                   <span>UNIQUE DEVICES ARMED</span>
                   <Smartphone className="w-4 h-4 text-emerald-700" />
                 </div>
-                <div className="text-3xl font-black text-emerald-950">
+                <div className="text-3xl font-black text-slate-900">
                   {stats ? stats.uniqueDevices : 0}
                 </div>
-                <p className="text-[11px] text-emerald-700">
-                  Distinct soldier phones equipped with the siren app
+                <p className="text-[11px] text-slate-600">
+                  Distinct phones equipped with the siren app
                 </p>
               </div>
 
@@ -1035,7 +1062,7 @@ export default function MobileAppPage() {
                   1 Phone = 1 Head Count
                 </div>
                 <p className="text-[11px] text-amber-700 leading-relaxed">
-                  Soldiers tapping download multiple times will never inflate your unique readiness tally.
+                  Multiple attempts or re-entries by the same device will not inflate counts.
                 </p>
               </div>
             </div>

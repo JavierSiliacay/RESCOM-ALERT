@@ -48,6 +48,12 @@ export default function MobileAppPage() {
   const [localPasscode, setLocalPasscode] = useState("");
   const [hasPasscodeEdits, setHasPasscodeEdits] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [saveStatus, setSaveStatus] = useState<{ message: string; type: "success" | "info" } | null>(null);
+
+  const showConfirmation = (message: string, type: "success" | "info" = "success") => {
+    setSaveStatus({ message, type });
+    setTimeout(() => setSaveStatus(null), 3000);
+  };
 
   const stats = useQuery(api.downloads.getStats);
   const portalSettings = useQuery(api.downloads.getPortalSettings);
@@ -244,11 +250,30 @@ export default function MobileAppPage() {
               </div>
             </div>
 
+            {/* Live Action Confirmation Toast */}
+            {saveStatus && (
+              <div
+                className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top-1 duration-200 ${
+                  saveStatus.type === "success"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                    : "bg-slate-100 border-slate-300 text-slate-800"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{saveStatus.message}</span>
+                </div>
+                <span className="text-[10px] uppercase font-mono text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-200 font-bold">
+                  Saved Live
+                </span>
+              </div>
+            )}
+
             {/* Passcode & Expiration Config Box */}
             {portalSettings?.isDownloadPortalEnabled !== false && (
               <div className="pt-4 border-t border-slate-100 grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* 1. Command Download Passcode Card */}
-                <div className="p-4 rounded-2xl bg-gradient-to-b from-white to-slate-50/80 border border-slate-200/90 shadow-2xs space-y-3">
+                <div className="p-4 rounded-2xl bg-gradient-to-b from-white to-slate-50/80 border border-slate-200/90 shadow-2xs space-y-3.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/70">
@@ -260,7 +285,7 @@ export default function MobileAppPage() {
                         </span>
                         <span className="text-[10px] text-slate-500">
                           {portalSettings?.passcode ? (
-                            <span className="text-emerald-700 font-medium">● Passcode Protected</span>
+                            <span className="text-emerald-700 font-bold">● Passcode Protected: {portalSettings.passcode}</span>
                           ) : (
                             <span className="text-slate-400">○ Open Access (No Passcode)</span>
                           )}
@@ -268,29 +293,28 @@ export default function MobileAppPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const randomPin = Math.floor(100000 + Math.random() * 900000).toString();
-                          setLocalPasscode(randomPin);
-                          setHasPasscodeEdits(false);
-                          updatePortalSettings({
-                            isDownloadPortalEnabled: true,
-                            allowRosterVerification: true,
-                            requirePasscode: true,
-                            passcode: randomPin,
-                            passcodeExpiresAt: (portalSettings as any)?.passcodeExpiresAt,
-                            updatedBy: officer.displayName || "Admin",
-                            updatedByEmail: officer.email || undefined,
-                          });
-                        }}
-                        className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border border-emerald-200/80 rounded-lg cursor-pointer transition-all flex items-center gap-1"
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        <span>Generate PIN</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const randomPin = Math.floor(100000 + Math.random() * 900000).toString();
+                        setLocalPasscode(randomPin);
+                        setHasPasscodeEdits(false);
+                        await updatePortalSettings({
+                          isDownloadPortalEnabled: true,
+                          allowRosterVerification: true,
+                          requirePasscode: true,
+                          passcode: randomPin,
+                          passcodeExpiresAt: (portalSettings as any)?.passcodeExpiresAt,
+                          updatedBy: officer.displayName || "Admin",
+                          updatedByEmail: officer.email || undefined,
+                        });
+                        showConfirmation(`Generated & saved new PIN: ${randomPin}`);
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border border-emerald-200/80 rounded-lg cursor-pointer transition-all flex items-center gap-1 shadow-2xs"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Generate PIN</span>
+                    </button>
                   </div>
 
                   <div className="space-y-2">
@@ -302,26 +326,24 @@ export default function MobileAppPage() {
                           setLocalPasscode(e.target.value.toUpperCase());
                           setHasPasscodeEdits(true);
                         }}
-                        onKeyDown={(e) => {
+                        onKeyDown={async (e) => {
                           if (e.key === "Enter") {
-                            e.currentTarget.blur();
+                            const val = localPasscode.trim().toUpperCase();
+                            setHasPasscodeEdits(false);
+                            await updatePortalSettings({
+                              isDownloadPortalEnabled: true,
+                              allowRosterVerification: true,
+                              requirePasscode: val.length > 0,
+                              passcode: val || undefined,
+                              passcodeExpiresAt: (portalSettings as any)?.passcodeExpiresAt,
+                              updatedBy: officer.displayName || "Admin",
+                              updatedByEmail: officer.email || undefined,
+                            });
+                            showConfirmation(val ? `Passcode saved as "${val}"` : "Passcode cleared (open access)");
                           }
                         }}
-                        onBlur={() => {
-                          const val = localPasscode.trim().toUpperCase();
-                          setHasPasscodeEdits(false);
-                          updatePortalSettings({
-                            isDownloadPortalEnabled: true,
-                            allowRosterVerification: true,
-                            requirePasscode: val.length > 0,
-                            passcode: val || undefined,
-                            passcodeExpiresAt: (portalSettings as any)?.passcodeExpiresAt,
-                            updatedBy: officer.displayName || "Admin",
-                            updatedByEmail: officer.email || undefined,
-                          });
-                        }}
                         placeholder="e.g. 10RCDG or leave blank for none"
-                        className="w-full pl-3 pr-20 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 font-mono font-bold text-slate-800 uppercase tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400 shadow-2xs transition-all"
+                        className="w-full pl-3 pr-28 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 font-mono font-extrabold text-slate-900 uppercase tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400 shadow-2xs transition-all"
                       />
                       <div className="absolute right-1.5 flex items-center gap-1">
                         {localPasscode && (
@@ -333,7 +355,7 @@ export default function MobileAppPage() {
                               setTimeout(() => setCopiedPasscode(false), 2000);
                             }}
                             title="Copy passcode"
-                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                           >
                             {copiedPasscode ? (
                               <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -342,11 +364,30 @@ export default function MobileAppPage() {
                             )}
                           </button>
                         )}
-                        {hasPasscodeEdits && (
-                          <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                            Unsaved
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const val = localPasscode.trim().toUpperCase();
+                            setHasPasscodeEdits(false);
+                            await updatePortalSettings({
+                              isDownloadPortalEnabled: true,
+                              allowRosterVerification: true,
+                              requirePasscode: val.length > 0,
+                              passcode: val || undefined,
+                              passcodeExpiresAt: (portalSettings as any)?.passcodeExpiresAt,
+                              updatedBy: officer.displayName || "Admin",
+                              updatedByEmail: officer.email || undefined,
+                            });
+                            showConfirmation(val ? `Passcode saved as "${val}"` : "Passcode cleared (open access)");
+                          }}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                            hasPasscodeEdits
+                              ? "bg-emerald-800 hover:bg-emerald-700 text-white shadow-xs"
+                              : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                          }`}
+                        >
+                          Save
+                        </button>
                       </div>
                     </div>
 
@@ -357,10 +398,10 @@ export default function MobileAppPage() {
                         <button
                           key={preset}
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             setLocalPasscode(preset);
                             setHasPasscodeEdits(false);
-                            updatePortalSettings({
+                            await updatePortalSettings({
                               isDownloadPortalEnabled: true,
                               allowRosterVerification: true,
                               requirePasscode: true,
@@ -369,11 +410,12 @@ export default function MobileAppPage() {
                               updatedBy: officer.displayName || "Admin",
                               updatedByEmail: officer.email || undefined,
                             });
+                            showConfirmation(`Applied preset passcode: ${preset}`);
                           }}
-                          className={`px-2 py-0.5 text-[10px] font-mono font-semibold rounded-md border cursor-pointer transition-colors ${
+                          className={`px-2.5 py-1 text-[10.5px] font-mono font-bold rounded-lg border cursor-pointer transition-colors ${
                             localPasscode === preset
-                              ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                              ? "bg-emerald-100 text-emerald-900 border-emerald-400 shadow-2xs"
+                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                           }`}
                         >
                           {preset}
@@ -382,10 +424,10 @@ export default function MobileAppPage() {
                       {localPasscode && (
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             setLocalPasscode("");
                             setHasPasscodeEdits(false);
-                            updatePortalSettings({
+                            await updatePortalSettings({
                               isDownloadPortalEnabled: true,
                               allowRosterVerification: true,
                               requirePasscode: false,
@@ -394,8 +436,9 @@ export default function MobileAppPage() {
                               updatedBy: officer.displayName || "Admin",
                               updatedByEmail: officer.email || undefined,
                             });
+                            showConfirmation("Removed passcode (portal is now open access)");
                           }}
-                          className="px-2 py-0.5 text-[10px] font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md border border-transparent cursor-pointer"
+                          className="px-2 py-0.5 text-[10px] font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-md border border-transparent cursor-pointer"
                         >
                           Clear
                         </button>
@@ -409,7 +452,7 @@ export default function MobileAppPage() {
                 </div>
 
                 {/* 2. Download Window Duration Card */}
-                <div className="p-4 rounded-2xl bg-gradient-to-b from-white to-slate-50/80 border border-slate-200/90 shadow-2xs space-y-3">
+                <div className="p-4 rounded-2xl bg-gradient-to-b from-white to-slate-50/80 border border-slate-200/90 shadow-2xs space-y-3.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/70">
@@ -427,12 +470,12 @@ export default function MobileAppPage() {
 
                     {/* Expiration Badge */}
                     {(portalSettings as any)?.passcodeExpiresAt && (portalSettings as any).passcodeExpiresAt > currentTime ? (
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-900 shadow-2xs">
                         <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
                         </span>
-                        <span className="text-[11px] font-mono font-bold">
+                        <span className="text-[11px] font-mono font-extrabold">
                           {(() => {
                             const diffMs = (portalSettings as any).passcodeExpiresAt - currentTime;
                             const hours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -443,12 +486,12 @@ export default function MobileAppPage() {
                         </span>
                       </div>
                     ) : (portalSettings as any)?.passcodeExpiresAt && (portalSettings as any).passcodeExpiresAt <= currentTime ? (
-                      <span className="text-[10.5px] font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-lg">
+                      <span className="text-[10.5px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-lg">
                         Expired (Locked)
                       </span>
                     ) : (
-                      <span className="text-[10.5px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      <span className="text-[10.5px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         Always Open
                       </span>
                     )}
@@ -463,14 +506,27 @@ export default function MobileAppPage() {
                       { label: "24 Hours", hours: 24 },
                       { label: "Always Open", hours: 0 },
                     ].map((opt) => {
-                      const isAlwaysOpen = opt.hours === 0 && !(portalSettings as any)?.passcodeExpiresAt;
+                      const expAt = (portalSettings as any)?.passcodeExpiresAt;
+                      let isSelected = false;
+
+                      if (opt.hours === 0) {
+                        isSelected = !expAt || expAt <= 0;
+                      } else if (expAt && expAt > currentTime) {
+                        const remainingHours = (expAt - currentTime) / (1000 * 60 * 60);
+                        // Highlight matching range
+                        if (opt.hours === 1 && remainingHours > 0 && remainingHours <= 1.1) isSelected = true;
+                        if (opt.hours === 2 && remainingHours > 1.1 && remainingHours <= 2.2) isSelected = true;
+                        if (opt.hours === 6 && remainingHours > 2.2 && remainingHours <= 6.5) isSelected = true;
+                        if (opt.hours === 24 && remainingHours > 6.5) isSelected = true;
+                      }
+
                       return (
                         <button
                           key={opt.label}
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             const exp = opt.hours > 0 ? Date.now() + opt.hours * 60 * 60 * 1000 : undefined;
-                            updatePortalSettings({
+                            await updatePortalSettings({
                               isDownloadPortalEnabled: true,
                               allowRosterVerification: true,
                               requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
@@ -479,11 +535,16 @@ export default function MobileAppPage() {
                               updatedBy: officer.displayName || "Admin",
                               updatedByEmail: officer.email || undefined,
                             });
+                            showConfirmation(
+                              opt.hours > 0
+                                ? `Download window set to ${opt.label} (auto-locks after)`
+                                : "Download window set to Always Open"
+                            );
                           }}
                           className={`py-2 px-1 text-center rounded-xl cursor-pointer transition-all border flex flex-col items-center justify-center gap-0.5 ${
-                            isAlwaysOpen
-                              ? "bg-emerald-800 text-white border-emerald-900 shadow-xs font-bold"
-                              : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200 text-xs font-medium"
+                            isSelected
+                              ? "bg-emerald-800 text-white border-emerald-950 shadow-sm font-bold ring-2 ring-emerald-600/30"
+                              : "bg-white hover:bg-slate-100 text-slate-700 border-slate-200 text-xs font-medium hover:border-slate-300"
                           }`}
                         >
                           <span className="text-[11px] leading-tight block font-semibold">{opt.label}</span>

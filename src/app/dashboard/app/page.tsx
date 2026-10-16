@@ -194,9 +194,9 @@ export default function MobileAppPage() {
     }
   }, [portalSettings]);
 
-  // Keep live countdown refreshed every 10 seconds
+  // Keep live countdown refreshed every 1 second
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 10000);
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -604,9 +604,10 @@ export default function MobileAppPage() {
                                 const days = Math.floor(totalSec / 86400);
                                 const hours = Math.floor((totalSec % 86400) / 3600);
                                 const mins = Math.floor((totalSec % 3600) / 60);
-                                if (days > 0) return `${days}d ${hours}h left`;
-                                if (hours > 0) return `${hours}h ${mins}m left`;
-                                return `${mins}m left`;
+                                const secs = totalSec % 60;
+                                if (days > 0) return `${days}d ${hours}h ${mins}m ${secs}s left`;
+                                if (hours > 0) return `${hours}h ${mins}m ${secs}s left`;
+                                return `${mins}m ${secs}s left`;
                               })()}
                             </span>
                           </div>

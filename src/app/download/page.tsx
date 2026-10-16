@@ -72,15 +72,23 @@ export default function SoldierDownloadPage() {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
 
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Keep live time updated for expiration countdowns
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Check if passcode is required and whether it has expired
   const isPasscodeActive = Boolean(
     portalSettings?.requirePasscode &&
     portalSettings?.passcode &&
-    (!portalSettings.passcodeExpiresAt || portalSettings.passcodeExpiresAt > Date.now())
+    (!portalSettings.passcodeExpiresAt || portalSettings.passcodeExpiresAt > currentTime)
   );
 
   const isPortalExpired = Boolean(
-    portalSettings?.passcodeExpiresAt && portalSettings.passcodeExpiresAt <= Date.now()
+    portalSettings?.passcodeExpiresAt && portalSettings.passcodeExpiresAt <= currentTime
   );
 
   // Initialize lockout and unlocked session from localStorage
@@ -445,11 +453,40 @@ export default function SoldierDownloadPage() {
             </div>
 
             {/* Header Lockup */}
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10.5px] font-mono font-bold tracking-wider uppercase">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Command Security Gate</span>
+            <div className="space-y-2">
+              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10.5px] font-mono font-bold tracking-wider uppercase">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Command Security Gate</span>
+                </div>
+
+                {/* Mobilization Window Duration Display for Soldiers */}
+                {(portalSettings as any)?.passcodeExpiresAt && (portalSettings as any).passcodeExpiresAt > currentTime ? (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-950 text-[10.5px] font-mono font-extrabold shadow-2xs animate-pulse">
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>
+                      Window Closes:{" "}
+                      {(() => {
+                        const diff = (portalSettings as any).passcodeExpiresAt - currentTime;
+                        const totalSec = Math.floor(diff / 1000);
+                        const days = Math.floor(totalSec / 86400);
+                        const hours = Math.floor((totalSec % 86400) / 3600);
+                        const mins = Math.floor((totalSec % 3600) / 60);
+                        const secs = totalSec % 60;
+                        if (days > 0) return `${days}d ${hours}h ${mins}m left`;
+                        if (hours > 0) return `${hours}h ${mins}m ${secs}s left`;
+                        return `${mins}m ${secs}s left`;
+                      })()}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10.5px] font-mono font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Always Open</span>
+                  </div>
+                )}
               </div>
+
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                 10RCDG RESCOM APP
               </h1>
@@ -581,10 +618,39 @@ export default function SoldierDownloadPage() {
           </div>
 
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-extrabold uppercase tracking-wider mb-1.5">
-              <Shield className="w-3.5 h-3.5" />
-              <span>Official Military Mobilization Portal</span>
+            <div className="flex items-center justify-center gap-1.5 flex-wrap mb-1.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-extrabold uppercase tracking-wider">
+                <Shield className="w-3.5 h-3.5" />
+                <span>Official Military Mobilization Portal</span>
+              </div>
+
+              {/* Mobilization Window Duration Display */}
+              {(portalSettings as any)?.passcodeExpiresAt && (portalSettings as any).passcodeExpiresAt > currentTime ? (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-950 text-[11px] font-mono font-extrabold shadow-2xs">
+                  <Clock className="w-3.5 h-3.5 text-amber-700" />
+                  <span>
+                    Window Closes:{" "}
+                    {(() => {
+                      const diff = (portalSettings as any).passcodeExpiresAt - currentTime;
+                      const totalSec = Math.floor(diff / 1000);
+                      const days = Math.floor(totalSec / 86400);
+                      const hours = Math.floor((totalSec % 86400) / 3600);
+                      const mins = Math.floor((totalSec % 3600) / 60);
+                      const secs = totalSec % 60;
+                      if (days > 0) return `${days}d ${hours}h ${mins}m left`;
+                      if (hours > 0) return `${hours}h ${mins}m ${secs}s left`;
+                      return `${mins}m ${secs}s left`;
+                    })()}
+                  </span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10.5px] font-mono font-bold">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Always Open</span>
+                </div>
+              )}
             </div>
+
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               10RCDG RESCOM APP
             </h1>

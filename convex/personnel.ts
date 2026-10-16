@@ -284,25 +284,15 @@ export const verifyMobile = query({
 
     if (matchedSoldier) {
       // OPSEC & Anti-Impersonation Guard:
-      // If the soldier already has an enrolled physical phone (appDeviceId or active hardware fcmToken)
-      // and this verification attempt is NOT from their owner phone and NOT via an authorized Command QR:
+      // If the soldier already has an active enrolled device (appDeviceId or active hardware fcmToken)
+      // and this attempt is NOT via an authorized Command QR code, immediately reject with
+      // zero soldier identity/profile details leaked.
       const isAlreadyBound = Boolean(
         matchedSoldier.appDeviceId ||
         (matchedSoldier.fcmToken && !matchedSoldier.fcmToken.startsWith("fcm_prov_"))
       );
 
-      const isMismatchedDevice = Boolean(
-        matchedSoldier.appDeviceId &&
-        args.appDeviceId &&
-        matchedSoldier.appDeviceId !== args.appDeviceId
-      );
-
-      // If already bound to another phone, immediately reject without exposing ANY soldier identity
-      if (
-        !args.isAuthorizedQr &&
-        isAlreadyBound &&
-        (isMismatchedDevice || (matchedSoldier.appDeviceId && !args.appDeviceId))
-      ) {
+      if (!args.isAuthorizedQr && isAlreadyBound) {
         return {
           status: "DEVICE_MISMATCH",
           message:

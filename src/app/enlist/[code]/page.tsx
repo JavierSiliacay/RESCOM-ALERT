@@ -240,6 +240,7 @@ export default function PublicEnlistmentPage() {
       });
 
       if (!res.valid) {
+        setPasscode(""); // Erase input on incorrect attempt for cleaner UX
         const nextFailed = failedAttempts + 1;
         setFailedAttempts(nextFailed);
 

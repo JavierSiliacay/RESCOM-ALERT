@@ -619,67 +619,138 @@ export default function MobileAppPage() {
                     </div>
                   </div>
 
-                  {/* Enlistment-style Duration Select Dropdown */}
-                  <div className="space-y-2">
-                    <select
-                      value={durationPreset}
-                      onChange={async (e) => {
-                        const selectedVal = e.target.value;
-                        setDurationPreset(selectedVal);
+                    {/* Enlistment-style Duration Select Dropdown */}
+                    <div className="space-y-2">
+                      <select
+                        value={durationPreset}
+                        onChange={async (e) => {
+                          const selectedVal = e.target.value;
+                          setDurationPreset(selectedVal);
 
-                        if (selectedVal === "Always Open") {
-                          await updatePortalSettings({
-                            isDownloadPortalEnabled: true,
-                            allowRosterVerification: true,
-                            requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
-                            passcode: (portalSettings as any)?.passcode,
-                            passcodeExpiresAt: undefined,
-                            sessionId: "sess_" + Date.now(),
-                            updatedBy: officer.displayName || "Admin",
-                            updatedByEmail: officer.email || undefined,
-                          });
-                          showConfirmation("Download window set to Always Open (No time limit)");
-                        } else if (selectedVal !== "Custom Duration") {
-                          const presetHoursMap: Record<string, number> = {
-                            "1 Hour": 1,
-                            "6 Hours": 6,
-                            "12 Hours": 12,
-                            "24 Hours (1 Day)": 24,
-                            "3 Days": 72,
-                            "7 Days (1 Week)": 168,
-                            "14 Days": 336,
-                            "30 Days": 720,
-                          };
-                          const hrs = presetHoursMap[selectedVal];
-                          if (hrs) {
-                            const exp = Date.now() + hrs * 60 * 60 * 1000;
+                          if (selectedVal === "Always Open") {
                             await updatePortalSettings({
                               isDownloadPortalEnabled: true,
                               allowRosterVerification: true,
                               requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
                               passcode: (portalSettings as any)?.passcode,
-                              passcodeExpiresAt: exp,
+                              passcodeExpiresAt: undefined,
                               sessionId: "sess_" + Date.now(),
                               updatedBy: officer.displayName || "Admin",
                               updatedByEmail: officer.email || undefined,
                             });
-                            showConfirmation(`Download window set to ${selectedVal}`);
+                            showConfirmation("Download window set to Always Open (No time limit)");
+                          } else if (selectedVal !== "Custom Duration" && selectedVal !== "Expired (Locked)") {
+                            const presetHoursMap: Record<string, number> = {
+                              "1 Hour": 1,
+                              "6 Hours": 6,
+                              "12 Hours": 12,
+                              "24 Hours (1 Day)": 24,
+                              "3 Days": 72,
+                              "7 Days (1 Week)": 168,
+                              "14 Days": 336,
+                              "30 Days": 720,
+                            };
+                            const hrs = presetHoursMap[selectedVal];
+                            if (hrs) {
+                              const exp = Date.now() + hrs * 60 * 60 * 1000;
+                              await updatePortalSettings({
+                                isDownloadPortalEnabled: true,
+                                allowRosterVerification: true,
+                                requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
+                                passcode: (portalSettings as any)?.passcode,
+                                passcodeExpiresAt: exp,
+                                sessionId: "sess_" + Date.now(),
+                                updatedBy: officer.displayName || "Admin",
+                                updatedByEmail: officer.email || undefined,
+                              });
+                              showConfirmation(`Download window set to ${selectedVal}`);
+                            }
                           }
-                        }
-                      }}
-                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 font-semibold text-slate-800 cursor-pointer shadow-2xs"
-                    >
-                      <option value="Always Open">Always Open (No Auto-Lockout)</option>
-                      <option value="1 Hour">1 Hour</option>
-                      <option value="6 Hours">6 Hours</option>
-                      <option value="12 Hours">12 Hours</option>
-                      <option value="24 Hours (1 Day)">24 Hours (1 Day)</option>
-                      <option value="3 Days">3 Days</option>
-                      <option value="7 Days (1 Week)">7 Days (1 Week)</option>
-                      <option value="14 Days">14 Days</option>
-                      <option value="30 Days">30 Days</option>
-                      <option value="Custom Duration">Custom Duration (Specify Below)...</option>
-                    </select>
+                        }}
+                        className={`w-full px-3.5 py-2.5 text-xs bg-white border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 font-semibold cursor-pointer shadow-2xs transition-colors ${
+                          durationPreset === "Expired (Locked)"
+                            ? "border-rose-300 text-rose-900 bg-rose-50/50"
+                            : "border-slate-300 text-slate-800"
+                        }`}
+                      >
+                        {durationPreset === "Expired (Locked)" && (
+                          <option value="Expired (Locked)">⛔ Expired (Locked) — Portal Closed</option>
+                        )}
+                        <option value="Always Open">Always Open (No Auto-Lockout)</option>
+                        <option value="1 Hour">1 Hour</option>
+                        <option value="6 Hours">6 Hours</option>
+                        <option value="12 Hours">12 Hours</option>
+                        <option value="24 Hours (1 Day)">24 Hours (1 Day)</option>
+                        <option value="3 Days">3 Days</option>
+                        <option value="7 Days (1 Week)">7 Days (1 Week)</option>
+                        <option value="14 Days">14 Days</option>
+                        <option value="30 Days">30 Days</option>
+                        <option value="Custom Duration">Custom Duration (Specify Below)...</option>
+                      </select>
+
+                      {/* Actionable Prompt When Window is Expired / Closed */}
+                      {durationPreset === "Expired (Locked)" && (
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-rose-50 to-amber-50 border border-rose-200/90 text-xs text-rose-950 space-y-2.5 animate-in fade-in duration-200 shadow-2xs">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                            <div className="leading-snug">
+                              <span className="font-extrabold text-rose-900 block">
+                                The download duration has expired or was closed early.
+                              </span>
+                              <span className="text-[11px] text-slate-600">
+                                Troops visiting <code className="bg-white/80 px-1 py-0.2 rounded font-mono font-bold text-slate-800 border border-slate-200">/download</code> will see a closed window notice. Would you like to launch a new duration or reopen permanently?
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setDurationPreset("Always Open");
+                                await updatePortalSettings({
+                                  isDownloadPortalEnabled: true,
+                                  allowRosterVerification: true,
+                                  requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
+                                  passcode: (portalSettings as any)?.passcode,
+                                  passcodeExpiresAt: undefined,
+                                  sessionId: "sess_" + Date.now(),
+                                  updatedBy: officer.displayName || "Admin",
+                                  updatedByEmail: officer.email || undefined,
+                                });
+                                showConfirmation("Reopened download window as Always Open");
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Make Always Open</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setDurationPreset("24 Hours (1 Day)");
+                                const exp = Date.now() + 24 * 60 * 60 * 1000;
+                                await updatePortalSettings({
+                                  isDownloadPortalEnabled: true,
+                                  allowRosterVerification: true,
+                                  requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
+                                  passcode: (portalSettings as any)?.passcode,
+                                  passcodeExpiresAt: exp,
+                                  sessionId: "sess_" + Date.now(),
+                                  updatedBy: officer.displayName || "Admin",
+                                  updatedByEmail: officer.email || undefined,
+                                });
+                                showConfirmation("Renewed download window for 24 Hours");
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 shadow-2xs transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Renew (24 Hours)</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                     {/* Custom Duration Input Box & Live Preview (Identical to Enlistment Form) */}
                     {durationPreset === "Custom Duration" && (() => {

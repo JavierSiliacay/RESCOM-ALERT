@@ -153,6 +153,7 @@ export default function MobileAppPage() {
   const [customDurationInput, setCustomDurationInput] = useState("");
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isCloseEarlyModalOpen, setIsCloseEarlyModalOpen] = useState(false);
+  const [isClosingEarly, setIsClosingEarly] = useState(false);
 
   const showConfirmation = (message: string, type: "success" | "info" = "success") => {
     setSaveStatus({ message, type });
@@ -1322,32 +1323,50 @@ export default function MobileAppPage() {
             <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
               <button
                 type="button"
+                disabled={isClosingEarly}
                 onClick={() => setIsCloseEarlyModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200/80 rounded-xl transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                disabled={isClosingEarly}
                 onClick={async () => {
-                  const newSession = "sess_" + Date.now();
-                  await updatePortalSettings({
-                    isDownloadPortalEnabled: true,
-                    allowRosterVerification: true,
-                    requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
-                    passcode: (portalSettings as any)?.passcode,
-                    passcodeExpiresAt: Date.now() - 1000, // Expire immediately
-                    sessionId: newSession,
-                    updatedBy: officer.displayName || "Admin",
-                    updatedByEmail: officer.email || undefined,
-                  });
-                  setIsCloseEarlyModalOpen(false);
-                  showConfirmation("Download window closed early successfully", "info");
+                  try {
+                    setIsClosingEarly(true);
+                    const newSession = "sess_" + Date.now();
+                    await updatePortalSettings({
+                      isDownloadPortalEnabled: true,
+                      allowRosterVerification: true,
+                      requirePasscode: (portalSettings as any)?.requirePasscode ?? false,
+                      passcode: (portalSettings as any)?.passcode,
+                      passcodeExpiresAt: Date.now() - 1000, // Expire immediately
+                      sessionId: newSession,
+                      updatedBy: officer.displayName || "Admin",
+                      updatedByEmail: officer.email || undefined,
+                    });
+                    setIsCloseEarlyModalOpen(false);
+                    showConfirmation("Download window closed early successfully", "info");
+                  } catch (err) {
+                    console.error("Failed to close early:", err);
+                  } finally {
+                    setIsClosingEarly(false);
+                  }
                 }}
-                className="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                className="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-wait text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Confirm Close Early</span>
+                {isClosingEarly ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Closing Window...</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Confirm Close Early</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

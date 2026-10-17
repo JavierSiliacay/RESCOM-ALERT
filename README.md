@@ -13,9 +13,11 @@
   <p>
     <img src="https://img.shields.io/badge/Web-Portal-1d4ed8?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Web Portal" />
     &nbsp;
-    <img src="https://img.shields.io/badge/Android-App-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android App" />
+    <img src="https://img.shields.io/badge/Android-App_v1.0.8-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android App" />
     &nbsp;
-    <img src="https://img.shields.io/badge/Architecture-Monorepo-065f46?style=for-the-badge&logo=git" alt="Monorepo" />
+    <img src="https://img.shields.io/badge/Cloudflare-WAF_Protected-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare WAF" />
+    &nbsp;
+    <img src="https://img.shields.io/badge/Security-Full_TLS_1.3_Strict-059669?style=for-the-badge&logo=letsencrypt&logoColor=white" alt="TLS 1.3" />
   </p>
 
 </div>
@@ -29,8 +31,39 @@
 It enables commanders and operations officers to issue urgent mobilization orders and disaster advisories that trigger an emergency siren on personnel devices and wake locked screens, even when phones are muted, locked, or without internet access.
 
 ### Monorepo Structure
-- **Web Command Portal** (`src/`): Web dashboard for headquarters to dispatch broadcasts and manage troop rosters.
-- **Android Field App** (`mobile/`): Native Android companion application with offline emergency siren engine for soldiers.
+- **Web Command Portal** (`src/`): Command HQ dashboard for officers to dispatch broadcasts, verify troop musters, and manage rosters.
+- **Android Field App** (`mobile/`): Native Android companion application (`v1.0.8`) with offline emergency siren engine and anti-impersonation hardware binding.
+
+---
+
+## 🏛️ System Architecture & Perimeter Defense
+
+<div align="center">
+  <img src="public/10rcdg-cloudflare-perimeter-architecture.jpg" alt="10RCDG RESCOM ALERT - Perimeter Security & Services Architecture" width="100%" />
+</div>
+
+RESCOM ALERT employs a multi-tiered, **Defense-in-Depth** architecture that neutralizes threats at the global edge before any request reaches the core system:
+
+### 1. 🛡️ Cloudflare Edge Security Perimeter (Pre-System Gatekeeper)
+* **Philippines-Only OPSEC Shield (Geo-Fencing):** Intercepts and unconditionally drops non-PH IP traffic (`(ip.src.country ne "PH")` &rarr; Block), blocking foreign reconnaissance scans and international botnets before they reach Philippine infrastructure.
+* **Anti-Brute Force Rate Limiter:** Protects sensitive mobilization routes (`/download` and `/enlist`) from high-frequency credential stuffing, automated APK scraping, and registration code enumeration.
+* **Bot Fight Mode & Automated DDoS Shield:** Employs behavioral heuristics and challenges to drop headless scrapers and volumetric floods across 330+ Anycast edge data centers worldwide.
+* **Full (Strict) TLS 1.3 Encryption:** Ensures zero-gap cryptographic protection from user device to application core with sub-second handshake latency and Perfect Forward Secrecy.
+
+### 2. ⚙️ Core Services Tier
+* **Alert & Siren Dispatcher:** Sub-second fan-out of Red, Yellow, White, and Standby mobilization orders to all active field units.
+* **Commander Auth (Google 2FA & RBAC):** Role-Based Access Control (Super Admin, CDO, Monitor) backed by two-factor authentication and session lockout controls.
+* **Troop Provisioning & Passcode Gate:** Normalizes 10-digit Philippine mobile numbers, enforces physical hardware device binding (`ANDROID_ID`), and strictly redacts soldier profiles upon unauthorized access.
+* **Dual Push & GSM SMS Broker:** Redundant alert dispatch pipeline—high-speed push notifications over data networks with automatic fallback to encrypted GSM SMS cellular broadcasts for offline areas.
+
+### 3. 🗄️ Data & Persistence Tier
+* **Real-Time Data Core:** Reactive, schema-validated database engine with persistent WebSocket subscriptions for real-time commander dashboard updates.
+* **Encrypted Audit Logs:** Immutable, append-only operational records logging every alert dispatch, muster confirmation, and administrative action for military accountability.
+* **Tactical Device Cache:** Low-latency in-memory cache indexing hardware identifiers and push tokens for immediate alert routing.
+
+---
+
+## 📡 Operational Signal Flow
 
 <div align="center">
   <img src="public/system-flow-diagram.png" alt="RESCOM ALERT Emergency Signal Flow" width="100%" />

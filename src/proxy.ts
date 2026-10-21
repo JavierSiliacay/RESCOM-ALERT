@@ -10,17 +10,30 @@ export const proxy = auth((req) => {
     user.status !== "SUSPENDED" &&
     user.status !== "REJECTED";
 
+  const isLandingPage = req.nextUrl.pathname === "/";
   const isSignInPage = req.nextUrl.pathname.startsWith("/sign-in");
   const isEnlistPage = req.nextUrl.pathname.startsWith("/enlist");
   const isDownloadPage = req.nextUrl.pathname.startsWith("/download");
+  const isRescomAiPage =
+    req.nextUrl.pathname.startsWith("/rescom-ai") ||
+    req.nextUrl.pathname.startsWith("/ai");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
+  const isAiApi = req.nextUrl.pathname.startsWith("/api/ai");
   const isApi = req.nextUrl.pathname.startsWith("/api");
   const isPublicFile =
     req.nextUrl.pathname === "/robots.txt" ||
     req.nextUrl.pathname === "/sitemap.xml" ||
     req.nextUrl.pathname.startsWith("/sitemap");
 
-  if (isAuthApi || isEnlistPage || isDownloadPage || isPublicFile) {
+  if (
+    isLandingPage ||
+    isAuthApi ||
+    isAiApi ||
+    isEnlistPage ||
+    isDownloadPage ||
+    isRescomAiPage ||
+    isPublicFile
+  ) {
     return NextResponse.next();
   }
 
@@ -29,8 +42,15 @@ export const proxy = auth((req) => {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Redirect unauthorized or revoked user trying to access protected routes
-  if (!isAuthorized && !isSignInPage && !isEnlistPage && !isDownloadPage) {
+  // Redirect unauthorized or revoked user trying to access protected routes (such as /dashboard)
+  if (
+    !isAuthorized &&
+    !isSignInPage &&
+    !isLandingPage &&
+    !isEnlistPage &&
+    !isDownloadPage &&
+    !isRescomAiPage
+  ) {
     const signInUrl = new URL("/sign-in", req.nextUrl.origin);
     if (user?.status === "SUSPENDED") {
       signInUrl.searchParams.set("error", "AccountSuspended");

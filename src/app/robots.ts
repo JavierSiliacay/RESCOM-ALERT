@@ -5,8 +5,8 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/sign-in", "/download", "/enlist/"],
-        disallow: ["/dashboard/", "/api/"],
+        allow: ["/", "/download", "/enlist/", "/rescom-ai", "/ai"],
+        disallow: ["/dashboard/", "/api/", "/sign-in", "/sign-in/"],
       },
     ],
     sitemap: "https://www.rescom-alert.site/sitemap.xml",

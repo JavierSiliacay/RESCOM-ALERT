@@ -1,7 +1,22 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { Shield, Radio, Lock, Activity, CheckCircle2, ExternalLink, AlertCircle } from "lucide-react";
 import { signIn, auth } from "@/auth";
 import { SuspensionCountdown } from "@/components/suspension-countdown";
+
+export const metadata: Metadata = {
+  title: "Officer Access — 10RCDG Personnel Portal",
+  description: "Authorized Military Personnel and Command Staff Authentication Portal.",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+    },
+  },
+};
 
 export default async function SignInPage({
   searchParams,

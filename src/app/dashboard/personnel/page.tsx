@@ -2521,7 +2521,7 @@ export default function PersonnelPage() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. 10RCDG-RESCOM"
+                    placeholder="e.g. 123456"
                     value={campaignFormData.passcode}
                     onChange={(e) =>
                       setCampaignFormData((prev) => ({

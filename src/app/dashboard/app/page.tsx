@@ -474,7 +474,7 @@ export default function MobileAppPage() {
                             showConfirmation(val ? `Passcode saved as "${val}"` : "Passcode cleared (open access)");
                           }
                         }}
-                        placeholder="e.g. 10RCDG or leave blank for none"
+                        placeholder="e.g. 123456 or leave blank for none"
                         className="w-full pl-3 pr-10 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 font-mono font-extrabold text-slate-900 uppercase tracking-widest placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400 shadow-2xs transition-all"
                         onBlur={async () => {
                           if (hasPasscodeEdits) {

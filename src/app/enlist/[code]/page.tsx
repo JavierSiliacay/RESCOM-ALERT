@@ -629,7 +629,7 @@ export default function PublicEnlistmentPage() {
                     placeholder={
                       isLockedOut
                         ? `Locked for security (${Math.floor(lockoutSecondsLeft / 60)}:${String(lockoutSecondsLeft % 60).padStart(2, "0")})...`
-                        : "Enter Passcode (e.g. 10RCDG-RESCOM)"
+                        : "Enter Passcode (e.g. 123456)"
                     }
                     value={passcode}
                     onChange={(e) => {

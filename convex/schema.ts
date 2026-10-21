@@ -220,7 +220,7 @@ export default defineSchema({
     allowRosterVerification: v.boolean(), // Sub-toggle: allows or blocks mobile phone number queries
     lockdownReason: v.optional(v.string()), // Custom broadcast reason shown to visitors when locked
     requirePasscode: v.optional(v.boolean()), // Require unit command passcode to download
-    passcode: v.optional(v.string()), // Command download passcode (e.g. 10RCDG-2026)
+    passcode: v.optional(v.string()), // Command download passcode (e.g. 123456)
     passcodeExpiresAt: v.optional(v.number()), // Timestamp when the download window/passcode expires
     sessionId: v.optional(v.string()), // Unique window session token; increments to wipe all locked-out devices on new window creation
     windowTitle: v.optional(v.string()), // Optional mobilization window title (e.g. "10RCDG Troop Mobilization")

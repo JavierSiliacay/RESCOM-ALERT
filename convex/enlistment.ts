@@ -239,7 +239,7 @@ export const submitEnlistment = mutation({
     const existingPersonnel = allPersonnel.find((p) => normalizePh(p.mobileNumber) === cleanMobile);
     if (existingPersonnel) {
       throw new ConvexError(
-        `This mobile number (${cleanMobile}) is already registered in the official 10RCDG personnel roster as ${existingPersonnel.rank} ${existingPersonnel.firstName} ${existingPersonnel.lastName}. You can download the app directly at the official download portal (/download).`
+        `This mobile number (${cleanMobile}) is already registered in the official 10RCDG personnel roster. You can download the app directly at the official download portal (/download).`
       );
     }
 

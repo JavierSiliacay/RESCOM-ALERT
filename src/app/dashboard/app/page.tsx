@@ -154,6 +154,7 @@ export default function MobileAppPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isCloseEarlyModalOpen, setIsCloseEarlyModalOpen] = useState(false);
   const [isClosingEarly, setIsClosingEarly] = useState(false);
+  const [isDisablePortalModalOpen, setIsDisablePortalModalOpen] = useState(false);
 
   const showConfirmation = (message: string, type: "success" | "info" = "success") => {
     setSaveStatus({ message, type });
@@ -207,7 +208,7 @@ export default function MobileAppPage() {
   }, []);
 
   const apkDownloadUrl =
-    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.0.8/rescom-alert-v1.0.8.apk";
+    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.1.0/rescom-alert-v1.1.0.apk";
 
   const handleCopyLink = () => {
     const urlToCopy = downloadPortalUrl || `${window.location.origin}/download`;
@@ -219,24 +220,41 @@ export default function MobileAppPage() {
   const handleTogglePortal = async () => {
     guardAction("Toggle Download Portal", async () => {
       if (isUpdatingPortal) return;
-      setIsUpdatingPortal(true);
-      try {
-        const currentEnabled = portalSettings?.isDownloadPortalEnabled ?? true;
-        const nextState = !currentEnabled;
-        await updatePortalSettings({
-          isDownloadPortalEnabled: nextState,
-          allowRosterVerification: nextState,
-          lockdownReason:
-            "The mobile app download portal is currently offline for maintenance or restricted by unit administration. Please coordinate with your Administrators.",
-          updatedBy: officer.displayName || "Authorized Officer",
-          updatedByEmail: officer.email,
-        });
-      } catch (err) {
-        console.error("Failed to toggle portal:", err);
-      } finally {
-        setIsUpdatingPortal(false);
+      const currentEnabled = portalSettings?.isDownloadPortalEnabled !== false;
+
+      // If portal is currently active, require explicit confirmation before taking it offline
+      if (currentEnabled) {
+        setIsDisablePortalModalOpen(true);
+        return;
       }
+
+      // If portal is currently offline, re-enable it immediately
+      await executeTogglePortal(true);
     });
+  };
+
+  const executeTogglePortal = async (nextState: boolean) => {
+    if (isUpdatingPortal) return;
+    setIsUpdatingPortal(true);
+    try {
+      await updatePortalSettings({
+        isDownloadPortalEnabled: nextState,
+        allowRosterVerification: nextState,
+        lockdownReason:
+          "The mobile app download portal is currently offline for maintenance or restricted by unit administration. Please coordinate with your Administrators.",
+        updatedBy: officer.displayName || "Authorized Officer",
+        updatedByEmail: officer.email,
+      });
+      setIsDisablePortalModalOpen(false);
+      showConfirmation(
+        nextState ? "Public Download Portal activated" : "Public Download Portal taken offline",
+        nextState ? "success" : "info"
+      );
+    } catch (err) {
+      console.error("Failed to toggle portal:", err);
+    } finally {
+      setIsUpdatingPortal(false);
+    }
   };
 
   return (
@@ -274,7 +292,7 @@ export default function MobileAppPage() {
             className="flex items-center gap-2 px-4 py-2.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider"
           >
             <Download className="w-4 h-4" />
-            <span>Download Soldier APK (v1.0.8)</span>
+            <span>Download Soldier APK (v1.1.0)</span>
           </a>
         </div>
       </div>
@@ -988,7 +1006,7 @@ export default function MobileAppPage() {
                     rel="noopener noreferrer"
                     className="block text-[11px] text-slate-500 hover:text-slate-800 underline transition-colors pt-1"
                   >
-                    Direct APK Binary (rescom-alert-v1.0.8.apk)
+                    Direct APK Binary (rescom-alert-v1.1.0.apk)
                   </a>
                 </div>
               </div>
@@ -1456,6 +1474,90 @@ export default function MobileAppPage() {
                   <>
                     <Clock className="w-3.5 h-3.5" />
                     <span>Confirm Close Early</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disable Portal Confirmation Modal */}
+      {isDisablePortalModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-rose-200 overflow-hidden transform animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-50 to-orange-50/40 border-b border-rose-200/80 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 border border-rose-300 text-rose-800 flex items-center justify-center shrink-0 shadow-xs">
+                  <Lock className="w-5 h-5 text-rose-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight">
+                    Disable Public Download Portal?
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-100 text-rose-900 border border-rose-300">
+                      OFFLINE LOCKDOWN
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDisablePortalModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-rose-100/60 rounded-lg transition-colors cursor-pointer"
+              >
+                <span className="sr-only">Close</span>
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-3">
+              <p className="text-xs font-bold text-slate-900">
+                Are you sure you want to take the mobile app download portal offline?
+              </p>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Visiting <code className="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold text-slate-800">/download</code> will immediately be blocked. Troops and public recruits will not be able to download the APK or verify their phone numbers until you toggle this back on.
+              </p>
+              <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xl text-xs space-y-1">
+                <div className="flex justify-between items-center text-rose-950">
+                  <span className="text-slate-600">Portal Target:</span>
+                  <span className="font-bold">/download (Public APK)</span>
+                </div>
+                <div className="flex justify-between items-center text-rose-950">
+                  <span className="text-slate-600">Portal Status:</span>
+                  <span className="font-mono font-bold text-rose-700">Enabled → Disabled (Offline)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isUpdatingPortal}
+                onClick={() => setIsDisablePortalModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isUpdatingPortal}
+                onClick={() => executeTogglePortal(false)}
+                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 disabled:cursor-wait text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                {isUpdatingPortal ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Disabling Portal...</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Disable Download Portal</span>
                   </>
                 )}
               </button>

@@ -37,7 +37,19 @@ export interface VerifyMobileResult {
 
 export interface PairingStatusResult {
   isPaired: boolean;
-  reason?: "UNPAIRED_BY_ADMIN" | "DEVICE_MISMATCH" | "NOT_FOUND" | "NETWORK_ERROR";
+  reason?: "DELETED_BY_ADMIN" | "UNPAIRED_BY_ADMIN" | "DEVICE_MISMATCH" | "NOT_FOUND" | "NETWORK_ERROR";
+  soldier?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    rank: string;
+    unit?: string;
+    groupName: string;
+    mobileNumber: string;
+    deviceType?: string;
+    fcmToken?: string;
+    deviceModel?: string;
+  };
 }
 
 /**

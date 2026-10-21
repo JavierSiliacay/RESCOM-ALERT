@@ -292,7 +292,15 @@ export const verifyMobile = query({
         (matchedSoldier.fcmToken && !matchedSoldier.fcmToken.startsWith("fcm_prov_"))
       );
 
-      if (!args.isAuthorizedQr && isAlreadyBound) {
+      // Same-Device Auto-Recovery: If the incoming hardware fingerprint matches the phone already enrolled,
+      // allow the soldier to re-link immediately without needing manual admin unlinking.
+      const isSameAuthorizedDevice = Boolean(
+        args.appDeviceId &&
+        matchedSoldier.appDeviceId &&
+        matchedSoldier.appDeviceId === args.appDeviceId
+      );
+
+      if (!args.isAuthorizedQr && isAlreadyBound && !isSameAuthorizedDevice) {
         return {
           status: "DEVICE_MISMATCH",
           message:
@@ -410,6 +418,12 @@ export const linkDevice = mutation({
       ...(args.appDeviceId ? { appDeviceId: args.appDeviceId, boundDeviceId: soldier.boundDeviceId || args.appDeviceId } : {}),
     });
 
+    const isReinstall = Boolean(
+      args.appDeviceId &&
+      soldier.appDeviceId &&
+      soldier.appDeviceId === args.appDeviceId
+    );
+
     if (isHardwareSwitch) {
       await ctx.db.insert("auditLogs", {
         userName: `${soldier.rank} ${soldier.firstName} ${soldier.lastName}`,
@@ -417,6 +431,16 @@ export const linkDevice = mutation({
         category: "SECURITY",
         action: "DEVICE_TRANSFERRED",
         details: `Soldier transferred RESCOM pairing to new device: ${newModel}. Previously paired: ${soldier.deviceModel}.`,
+        ipAddress: "127.0.0.1",
+        timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+      });
+    } else if (isReinstall) {
+      await ctx.db.insert("auditLogs", {
+        userName: `${soldier.rank} ${soldier.firstName} ${soldier.lastName}`,
+        userRole: "SOLDIER",
+        category: "SECURITY",
+        action: "DEVICE_REPAIRED",
+        details: `Soldier re-linked RESCOM Alert on authorized device (${newModel}) after app re-installation.`,
         ipAddress: "127.0.0.1",
         timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
       });
@@ -576,7 +600,7 @@ export const checkDevicePairing = query({
   handler: async (ctx, args) => {
     const soldier = await ctx.db.get(args.soldierId);
     if (!soldier) {
-      return { isPaired: false, reason: "NOT_FOUND" as const };
+      return { isPaired: false, reason: "DELETED_BY_ADMIN" as const };
     }
     // If the administrator has cleared appDeviceId via unlinkDevice
     if (!soldier.appDeviceId) {
@@ -586,7 +610,20 @@ export const checkDevicePairing = query({
     if (soldier.appDeviceId !== args.appDeviceId) {
       return { isPaired: false, reason: "DEVICE_MISMATCH" as const };
     }
-    return { isPaired: true };
+    return {
+      isPaired: true,
+      soldier: {
+        id: soldier._id,
+        firstName: soldier.firstName,
+        lastName: soldier.lastName,
+        rank: soldier.rank,
+        unit: soldier.unit,
+        groupName: soldier.groupName,
+        mobileNumber: soldier.mobileNumber,
+        deviceType: soldier.deviceType || "ANDROID",
+        deviceModel: soldier.deviceModel,
+      },
+    };
   },
 });
 

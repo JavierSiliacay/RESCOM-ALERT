@@ -94,18 +94,58 @@ function Shell(): React.JSX.Element {
         await alertBridgeService.clearSoldierProfile();
         setSoldier(null);
 
-        // 2. Alert the soldier with official 10RCDG notice
-        Alert.alert(
-          "Device Unpaired by Command",
-          "The administrator has unpaired this device from 10RCDG RESCOM. To re-link this phone, please pair your mobile number again or contact your Unit Officer.",
-          [
-            {
-              text: "Pair Phone",
-              onPress: () => setPairingModalOpen(true),
-            },
-            { text: "Dismiss", style: "cancel" },
-          ]
-        );
+        // 2. Alert the soldier with official 10RCDG notice based on command action
+        if (res.reason === "DELETED_BY_ADMIN" || res.reason === "NOT_FOUND") {
+          Alert.alert(
+            "Personnel Data Removed",
+            "The administrators deleted your data in the web portal and unpaired this device. Please contact your Unit Officer or 10RCDG Headquarters if you believe this was an error.",
+            [
+              { text: "Dismiss", style: "cancel" },
+            ]
+          );
+        } else if (res.reason === "DEVICE_MISMATCH") {
+          Alert.alert(
+            "Device Transfer Detected",
+            "Your mobile number is paired to a different phone. If you recently changed or upgraded your phone, contact your Unit Officer to re-authorize this device.",
+            [
+              {
+                text: "Pair Phone",
+                onPress: () => setPairingModalOpen(true),
+              },
+              { text: "Dismiss", style: "cancel" },
+            ]
+          );
+        } else {
+          Alert.alert(
+            "Device Unpaired by Command",
+            "The administrator has unpaired this device from 10RCDG RESCOM. To re-link this phone, please pair your mobile number again or contact your Unit Officer.",
+            [
+              {
+                text: "Pair Phone",
+                onPress: () => setPairingModalOpen(true),
+              },
+              { text: "Dismiss", style: "cancel" },
+            ]
+          );
+        }
+      } else if (res.soldier) {
+        // Live Profile Sync: Check if administrator modified rank, name, group, unit, or mobile on web portal
+        const isModified =
+          res.soldier.rank !== currentSoldier.rank ||
+          res.soldier.firstName !== currentSoldier.firstName ||
+          res.soldier.lastName !== currentSoldier.lastName ||
+          res.soldier.unit !== currentSoldier.unit ||
+          res.soldier.groupName !== currentSoldier.groupName ||
+          res.soldier.mobileNumber !== currentSoldier.mobileNumber;
+
+        if (isModified) {
+          const updatedProfile = {
+            ...currentSoldier,
+            ...res.soldier,
+          };
+          await alertBridgeService.saveSoldierProfile(updatedProfile);
+          setSoldier(updatedProfile);
+        }
       }
     } catch {
       // Offline / network failure: preserve local profile for emergency sirens

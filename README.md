@@ -13,7 +13,7 @@
   <p>
     <img src="https://img.shields.io/badge/Web-Portal-1d4ed8?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Web Portal" />
     &nbsp;
-    <img src="https://img.shields.io/badge/Android-App_v1.0.8-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android App" />
+    <img src="https://img.shields.io/badge/Android-App_v1.1.0-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android App" />
     &nbsp;
     <img src="https://img.shields.io/badge/Cloudflare-WAF_Protected-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare WAF" />
     &nbsp;
@@ -32,7 +32,7 @@ It enables commanders and operations officers to issue urgent mobilization order
 
 ### Monorepo Structure
 - **Web Command Portal** (`src/`): Command HQ dashboard for officers to dispatch broadcasts, verify troop musters, and manage rosters.
-- **Android Field App** (`mobile/`): Native Android companion application (`v1.0.8`) with offline emergency siren engine and anti-impersonation hardware binding.
+- **Android Field App** (`mobile/`): Native Android companion application (`v1.1.0`) with offline emergency siren engine and anti-impersonation hardware binding.
 
 ---
 

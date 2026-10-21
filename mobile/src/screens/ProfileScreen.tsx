@@ -354,7 +354,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <Text style={styles.clearText}>Clear saved alerts on this phone</Text>
       </TouchableOpacity>
 
-      <Text style={styles.footer}>RESCOM ALERT · Version 1.0.5 · 10RCDG RESCOM, PA</Text>
+      <Text style={styles.footer}>RESCOM ALERT · Version 1.1.0 · 10RCDG RESCOM, PA</Text>
     </ScrollView>
   );
 };

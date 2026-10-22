@@ -443,6 +443,16 @@ interface RescomAiDialogProps {
 export function RescomAiDialog({ isOpen, onClose }: RescomAiDialogProps) {
   const [query, setQuery] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -469,7 +479,7 @@ export function RescomAiDialog({ isOpen, onClose }: RescomAiDialogProps) {
 
   const handleSend = async (textToSend?: string) => {
     const raw = (textToSend || query).trim();
-    if (!raw) return;
+    if (!raw || isTyping || cooldown > 0) return;
 
     const userMsg: Message = {
       id: `user-${Date.now()}`,
@@ -488,12 +498,43 @@ export function RescomAiDialog({ isOpen, onClose }: RescomAiDialogProps) {
 
     setMessages((prev) => [...prev, userMsg, initialAiMsg]);
     setQuery("");
+
+    // 1. SMART LOCAL DOCTRINE INTERCEPT:
+    // If the cadet is asking for standard reference doctrine (or clicks a chip),
+    // answer instantly from local verified database. Zero API cost, zero lag, never 429!
+    const lower = raw.toLowerCase();
+    const directDoctrineMatch = ACCURATE_KNOWLEDGE.find((item) =>
+      item.keywords.some((kw) => {
+        return lower === kw || lower.startsWith(kw) || (lower.includes(kw) && lower.split(" ").length <= 7);
+      })
+    );
+
+    if (directDoctrineMatch) {
+      setIsTyping(true);
+      setTimeout(() => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMsgId
+              ? {
+                  ...msg,
+                  text: directDoctrineMatch.response,
+                  links: directDoctrineMatch.links,
+                }
+              : msg
+          )
+        );
+        setIsTyping(false);
+        setCooldown(2);
+      }, 300);
+      return;
+    }
+
     setIsTyping(true);
 
     try {
       // Build conversation history for the live AI backend
       const history = messages
-        .filter((m) => m.id !== "welcome")
+        .filter((m) => m.id !== "welcome" && m.text && m.text.trim().length > 0)
         .map((m) => ({
           role: m.sender === "user" ? ("user" as const) : ("assistant" as const),
           content: m.text,
@@ -504,6 +545,31 @@ export function RescomAiDialog({ isOpen, onClose }: RescomAiDialogProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: raw, history }),
       });
+
+      // 2. FRIENDLY RATE-LIMIT (429) ADVISORY
+      if (res.status === 429) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMsgId
+              ? {
+                  ...msg,
+                  text: `Advisory: Mataas ang kasalukuyang bilang ng mga kadeteng kumukonsulta sa RESCOM AI sa Northern Mindanao (High Volume Traffic).
+
+Mangyaring maghintay ng 10–15 segundo bago subukang muli ang iyong katanungan, o sumangguni sa mga opisyal na doktrina sa ibaba habang naghihintay:`,
+                  links: [
+                    { label: "The 11 General Orders of a Sentry", href: "/rescom-ai" },
+                    { label: "Philippine Army Rank Structure", href: "/rescom-ai" },
+                    { label: "The Cadet Honor Code", href: "/rescom-ai" },
+                    { label: "Download RESCOM ALERT APK", href: "/download" },
+                  ],
+                }
+              : msg
+          )
+        );
+        setIsTyping(false);
+        setCooldown(10);
+        return;
+      }
 
       if (res.ok && res.body) {
         const reader = res.body.getReader();
@@ -531,14 +597,14 @@ export function RescomAiDialog({ isOpen, onClose }: RescomAiDialogProps) {
         }
 
         if (accumulated.trim()) {
-          const lower = raw.toLowerCase();
+          const lowerCase = raw.toLowerCase();
           const shouldAttachAppLinks =
-            lower.includes("download") ||
-            lower.includes("app") ||
-            lower.includes("apk") ||
-            lower.includes("install") ||
-            lower.includes("mobile") ||
-            lower.includes("alert");
+            lowerCase.includes("download") ||
+            lowerCase.includes("app") ||
+            lowerCase.includes("apk") ||
+            lowerCase.includes("install") ||
+            lowerCase.includes("mobile") ||
+            lowerCase.includes("alert");
 
           if (shouldAttachAppLinks) {
             setMessages((prev) =>
@@ -556,6 +622,7 @@ export function RescomAiDialog({ isOpen, onClose }: RescomAiDialogProps) {
             );
           }
           setIsTyping(false);
+          setCooldown(3);
           return;
         }
       }
@@ -564,7 +631,6 @@ export function RescomAiDialog({ isOpen, onClose }: RescomAiDialogProps) {
     }
 
     // Graceful fallback to verified local doctrine database
-    const lower = raw.toLowerCase();
     let match = ACCURATE_KNOWLEDGE.find((item) =>
       item.keywords.some((kw) => lower.includes(kw))
     );
@@ -572,7 +638,16 @@ export function RescomAiDialog({ isOpen, onClose }: RescomAiDialogProps) {
     if (!match) {
       match = {
         keywords: [],
-        response: `Notice: RESCOM AI is strictly dedicated to Basic ROTC Military Science, Philippine Army doctrine, and 10RCDG readiness. My knowledge is restricted purely to military science and national defense affairs.\n\nCadets may inquire about:\n• The 11 General Orders of a Sentry\n• Philippine Army & Cadet Officer Rank Structures\n• AFP Core Values & The Cadet Honor Code\n• Military Courtesy, Saluting & Reporting Rules\n• Drills and Ceremonies (Commands & Movements)\n• Interior Guard Duty & Countersign\n• Military Hygiene & Heat Injury First Aid\n• RA 7077 (Citizen Armed Forces) & RA 9163\n• Official RESCOM ALERT Mobile App Download`,
+        response: `Paumanhin, kasalukuyang nagre-reconnect ang live RESCOM AI intelligence network. Maaari mong ulitin ang iyong katanungan tungkol sa military doctrine, cadet leadership, o pumili sa mga gabay sa ibaba habang muling kumokonekta:
+
+• The 11 General Orders of a Sentry
+• Philippine Army & Cadet Officer Rank Structures
+• AFP Core Values & The Cadet Honor Code
+• Military Courtesy, Saluting & Reporting Rules
+• Drills and Ceremonies (Commands & Movements)
+• Interior Guard Duty & Countersign
+• Military Hygiene & Heat Injury First Aid
+• RA 7077 (Citizen Armed Forces) & RA 9163`,
         links: [
           { label: "Download RESCOM ALERT APK", href: "/download" },
           { label: "Android Setup Guide", href: "/download/guide" },
@@ -758,11 +833,17 @@ export function RescomAiDialog({ isOpen, onClose }: RescomAiDialogProps) {
           />
           <button
             type="submit"
-            disabled={!query.trim()}
+            disabled={!query.trim() || isTyping || cooldown > 0}
             className="px-4 py-2.5 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-800 text-white font-semibold rounded-md text-xs sm:text-sm flex items-center gap-1.5 transition-colors shadow-xs"
           >
-            <Send className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Send</span>
+            {cooldown > 0 ? (
+              <span className="font-mono text-xs">{cooldown}s</span>
+            ) : (
+              <>
+                <Send className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Send</span>
+              </>
+            )}
           </button>
         </form>
 

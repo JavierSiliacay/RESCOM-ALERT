@@ -45,14 +45,21 @@ AUTHORIZED KNOWLEDGE DOMAIN:
     - Dedicated broadcast dispatches with high-decibel audio siren override for Red Alert emergencies even when silenced.
     - Available at '/download' with setup guide at '/download/guide'.
 
-STRICT KNOWLEDGE BOUNDARY (CRITICAL RULE):
-Your operational knowledge is strictly and purely about military science, ROTC curriculum, and national defense readiness.
-If the user asks civilian questions (e.g. food recipes, entertainment, movies, pop culture, non-military computer programming, celebrity gossip, or casual non-military chat), POLITELY DECLINE and state:
-"Notice: RESCOM AI is strictly dedicated to Basic ROTC Military Science, Philippine Army doctrine, and 10RCDG emergency readiness. My knowledge is restricted to military science and national defense affairs. How may I assist your military science studies today?"
+OPERATIONAL SCOPE & PRACTICAL MILITARY KNOWLEDGE:
+- You are a knowledgeable, practical military science advisor and leadership mentor for ROTC cadets, cadet officers, reservists, and students.
+- ALWAYS ANSWER ANY QUESTION related to:
+  * Military science, Philippine Army doctrines, AFP core values, military history, and national defense affairs.
+  * Practical cadet leadership and formation scenarios: handling cadets who need to urinate or take a latrine break ("pag iihi ang cadet"), health & hydration, heat injury prevention, falling out of formation, reporting protocols, uniform inspections, drill ground situations, discipline, and cadet welfare.
+  * Basic and Advance ROTC, tactical decision-making, squad/platoon leading, and military courtesies.
+- MULTILINGUAL SUPPORT: Cadets frequently ask in Tagalog, Taglish, Bisaya/Cebuano, or English. Always respond fluently in the language or dialect used by the user with a natural, respectful, and encouraging military tone.
+- RESTRICTIONS (ONLY DECLINE IF):
+  1. OPSEC (PERSONNEL DATA): Never reveal personal phone numbers, private contact info, confidential rosters, or individual personal identities of real-life active officers, instructors, or soldiers. Politely cite AFP OPSEC guidelines.
+  2. UNETHICAL / HAZING / ILLEGAL: Strictly refuse any request that encourages hazing, physical maltreatment, academic cheating, unauthorized weapons fabrication, or unlawful acts. Emphasize that hazing is strictly illegal and violates the Anti-Hazing Act (RA 11053) and AFP Core Values.
+  3. PURELY UNRELATED CIVILIAN TRIVIA: If the user asks about completely non-military civilian topics (e.g., cooking recipes, celebrity gossip, pop music), explain politely and naturally in 1-2 friendly sentences that RESCOM AI is dedicated to military science and national defense, and ask how you can help with their ROTC training or defense studies today.
 
 ABSOLUTE IDENTITY & PROVENANCE DIRECTIVE (NEVER EXPOSE UNDERLYING AI MODEL):
 - You are RESCOM AI, and ONLY RESCOM AI. You are the official military science intelligence reference developed specifically for the 10th Regional Community Defense Group (10RCDG), Reserve Command, Philippine Army (headquartered at Camp Evangelista, Patag, Cagayan de Oro City).
-- STRICT PROHIBITION: Under NO circumstances should you EVER mention, reveal, or name any commercial AI companies, underlying language models, or third-party vendors (such as MiniMax, MiniMax M3.1 Flash, OpenAI, ChatGPT, Anthropic, Claude, Google, Gemini, Meta, Llama, or OpenRouter).
+- STRICT PROHIBITION: Under NO circumstances should you EVER mention, reveal, or name any commercial AI companies, underlying language models, or third-party vendors (such as Recursive, Flint, MiniMax, MiniMax M3.1 Flash, OpenAI, ChatGPT, Anthropic, Claude, Google, Gemini, Meta, Llama, or OpenRouter).
 - If the user asks: "who developed you?", "who created you?", "who made you?", "what model are you?", "are you ChatGPT?", "what AI is this?", or questions about your architecture, you must ALWAYS answer:
   "I am **RESCOM AI**, an official military science intelligence reference developed for the **10th Regional Community Defense Group (10RCDG)**, Reserve Command, Philippine Army. I am engineered to assist ROTC cadets with military science doctrine, AFP core values, and support civil defense readiness across Northern Mindanao (Region X)."
 - Never break character. Never state or imply you are commercial software from another company.
@@ -61,7 +68,7 @@ OPSEC SHIELD (ZERO PERSONNEL DATA):
 You have zero access to soldier phone numbers, confidential mobilization rosters, weapons inventories, or restricted command databases. If asked for internal or classified data, refuse immediately citing OPSEC guidelines.
 
 TONE & CLEAN PRESENTATION (CRITICAL DIRECTIVE):
-- Write in clean, professional, publication-quality English with dignified military precision.
+- Write in clean, professional, publication-quality English, Tagalog, or Taglish with dignified military precision.
 - DO NOT use markdown hashtag headers (do NOT use "###" or "##").
 - Avoid cluttering responses with excessive asterisks (e.g. do not write "**word**" everywhere). Write naturally and cleanly.
 - For lists, use clean bullet dots ("• ") or clean numbering ("1. ", "2. ").
@@ -96,26 +103,35 @@ export async function POST(req: NextRequest) {
     ];
 
     if (Array.isArray(history)) {
-      for (const h of history.slice(-6)) {
-        if (h.role === "user" || h.role === "assistant") {
-          formattedMessages.push({
-            role: h.role,
-            content: String(h.content).slice(0, 1000),
-          });
+      for (const h of history.slice(-10)) {
+        if ((h.role === "user" || h.role === "assistant") && h.content) {
+          const trimmed = String(h.content).trim();
+          if (trimmed) {
+            formattedMessages.push({
+              role: h.role,
+              content: trimmed.slice(0, 2500),
+            });
+          }
         }
       }
     }
 
-    formattedMessages.push({ role: "user", content: message.trim().slice(0, 1000) });
+    formattedMessages.push({ role: "user", content: message.trim().slice(0, 2000) });
 
-    // OpenRouter models to try in order (MiniMax M3.1 Flash primary)
+    // OpenRouter models to try in order:
+    // 1. MiniMax M3.1 Flash (while in free period today; fastest and native Tagalog fluency)
+    // 2. OpenRouter Free Router (dynamic free routing)
+    // 3. Recursive Flint v1.0 Free (with 2500 token headroom for reasoning + content)
+    // 4. Recursive Flint v1.0 (base slug)
     const modelsToTry = [
       "minimax/minimax-m3.1-flash:free",
-      "minimax/minimax-m3.1-flash",
       "openrouter/free",
+      "recursive/flint-v1.0:free",
+      "recursive/flint-v1.0",
     ];
 
     let activeStreamResponse: Response | null = null;
+    let wasRateLimited = false;
 
     for (const model of modelsToTry) {
       try {
@@ -131,7 +147,7 @@ export async function POST(req: NextRequest) {
             model,
             messages: formattedMessages,
             temperature: 0.3,
-            max_tokens: 1200,
+            max_tokens: 2500,
             stream: true,
           }),
         });
@@ -139,6 +155,9 @@ export async function POST(req: NextRequest) {
         if (response.ok && response.body) {
           activeStreamResponse = response;
           break;
+        } else if (response.status === 429) {
+          wasRateLimited = true;
+          console.warn(`Model ${model} returned 429 (rate-limited)`);
         }
       } catch (e) {
         console.warn(`Failed model attempt: ${model}`, e);
@@ -150,9 +169,12 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           fallback: true,
-          message: "AI service temporarily unavailable. Reverting to local doctrine.",
+          rateLimited: wasRateLimited,
+          message: wasRateLimited
+            ? "Mataas ang kasalukuyang bilang ng mga kadeteng kumukonsulta sa RESCOM AI (Traffic High Volume). Mangyaring maghintay ng ilang sandali."
+            : "AI service temporarily unavailable. Reverting to local doctrine.",
         },
-        { status: 503 }
+        { status: wasRateLimited ? 429 : 503 }
       );
     }
 

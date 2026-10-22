@@ -668,81 +668,36 @@ export const updateLocation = mutation({
   },
 });
 
-// Admin Helper: Seed or simulate tactical positions across Northern Mindanao for demonstration
-export const simulateTacticalLocations = mutation({
+// Admin: Purge all simulated/fake location coordinates from personnel
+export const clearAllLocations = mutation({
   args: {
     adminEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await assertCallerAuthorized(ctx, args.adminEmail, "simulate locations");
+    await assertCallerAuthorized(ctx, args.adminEmail, "clear personnel locations");
     const personnelList = await ctx.db.query("personnel").collect();
+    let clearedCount = 0;
 
-    // Sample coordinates across Region X (Cagayan de Oro, Iligan, Bukidnon, MisOr)
-    const basePoints = [
-      { lat: 8.4822, lng: 124.6472, area: "Camp Evangelista, CDO" },
-      { lat: 8.4772, lng: 124.645, area: "Patag, CDO" },
-      { lat: 8.4542, lng: 124.6319, area: "Uptown CDO" },
-      { lat: 8.228, lng: 124.2452, area: "Iligan City" },
-      { lat: 8.1574, lng: 125.1277, area: "Malaybalay, Bukidnon" },
-      { lat: 7.9056, lng: 125.0933, area: "Valencia, Bukidnon" },
-      { lat: 8.5614, lng: 124.7733, area: "Tagoloan, MisOr" },
-      { lat: 8.6256, lng: 124.7644, area: "Villanueva, MisOr" },
-    ];
-
-    const nowIso = new Date().toISOString();
-    let updatedCount = 0;
-
-    // If database has no personnel records yet, generate initial tactical demonstration cadre
-    if (personnelList.length === 0) {
-      const demoCadre = [
-        { rank: "CPT", firstName: "Mateo", lastName: "Valdez", unit: "10RCDG HQ", groupName: "10RCDG HQ Staff", mobileNumber: "+639171110001" },
-        { rank: "2LT", firstName: "Dante", lastName: "Navarro", unit: "1001st CDC (Camiguin)", groupName: "1001st CDC Unit", mobileNumber: "+639171110002" },
-        { rank: "MSg", firstName: "Crisanto", lastName: "Magbanua", unit: "1002nd CDC (MisOr)", groupName: "1002nd CDC Unit", mobileNumber: "+639171110003" },
-        { rank: "SSg", firstName: "Ramon", lastName: "Dela Torre", unit: "1003rd CDC (Bukidnon)", groupName: "1003rd CDC Unit", mobileNumber: "+639171110004" },
-        { rank: "Sgt", firstName: "Eduardo", lastName: "Santos", unit: "1004th CDC (MisOcc)", groupName: "1004th CDC Unit", mobileNumber: "+639171110005" },
-        { rank: "Cpl", firstName: "Arnel", lastName: "Villanueva", unit: "1005th CDC (Iligan City)", groupName: "1005th CDC Unit", mobileNumber: "+639171110006" },
-        { rank: "Pvt", firstName: "Kenneth", lastName: "Bautista", unit: "USTP ROTC DMST", groupName: "USTP ROTC Cadets", mobileNumber: "+639171110007" },
-        { rank: "Pvt", firstName: "Bryan", lastName: "Marquez", unit: "Xavier Univ DMST", groupName: "XU ROTC Cadets", mobileNumber: "+639171110008" },
-      ];
-
-      for (let i = 0; i < demoCadre.length; i++) {
-        const t = demoCadre[i];
-        const bp = basePoints[i % basePoints.length];
-        const jitterLat = (Math.random() - 0.5) * 0.02;
-        const jitterLng = (Math.random() - 0.5) * 0.02;
-        await ctx.db.insert("personnel", {
-          ...t,
-          status: "ACTIVE",
-          deviceType: "ANDROID",
-          latitude: bp.lat + jitterLat,
-          longitude: bp.lng + jitterLng,
-          locationAccuracy: 8,
-          locationUpdatedAt: nowIso,
-          isGpsEnabled: true,
-          createdAt: nowIso,
+    for (const p of personnelList) {
+      if (
+        typeof p.latitude === "number" ||
+        typeof p.longitude === "number" ||
+        p.isGpsEnabled ||
+        p.locationUpdatedAt ||
+        typeof p.locationAccuracy === "number"
+      ) {
+        await ctx.db.patch(p._id, {
+          latitude: undefined,
+          longitude: undefined,
+          locationAccuracy: undefined,
+          locationUpdatedAt: undefined,
+          isGpsEnabled: false,
         });
-        updatedCount++;
+        clearedCount++;
       }
-      return { success: true, updatedCount };
     }
 
-    for (let i = 0; i < personnelList.length; i++) {
-      const p = personnelList[i];
-      const bp = basePoints[i % basePoints.length];
-      const jitterLat = (Math.random() - 0.5) * 0.025;
-      const jitterLng = (Math.random() - 0.5) * 0.025;
-
-      await ctx.db.patch(p._id, {
-        latitude: bp.lat + jitterLat,
-        longitude: bp.lng + jitterLng,
-        locationAccuracy: Math.round(5 + Math.random() * 10),
-        locationUpdatedAt: nowIso,
-        isGpsEnabled: true,
-      });
-      updatedCount++;
-    }
-
-    return { success: true, updatedCount };
+    return { success: true, clearedCount };
   },
 });
 

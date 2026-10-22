@@ -16,12 +16,11 @@ import {
   X,
   Compass,
   Radio,
-  Sparkles,
   ChevronRight,
   ExternalLink,
   AlertTriangle,
 } from "lucide-react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useCurrentOfficer } from "@/components/officer-context";
 
@@ -60,7 +59,6 @@ const TILE_LAYERS = {
 export default function TacticalMapView() {
   const personnel = useQuery(api.personnel.list) || [];
   const currentOfficer = useCurrentOfficer();
-  const simulateLocationsMutation = useMutation(api.personnel.simulateTacticalLocations);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -72,8 +70,6 @@ export default function TacticalMapView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUnit, setSelectedUnit] = useState<string>("ALL");
   const [selectedSoldierId, setSelectedSoldierId] = useState<string | null>(null);
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simulationToast, setSimulationToast] = useState<string | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   // Geo-fence dispatch mode
@@ -274,27 +270,6 @@ export default function TacticalMapView() {
     }
   };
 
-  // Simulate test locations across Region X
-  const handleSimulatePositions = async () => {
-    try {
-      setIsSimulating(true);
-      const res = await simulateLocationsMutation({
-        adminEmail: currentOfficer.email || undefined,
-      });
-      if (res?.success) {
-        setSimulationToast(`Deployed ${res.updatedCount} troops across Region X bases`);
-        setTimeout(() => setSimulationToast(null), 4000);
-        handleResetView();
-      }
-    } catch (e: any) {
-      console.error("Simulation error:", e);
-      setSimulationToast(e?.message || "Simulation error occurred");
-      setTimeout(() => setSimulationToast(null), 4000);
-    } finally {
-      setIsSimulating(false);
-    }
-  };
-
   return (
     <div className="relative w-full h-[calc(100vh-4rem)] overflow-hidden bg-slate-100 font-sans">
       
@@ -326,9 +301,9 @@ export default function TacticalMapView() {
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
-            <div className="hidden sm:flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-              <span>{locatedSoldiers.length} Online</span>
+            <div className="hidden sm:flex items-center gap-1.5 bg-slate-100 border border-slate-200 text-slate-700 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0">
+              <span className={`w-1.5 h-1.5 rounded-full ${locatedSoldiers.length > 0 ? "bg-emerald-600 animate-pulse" : "bg-slate-400"}`} />
+              <span>{locatedSoldiers.length} Live GPS</span>
             </div>
           </div>
 
@@ -374,7 +349,7 @@ export default function TacticalMapView() {
       </div>
 
       {/* ====================================================
-          TOP-RIGHT CONTROLS: LAYER TOGGLE & SIMULATION
+          TOP-RIGHT CONTROLS: LAYER TOGGLE & RESET
          ==================================================== */}
       <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
         {/* Layer Switcher: Street & Satellite (100% Free) */}
@@ -402,27 +377,16 @@ export default function TacticalMapView() {
         >
           <Compass className="w-4 h-4 text-emerald-800" />
         </button>
-
-        {/* Demo Simulation Helper */}
-        <button
-          onClick={handleSimulatePositions}
-          disabled={isSimulating}
-          title="Simulate active GPS coords for test demonstration"
-          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold px-3 py-1.5 rounded-xl shadow-lg text-xs flex items-center gap-1.5 transition-all"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">
-            {isSimulating ? "Simulating..." : "Demo Troops"}
-          </span>
-        </button>
       </div>
 
-      {/* Floating Status Notification */}
-      {simulationToast && (
-        <div className="absolute top-16 right-4 z-30 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="bg-emerald-900/95 backdrop-blur-md text-emerald-100 text-xs font-bold px-3.5 py-2 rounded-xl shadow-xl border border-emerald-700/60 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{simulationToast}</span>
+      {/* Real-time GPS Standby Notification (When 0 active GPS fixes) */}
+      {locatedSoldiers.length === 0 && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none max-w-[90vw]">
+          <div className="bg-white/95 backdrop-blur-md text-slate-700 text-xs font-medium px-4 py-2 rounded-2xl shadow-lg border border-slate-200/90 flex items-center gap-2.5">
+            <Radio className="w-3.5 h-3.5 text-emerald-700 animate-pulse shrink-0" />
+            <span>
+              <strong>GPS Standby:</strong> Awaiting real-time troop coordinates from soldier mobile devices.
+            </span>
           </div>
         </div>
       )}

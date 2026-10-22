@@ -172,4 +172,35 @@ export const convexHttpService = {
       return false;
     }
   },
+
+  /**
+   * Syncs the soldier's GPS coordinates to Convex for the Tactical Map (v1.2.0)
+   */
+  updateLocation: async ({
+    soldierId,
+    latitude,
+    longitude,
+    accuracy,
+  }: {
+    soldierId: string;
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  }): Promise<boolean> => {
+    try {
+      const response = await fetch(`${CONVEX_URL}/api/mutation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: "personnel:updateLocation",
+          args: { soldierId, latitude, longitude, accuracy },
+          format: "json",
+        }),
+      });
+      return response.ok;
+    } catch (err) {
+      console.error("Convex updateLocation error:", err);
+      return false;
+    }
+  },
 };

@@ -301,5 +301,34 @@ export const alertBridgeService = {
       return { success: false, error: e?.message || "File pick failed" };
     }
   },
+
+  /**
+   * Checks if ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION is granted (v1.2.0)
+   */
+  checkLocationPermission: async (): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge?.checkLocationPermission) return false;
+    try {
+      return await AlertBridge.checkLocationPermission();
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Retrieves the soldier's current GPS coordinates (v1.2.0)
+   */
+  getCurrentLocation: async (): Promise<{
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    timestamp: number;
+  } | null> => {
+    if (Platform.OS !== "android" || !AlertBridge?.getCurrentLocation) return null;
+    try {
+      return await AlertBridge.getCurrentLocation();
+    } catch {
+      return null;
+    }
+  },
 };
 

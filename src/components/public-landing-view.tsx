@@ -87,7 +87,7 @@ export function PublicLandingView({
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white font-semibold text-sm shadow-sm transition-all duration-150 active:scale-98"
                 >
                   <Smartphone className="w-4 h-4 shrink-0" />
-                  <span>Download Mobile App (APK v1.1.0)</span>
+                  <span>Download Mobile App (APK v1.2.0)</span>
                   <ArrowRight className="w-4 h-4 ml-0.5 shrink-0" />
                 </Link>
 
@@ -151,7 +151,7 @@ export function PublicLandingView({
                     RESCOM ALERT for Android
                   </h2>
                   <p className="text-xs text-slate-500 font-mono">
-                    Version 1.1.0 
+                    Version 1.2.0 
                   </p>
                 </div>
 

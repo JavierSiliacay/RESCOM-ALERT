@@ -208,7 +208,7 @@ export default function MobileAppPage() {
   }, []);
 
   const apkDownloadUrl =
-    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.1.0/rescom-alert-v1.1.0.apk";
+    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.2.0/rescom-alert-v1.2.0.apk";
 
   const handleCopyLink = () => {
     const urlToCopy = downloadPortalUrl || `${window.location.origin}/download`;
@@ -292,7 +292,7 @@ export default function MobileAppPage() {
             className="flex items-center gap-2 px-4 py-2.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider"
           >
             <Download className="w-4 h-4" />
-            <span>Download Soldier APK (v1.1.0)</span>
+            <span>Download Soldier APK (v1.2.0)</span>
           </a>
         </div>
       </div>
@@ -1006,7 +1006,7 @@ export default function MobileAppPage() {
                     rel="noopener noreferrer"
                     className="block text-[11px] text-slate-500 hover:text-slate-800 underline transition-colors pt-1"
                   >
-                    Direct APK Binary (rescom-alert-v1.1.0.apk)
+                    Direct APK Binary (rescom-alert-v1.2.0.apk)
                   </a>
                 </div>
               </div>

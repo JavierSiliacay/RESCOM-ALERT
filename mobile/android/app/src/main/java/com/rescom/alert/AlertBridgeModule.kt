@@ -427,4 +427,69 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
             promise.resolve("7V8UpW3jxbp")
         }
     }
+
+    @ReactMethod
+    fun checkLocationPermission(promise: Promise) {
+        try {
+            val fine = ContextCompat.checkSelfPermission(
+                reactContext,
+                android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val coarse = ContextCompat.checkSelfPermission(
+                reactContext,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            promise.resolve(fine || coarse)
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    @ReactMethod
+    fun getCurrentLocation(promise: Promise) {
+        try {
+            val locationManager = reactContext.getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager
+            if (locationManager == null) {
+                promise.reject("LOCATION_UNAVAILABLE", "Location manager not available")
+                return
+            }
+
+            val fineGranted = ContextCompat.checkSelfPermission(
+                reactContext,
+                android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val coarseGranted = ContextCompat.checkSelfPermission(
+                reactContext,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            if (!fineGranted && !coarseGranted) {
+                promise.reject("PERMISSION_DENIED", "Location permission not granted")
+                return
+            }
+
+            val gpsLoc = try { locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER) } catch (e: Exception) { null }
+            val netLoc = try { locationManager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER) } catch (e: Exception) { null }
+
+            val bestLoc = when {
+                gpsLoc != null && netLoc != null -> if (gpsLoc.time > netLoc.time) gpsLoc else netLoc
+                gpsLoc != null -> gpsLoc
+                else -> netLoc
+            }
+
+            if (bestLoc != null) {
+                val map = Arguments.createMap().apply {
+                    putDouble("latitude", bestLoc.latitude)
+                    putDouble("longitude", bestLoc.longitude)
+                    putDouble("accuracy", bestLoc.accuracy.toDouble())
+                    putDouble("timestamp", bestLoc.time.toDouble())
+                }
+                promise.resolve(map)
+            } else {
+                promise.reject("NO_LOCATION_FIX", "No cached GPS fix yet")
+            }
+        } catch (e: Exception) {
+            promise.reject("LOCATION_ERROR", e.message, e)
+        }
+    }
 }

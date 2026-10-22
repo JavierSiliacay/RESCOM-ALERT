@@ -213,6 +213,49 @@ function MessagingContent() {
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [appliedTemplateFeedback, setAppliedTemplateFeedback] = useState<string | null>(null);
 
+  // Tactical Map URL Parameters (Geo-Fence radius or Direct Soldier Alert)
+  const initialRecipient = searchParams.get("recipient");
+  const geoRadius = searchParams.get("geoRadius");
+  const geoRecipientsParam = searchParams.get("geoRecipients");
+
+  useEffect(() => {
+    if (initialRecipient && personnel.length > 0) {
+      setRecipientMode("MANUAL");
+      const found = personnel.find((p) => isSamePhMobileNumber(p.mobileNumber, initialRecipient));
+      setManualRecipients([
+        {
+          id: found ? String(found._id) : undefined,
+          name: found ? `${found.firstName} ${found.lastName}` : initialRecipient,
+          rank: found?.rank || "",
+          unit: found?.unit || found?.groupName || "",
+          number: initialRecipient,
+        },
+      ]);
+    } else if (geoRadius) {
+      setRecipientMode("MANUAL");
+      setMessageTitle(`10RCDG TACTICAL PERIMETER ALERT (${geoRadius} KM)`);
+      setMessageContent(
+        `10RCDG EMERGENCY MOBILIZATION ADVISORY: Red Alert notice for all personnel deployed within the active ${geoRadius}km tactical incident zone. Confirm station safety and report status immediately.`
+      );
+      if (geoRecipientsParam) {
+        const rawList = geoRecipientsParam.split(",").filter(Boolean);
+        const chips: RecipientChip[] = rawList.map((num) => {
+          const found = personnel.find((p) => isSamePhMobileNumber(p.mobileNumber, num));
+          return {
+            id: found ? String(found._id) : undefined,
+            name: found ? `${found.firstName} ${found.lastName}` : num,
+            rank: found?.rank || "",
+            unit: found?.unit || found?.groupName || "",
+            number: num,
+          };
+        });
+        if (chips.length > 0) {
+          setManualRecipients(chips);
+        }
+      }
+    }
+  }, [initialRecipient, geoRadius, geoRecipientsParam, personnel]);
+
   // Group selection helpers
   const toggleGroup = (groupId: string) => {
     if (groupId === "ALL") {

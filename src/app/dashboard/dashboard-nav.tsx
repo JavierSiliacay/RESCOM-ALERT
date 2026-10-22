@@ -25,6 +25,9 @@ import {
   UserCheck,
   Code2,
   Smartphone,
+  MapPin,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useCurrentOfficer } from "@/components/officer-context";
 
@@ -49,9 +52,27 @@ export function DashboardNav({
   const effectiveName = currentOfficer.name || userName;
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("rescom_sidebar_collapsed");
+      if (saved === "true") {
+        setIsCollapsed(true);
+      }
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("rescom_sidebar_collapsed", String(next));
+      return next;
+    });
+  };
 
   const isDeveloper =
     effectiveRole === "DEVELOPER" ||
@@ -59,6 +80,7 @@ export function DashboardNav({
 
   const navItems = [
     { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    { label: "Tactical Map", href: "/dashboard/map", icon: MapPin },
     { label: "Members & Contacts", href: "/dashboard/personnel", icon: Users },
     { label: "Contact Groups", href: "/dashboard/groups", icon: FolderKanban },
     { label: "Messaging", href: "/dashboard/messaging", icon: Send },
@@ -225,41 +247,63 @@ export function DashboardNav({
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 lg:w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-xl lg:shadow-xs transform lg:transform-none lg:static transition-transform duration-200 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 ${
+          isCollapsed ? "lg:w-[72px]" : "lg:w-64"
+        } bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-xl lg:shadow-xs transform lg:transform-none lg:static transition-[width,transform] duration-200 ease-in-out relative ${
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
+        {/* Floating Border Edge Collapse/Expand Arrow Button (centered vertically on dividing line) */}
+        <button
+          onClick={toggleSidebar}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="hidden lg:flex absolute -right-3.5 top-1/2 -translate-y-1/2 z-50 w-7 h-7 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-500 rounded-full shadow-md items-center justify-center text-slate-500 hover:text-emerald-800 transition-all cursor-pointer hover:scale-110 active:scale-95 group"
+        >
+          {isCollapsed ? (
+            <ChevronRight className="w-4 h-4 text-emerald-800 transition-transform group-hover:translate-x-0.5" />
+          ) : (
+            <ChevronLeft className="w-4 h-4 text-slate-600 group-hover:text-emerald-800 transition-transform group-hover:-translate-x-0.5" />
+          )}
+        </button>
+
         {/* Desktop Sidebar Header */}
-        <div className="p-4 border-b border-slate-200 hidden lg:block">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center -space-x-2 shrink-0">
-              <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-amber-500/80 ring-2 ring-emerald-100 shadow-sm bg-white z-10 flex items-center justify-center">
-                <Image
-                  src="/rescom-pa-seal.png"
-                  alt="RESCOM PA"
-                  fill
-                  sizes="36px"
-                  className="object-cover scale-105"
-                />
+        <div className="p-3.5 border-b border-slate-200 hidden lg:block">
+          <div className="flex items-center">
+            <div className={`flex items-center ${isCollapsed ? "justify-center w-full" : "gap-2.5"} min-w-0`}>
+              <div className="flex items-center -space-x-2 shrink-0">
+                <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-amber-500/80 ring-2 ring-emerald-100 shadow-sm bg-white z-10 flex items-center justify-center">
+                  <Image
+                    src="/rescom-pa-seal.png"
+                    alt="RESCOM PA"
+                    fill
+                    sizes="32px"
+                    className="object-cover scale-105"
+                  />
+                </div>
+                {!isCollapsed && (
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-amber-500/80 ring-2 ring-emerald-100 shadow-sm bg-white flex items-center justify-center">
+                    <Image
+                      src="/rescom-emblem.jpg"
+                      alt="10RCDG"
+                      fill
+                      sizes="32px"
+                      className="object-cover scale-105"
+                    />
+                  </div>
+                )}
               </div>
-              <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-amber-500/80 ring-2 ring-emerald-100 shadow-sm bg-white flex items-center justify-center">
-                <Image
-                  src="/rescom-emblem.jpg"
-                  alt="10RCDG"
-                  fill
-                  sizes="36px"
-                  className="object-cover scale-105"
-                />
-              </div>
-            </div>
-            <div>
-              <h2 className="text-sm font-extrabold tracking-wider text-slate-900">
-                <span className="text-emerald-950">RESCOM </span>
-                <span className="text-amber-600">ALERT</span>
-              </h2>
-              <p className="text-[11px] text-slate-500 font-medium">
-                10RCDG RESCOM, PA
-              </p>
+              {!isCollapsed && (
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm font-extrabold tracking-wider text-slate-900 truncate">
+                    <span className="text-emerald-950">RESCOM </span>
+                    <span className="text-amber-600">ALERT</span>
+                  </h2>
+                  <p className="text-[10px] text-slate-500 font-medium truncate">
+                    10RCDG RESCOM, PA
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -298,14 +342,20 @@ export function DashboardNav({
         </div>
 
         {/* Status indicator badge */}
-        <div className="px-4 py-2 bg-emerald-50/80 border-b border-emerald-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Shield className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-            <span className="text-xs font-medium text-emerald-800">
-              Connected as
-            </span>
-          </div>
-          {effectiveRole === "DEVELOPER" ? (
+        <div className={`px-3 py-2 bg-emerald-50/80 border-b border-emerald-100 flex items-center ${isCollapsed ? "justify-center" : "justify-between"}`}>
+          {!isCollapsed && (
+            <div className="flex items-center gap-2">
+              <Shield className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+              <span className="text-xs font-medium text-emerald-800">
+                Connected as
+              </span>
+            </div>
+          )}
+          {isCollapsed ? (
+            <div title={`Connected as ${effectiveRole}`} className="p-0.5">
+              <Shield className="w-4 h-4 text-emerald-700" />
+            </div>
+          ) : effectiveRole === "DEVELOPER" ? (
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 bg-purple-100 px-2 py-0.5 rounded border border-purple-300 shadow-2xs font-mono flex items-center gap-1.5">
               <Code2 className="w-3.5 h-3.5 text-purple-700 shrink-0" />
               <span>DEVELOPER</span>
@@ -322,7 +372,7 @@ export function DashboardNav({
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -337,7 +387,10 @@ export function DashboardNav({
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                title={isCollapsed ? item.label : undefined}
+                className={`flex items-center ${
+                  isCollapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
+                } rounded-xl text-sm font-semibold transition-all duration-150 ${
                   isActive
                     ? "bg-emerald-800 text-white shadow-xs"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
@@ -348,54 +401,86 @@ export function DashboardNav({
                     isActive ? "text-emerald-200" : "text-slate-500"
                   }`}
                 />
-                <span>{item.label}</span>
+                {!isCollapsed && <span className="truncate">{item.label}</span>}
               </Link>
             );
           })}
         </nav>
 
         {/* Sidebar Footer — User Info & Sign Out */}
-        <div className="p-3.5 border-t border-slate-200 bg-slate-50/70">
-          <div className="flex items-center gap-3">
-            {/* User Avatar */}
-            {userImage ? (
-              <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-300 shrink-0">
-                <Image
-                  src={userImage}
-                  alt={userName}
-                  fill
-                  unoptimized
-                  className="object-cover"
-                />
-              </div>
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-emerald-800 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
-                {userName.charAt(0).toUpperCase()}
-              </div>
-            )}
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1">
-                <p className="text-xs font-bold text-slate-900 truncate">
-                  {effectiveName}
-                </p>
-                {effectiveRole === "COMMANDER" && (
-                  <Crown className="w-3 h-3 text-amber-600 shrink-0" />
+        <div className={`p-3 border-t border-slate-200 bg-slate-50/70 ${isCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
+          {isCollapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              <div
+                title={`${effectiveName} (${effectiveRank || "Personnel Officer"})`}
+                className="cursor-default"
+              >
+                {userImage ? (
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden border border-slate-300 shrink-0">
+                    <Image
+                      src={userImage}
+                      alt={userName}
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-emerald-800 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+                    {userName.charAt(0).toUpperCase()}
+                  </div>
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 truncate">
-                {effectiveRank || "Personnel Officer"}
-              </p>
+              <button
+                onClick={() => setShowSignOutModal(true)}
+                title="Sign Out"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              {/* User Avatar */}
+              {userImage ? (
+                <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-300 shrink-0">
+                  <Image
+                    src={userImage}
+                    alt={userName}
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-emerald-800 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+              )}
 
-            <button
-              onClick={() => setShowSignOutModal(true)}
-              title="Sign Out"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1">
+                  <p className="text-xs font-bold text-slate-900 truncate">
+                    {effectiveName}
+                  </p>
+                  {effectiveRole === "COMMANDER" && (
+                    <Crown className="w-3 h-3 text-amber-600 shrink-0" />
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 truncate">
+                  {effectiveRank || "Personnel Officer"}
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowSignOutModal(true)}
+                title="Sign Out"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 

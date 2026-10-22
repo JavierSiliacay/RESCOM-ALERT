@@ -33,10 +33,10 @@ const STEPS: GuideStep[] = [
     step: 1,
     phase: "INSTALL",
     title: "Open Downloaded APK with Package Installer",
-    tagalogSummary: "Buksan ang rescom-alert-v1.1.0.apk gamit ang Package installer.",
+    tagalogSummary: "Buksan ang rescom-alert-v1.2.0.apk gamit ang Package installer.",
     instructions: [
       "Pumunta sa inyong Downloads folder o sa browser notification.",
-      "Pindutin ang file na rescom-alert-v1.1.0.apk (o rescom-alert.apk).",
+      "Pindutin ang file na rescom-alert-v1.2.0.apk (o rescom-alert.apk).",
       'Sa "Open with" pop-up, piliin ang Package installer at pindutin ang "Just once" o "Always".',
     ],
     imageSrc: "/installation-guide/Step1.jpg",
@@ -109,7 +109,7 @@ const STEPS: GuideStep[] = [
     tagalogSummary: "I-off ang toggle at bumalik sa Downloads para i-install ang APK.",
     instructions: [
       'I-toggle patayin ang "Scan apps with Play Protect" (pindutin ang "Turn off" sa confirmation dialog).',
-      "Bumalik sa inyong Downloads folder at pindutin muli ang rescom-alert-v1.1.0.apk.",
+      "Bumalik sa inyong Downloads folder at pindutin muli ang rescom-alert-v1.2.0.apk.",
       'Pindutin ang "Install" — magtutuloy na ang pag-install nang maayos!',
     ],
     imageSrc: "/installation-guide/Step7.jpg",

@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { alertBridgeService, PermissionStatus } from "../services/alertBridge";
+import { convexHttpService } from "../services/convexHttp";
 import { colors, radius, shadow } from "../theme";
 import { RankInsignia } from "../components/RankInsignia";
 
@@ -32,6 +33,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     canFullScreen: false,
     canDrawOverlays: false,
   });
+  const [hasLocation, setHasLocation] = useState(false);
 
   const [strobeEnabled, setStrobeEnabled] = useState(true);
   const [soundSettings, setSoundSettings] = useState({
@@ -48,6 +50,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setStrobeEnabled(strobe);
     const sound = await alertBridgeService.getAlertSoundSettings();
     setSoundSettings(sound);
+    const locOk = await alertBridgeService.checkLocationPermission();
+    setHasLocation(locOk);
+
+    // If soldier is paired and location is allowed, sync coordinates to cloud
+    if (locOk && soldier) {
+      try {
+        const soldierId = soldier.id || soldier._id;
+        const coords = await alertBridgeService.getCurrentLocation();
+        if (coords && soldierId) {
+          convexHttpService.updateLocation({
+            soldierId,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            accuracy: coords.accuracy,
+          }).catch(() => {});
+        }
+      } catch {}
+    }
   };
 
   useEffect(() => {
@@ -124,6 +144,36 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     }
   };
 
+  const handleRequestLocation = async () => {
+    if (Platform.OS !== "android") return;
+    try {
+      const res = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: "10RCDG Tactical Map Location",
+          message:
+            "Allow RESCOM ALERT to share your device location with Headquarters so commanders can visualize your deployment on the tactical map.",
+          buttonPositive: "Allow",
+          buttonNegative: "Cancel",
+        }
+      );
+      if (res === PermissionsAndroid.RESULTS.GRANTED) {
+        refresh();
+      } else {
+        Alert.alert(
+          "Location Permission",
+          "Tactical location was not enabled. You can enable it anytime in Android App Settings → Permissions → Location.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const isOverlayOk =
     typeof Platform.Version === "number" && Platform.Version >= 34
       ? Boolean(perms.canDrawOverlays && perms.canFullScreen)
@@ -156,6 +206,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       ok: isOverlayOk,
       action: () => alertBridgeService.requestOverlayPermission(),
       actionLabel: "ENABLE",
+    },
+    {
+      key: "location",
+      title: "Tactical GPS Location",
+      desc: hasLocation
+        ? "Active: Headquarters and unit officers can visualize your deployment on the tactical map."
+        : "Allows the command portal to map troop distribution across Northern Mindanao.",
+      ok: hasLocation,
+      action: !hasLocation ? handleRequestLocation : undefined,
+      actionLabel: !hasLocation ? "ALLOW" : undefined,
     },
   ];
 
@@ -354,7 +414,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <Text style={styles.clearText}>Clear saved alerts on this phone</Text>
       </TouchableOpacity>
 
-      <Text style={styles.footer}>RESCOM ALERT · Version 1.1.0 · 10RCDG RESCOM, PA</Text>
+      <Text style={styles.footer}>RESCOM ALERT · Version 1.2.0 · 10RCDG RESCOM, PA</Text>
     </ScrollView>
   );
 };

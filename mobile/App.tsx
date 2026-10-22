@@ -66,6 +66,9 @@ function Shell(): React.JSX.Element {
         // Background Cloud Audit: Check if Headquarters administrator unpaired this device
         // Only executes silently if the phone has active internet; never blocks offline alerts
         checkRemotePairingStatus(saved).catch(() => {});
+
+        // Sync GPS coordinates to Convex for Tactical Map (v1.2.0)
+        syncLocationToCloud(saved).catch(() => {});
       } else {
         // First install / unlinked: prompt soldier to pair mobile number
         setTimeout(() => setPairingModalOpen(true), 600);
@@ -74,6 +77,26 @@ function Shell(): React.JSX.Element {
       setIsArmed(Boolean(perms.isFullyArmed));
     } catch (e) {
       // Background load
+    }
+  };
+
+  const syncLocationToCloud = async (currentSoldier: any) => {
+    try {
+      const soldierId = currentSoldier?.id || currentSoldier?._id;
+      if (!soldierId) return;
+      const hasLoc = await alertBridgeService.checkLocationPermission();
+      if (!hasLoc) return;
+      const coords = await alertBridgeService.getCurrentLocation();
+      if (coords && coords.latitude && coords.longitude) {
+        await convexHttpService.updateLocation({
+          soldierId,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy,
+        });
+      }
+    } catch {
+      // Offline / silent fail
     }
   };
 
@@ -167,6 +190,7 @@ function Shell(): React.JSX.Element {
       const saved = await alertBridgeService.getSoldierProfile();
       if (saved) {
         checkRemotePairingStatus(saved).catch(() => {});
+        syncLocationToCloud(saved).catch(() => {});
       }
     }, 15000);
 
@@ -174,12 +198,17 @@ function Shell(): React.JSX.Element {
       const perms = [
         PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
         PermissionsAndroid.PERMISSIONS.READ_SMS,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
       ];
       if (typeof Platform.Version === "number" && Platform.Version >= 33) {
         const postNotif = (PermissionsAndroid.PERMISSIONS as any).POST_NOTIFICATIONS;
         if (postNotif) perms.push(postNotif);
       }
-      PermissionsAndroid.requestMultiple(perms).catch(() => {});
+      PermissionsAndroid.requestMultiple(perms)
+        .then(() => {
+          refreshProfileAndPerms();
+        })
+        .catch(() => {});
     }
 
     return () => {

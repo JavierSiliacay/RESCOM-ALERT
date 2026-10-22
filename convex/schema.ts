@@ -23,6 +23,12 @@ export default defineSchema({
     lastDownloadedAt: v.optional(v.string()),
     appInstalledAt: v.optional(v.string()),
     lastActiveAt: v.optional(v.string()),
+    // Real-time Tactical GPS Location Tracking (v1.2.0)
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    locationAccuracy: v.optional(v.number()), // Accuracy radius in meters
+    locationUpdatedAt: v.optional(v.string()), // Timestamp when phone reported coordinates
+    isGpsEnabled: v.optional(v.boolean()),
     createdAt: v.string(),
     createdBy: v.optional(v.string()), // Officer name who registered the personnel
     updatedAt: v.optional(v.string()), // Timestamp of last edit

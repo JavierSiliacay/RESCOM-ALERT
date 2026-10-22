@@ -58,6 +58,7 @@ const TILE_LAYERS = {
 
 export default function TacticalMapView() {
   const personnel = useQuery(api.personnel.list) || [];
+  const contactGroups = useQuery(api.groups.list) || [];
   const currentOfficer = useCurrentOfficer();
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -84,12 +85,15 @@ export default function TacticalMapView() {
     );
   }, [personnel]);
 
-  // Filtered by selected CDC / Unit
+  // Filtered by selected Contact Group
   const filteredSoldiers = useMemo(() => {
     if (selectedUnit === "ALL") return locatedSoldiers;
     return locatedSoldiers.filter((p) => {
-      const u = (p.unit || p.groupName || "").toLowerCase();
-      return u.includes(selectedUnit.toLowerCase());
+      return (
+        p.groupId === selectedUnit ||
+        p.groupName?.toLowerCase() === selectedUnit.toLowerCase() ||
+        (p.unit && p.unit.toLowerCase().includes(selectedUnit.toLowerCase()))
+      );
     });
   }, [locatedSoldiers, selectedUnit]);
 
@@ -392,42 +396,56 @@ export default function TacticalMapView() {
       )}
 
       {/* ====================================================
-          LEFT CDC UNIT FILTER STRIP
+          LEFT CONTACT GROUPS FILTER STRIP
          ==================================================== */}
       <div className="absolute bottom-6 left-4 z-20 hidden md:block">
         <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 p-3 w-64 space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-slate-800 border-b border-slate-100 pb-1.5">
             <div className="flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-emerald-800" />
-              <span>Unit Deployments</span>
+              <Users className="w-3.5 h-3.5 text-emerald-800" />
+              <span>Contact Groups</span>
             </div>
             <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-mono">
               {filteredSoldiers.length} Plotted
             </span>
           </div>
 
-          <div className="space-y-1 text-xs">
-            {[
-              { id: "ALL", label: "All 10RCDG Personnel" },
-              { id: "1001", label: "1001st CDC (Camiguin)" },
-              { id: "1002", label: "1002nd CDC (MisOr)" },
-              { id: "1003", label: "1003rd CDC (Bukidnon)" },
-              { id: "1004", label: "1004th CDC (MisOcc)" },
-              { id: "1005", label: "1005th CDC (Iligan / Lanao)" },
-            ].map((unit) => (
-              <button
-                key={unit.id}
-                onClick={() => setSelectedUnit(unit.id)}
-                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between transition-colors ${
-                  selectedUnit === unit.id
-                    ? "bg-emerald-800 text-white font-semibold"
-                    : "text-slate-700 hover:bg-slate-100"
-                }`}
-              >
-                <span>{unit.label}</span>
-                {selectedUnit === unit.id && <ChevronRight className="w-3.5 h-3.5" />}
-              </button>
-            ))}
+          <div className="space-y-1 text-xs max-h-56 overflow-y-auto pr-0.5">
+            <button
+              onClick={() => setSelectedUnit("ALL")}
+              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between transition-colors ${
+                selectedUnit === "ALL"
+                  ? "bg-emerald-800 text-white font-semibold"
+                  : "text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              <span>All 10RCDG Personnel</span>
+              {selectedUnit === "ALL" && <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+            </button>
+
+            {contactGroups.map((g) => {
+              const isSelected = selectedUnit === g._id || selectedUnit === g.name;
+              return (
+                <button
+                  key={String(g._id)}
+                  onClick={() => setSelectedUnit(String(g._id))}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-colors ${
+                    isSelected
+                      ? "bg-emerald-800 text-white font-semibold"
+                      : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: g.color || "#10b981" }}
+                    />
+                    <span className="truncate">{g.name}</span>
+                  </div>
+                  {isSelected && <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+                </button>
+              );
+            })}
           </div>
 
           {/* Geo-fence Toggle */}

@@ -6,7 +6,7 @@ import { MapPin } from "lucide-react";
 const TacticalMapView = dynamic(() => import("./tactical-map-view"), {
   ssr: false,
   loading: () => (
-    <div className="relative w-full h-[calc(100vh-4rem)] overflow-hidden bg-slate-100 font-sans">
+    <div className="relative w-full h-full overflow-hidden bg-slate-100 font-sans">
       {/* Top HUD Skeleton */}
       <div className="absolute top-4 left-4 z-20 w-80 sm:w-96 max-w-[calc(100vw-2rem)]">
         <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-md border border-slate-200/80 p-2.5 flex items-center justify-between">

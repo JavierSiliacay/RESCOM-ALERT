@@ -287,15 +287,15 @@ export default function GroupsPage() {
   const totalMembers = groups.reduce((acc, g) => acc + g.memberCount, 0);
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800 uppercase mb-1">
-            <Shield className="w-4 h-4 text-emerald-600" />
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-semibold text-emerald-800 uppercase mb-0.5 sm:mb-1">
+            <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
             10RCDG Unit Organization
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight">
             Contact Groups
           </h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
@@ -305,7 +305,7 @@ export default function GroupsPage() {
 
         <button
           onClick={handleOpenAdd}
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider self-start sm:self-auto"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer uppercase tracking-wider self-start sm:self-auto w-full sm:w-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Create New Group</span>

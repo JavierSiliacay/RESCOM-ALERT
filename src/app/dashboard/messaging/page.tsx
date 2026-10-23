@@ -774,13 +774,13 @@ function MessagingContent() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3.5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* Top Header & Integrated Navigation Tabs */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-              <Send className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+              <Send className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
@@ -794,10 +794,10 @@ function MessagingContent() {
         </div>
 
         {/* Tab Switchers */}
-        <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/80 self-start md:self-auto overflow-x-auto max-w-full">
+        <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/80 w-full md:w-auto overflow-x-auto max-w-full no-scrollbar">
           <button
             onClick={() => handleTabChange("send")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "send"
                 ? "bg-white text-emerald-800 shadow-xs border border-slate-200"
                 : "text-slate-600 hover:text-slate-900"
@@ -808,7 +808,7 @@ function MessagingContent() {
           </button>
           <button
             onClick={() => handleTabChange("outbox")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "outbox"
                 ? "bg-white text-emerald-800 shadow-xs border border-slate-200"
                 : "text-slate-600 hover:text-slate-900"
@@ -822,7 +822,7 @@ function MessagingContent() {
           </button>
           <button
             onClick={() => handleTabChange("audit")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "audit"
                 ? "bg-white text-emerald-800 shadow-xs border border-slate-200"
                 : "text-slate-600 hover:text-slate-900"

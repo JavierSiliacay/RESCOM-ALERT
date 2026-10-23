@@ -188,10 +188,10 @@ export function DashboardNav({
   return (
     <div className="flex flex-col lg:flex-row h-dvh w-full overflow-hidden bg-[#f8fafc] text-slate-900">
       {/* Mobile Top App Bar */}
-      <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 z-30 shrink-0">
-        <div className="flex items-center gap-2.5">
+      <header className="lg:hidden flex items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 bg-white/95 backdrop-blur-md border-b border-slate-200 z-30 shrink-0 sticky top-0 shadow-2xs">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
           <div className="flex items-center -space-x-2 shrink-0">
-            <div className="relative w-8 h-8 rounded-full overflow-hidden border border-amber-500/80 ring-2 ring-emerald-100 shadow-xs bg-white z-10 flex items-center justify-center">
+            <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border border-amber-500/80 ring-2 ring-emerald-100 shadow-xs bg-white z-10 flex items-center justify-center">
               <Image
                 src="/rescom-pa-seal.png"
                 alt="RESCOM PA"
@@ -200,7 +200,7 @@ export function DashboardNav({
                 className="object-cover scale-105"
               />
             </div>
-            <div className="relative w-8 h-8 rounded-full overflow-hidden border border-amber-500/80 ring-2 ring-emerald-100 shadow-xs bg-white flex items-center justify-center">
+            <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border border-amber-500/80 ring-2 ring-emerald-100 shadow-xs bg-white flex items-center justify-center">
               <Image
                 src="/rescom-emblem.jpg"
                 alt="10RCDG"
@@ -210,27 +210,27 @@ export function DashboardNav({
               />
             </div>
           </div>
-          <div>
-            <h1 className="text-sm font-extrabold text-slate-900 tracking-tight leading-none">
+          <div className="min-w-0">
+            <h1 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight leading-none truncate">
               <span className="text-emerald-950">RESCOM </span>
               <span className="text-amber-600">ALERT</span>
             </h1>
-            <p className="text-[10px] text-slate-500 font-medium mt-0.5">10RCDG RESCOM, PA</p>
+            <p className="text-[9px] sm:text-[10px] text-slate-500 font-medium mt-0.5 truncate">10RCDG RESCOM, PA</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <button
             onClick={() => setShowSignOutModal(true)}
             title="Sign Out"
-            className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="Toggle Menu"
-            className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -241,15 +241,15 @@ export function DashboardNav({
       {mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="lg:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 transition-opacity"
+          className="lg:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 transition-opacity"
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 ${
+        className={`fixed lg:relative inset-y-0 left-0 z-50 h-dvh lg:h-auto w-72 max-w-[85vw] lg:max-w-none ${
           isCollapsed ? "lg:w-[72px]" : "lg:w-64"
-        } bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-xl lg:shadow-xs transform lg:transform-none lg:static transition-[width,transform] duration-200 ease-in-out relative ${
+        } bg-white border-r border-slate-200 flex flex-col shrink-0 shadow-2xl lg:shadow-xs transform lg:transform-none transition-[width,transform] duration-200 ease-in-out ${
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
@@ -342,33 +342,34 @@ export function DashboardNav({
         </div>
 
         {/* Status indicator badge */}
-        <div className={`px-3 py-2 bg-emerald-50/80 border-b border-emerald-100 flex items-center ${isCollapsed ? "justify-center" : "justify-between"}`}>
-          {!isCollapsed && (
-            <div className="flex items-center gap-2">
-              <Shield className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-              <span className="text-xs font-medium text-emerald-800">
-                Connected as
-              </span>
-            </div>
-          )}
-          {isCollapsed ? (
-            <div title={`Connected as ${effectiveRole}`} className="p-0.5">
+        <div className={`px-3 py-2 bg-emerald-50/80 border-b border-emerald-100 flex items-center ${isCollapsed ? "lg:justify-center justify-between" : "justify-between"}`}>
+          <div className={`flex items-center gap-2 ${isCollapsed ? "lg:hidden" : ""}`}>
+            <Shield className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+            <span className="text-xs font-medium text-emerald-800">
+              Connected as
+            </span>
+          </div>
+          {isCollapsed && (
+            <div title={`Connected as ${effectiveRole}`} className="hidden lg:block p-0.5">
               <Shield className="w-4 h-4 text-emerald-700" />
             </div>
-          ) : effectiveRole === "DEVELOPER" ? (
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 bg-purple-100 px-2 py-0.5 rounded border border-purple-300 shadow-2xs font-mono flex items-center gap-1.5">
-              <Code2 className="w-3.5 h-3.5 text-purple-700 shrink-0" />
-              <span>DEVELOPER</span>
-            </span>
-          ) : effectiveRole === "VIEWER" ? (
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-300 shadow-2xs font-mono flex items-center gap-1">
-              <span>VIEWER (READ-ONLY)</span>
-            </span>
-          ) : (
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300 shadow-2xs font-mono">
-              {effectiveRole || "COMMANDER"}
-            </span>
           )}
+          <div className={isCollapsed ? "lg:hidden" : ""}>
+            {effectiveRole === "DEVELOPER" ? (
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-950 bg-purple-100 px-2 py-0.5 rounded border border-purple-300 shadow-2xs font-mono flex items-center gap-1.5">
+                <Code2 className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                <span>DEVELOPER</span>
+              </span>
+            ) : effectiveRole === "VIEWER" ? (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-300 shadow-2xs font-mono flex items-center gap-1">
+                <span>VIEWER (READ-ONLY)</span>
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300 shadow-2xs font-mono">
+                {effectiveRole || "COMMANDER"}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Navigation Items */}
@@ -389,7 +390,7 @@ export function DashboardNav({
                 onClick={() => setMobileOpen(false)}
                 title={isCollapsed ? item.label : undefined}
                 className={`flex items-center ${
-                  isCollapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
+                  isCollapsed ? "lg:justify-center lg:px-2 gap-3 px-3 py-2.5" : "gap-3 px-3 py-2.5"
                 } rounded-xl text-sm font-semibold transition-all duration-150 ${
                   isActive
                     ? "bg-emerald-800 text-white shadow-xs"
@@ -401,16 +402,17 @@ export function DashboardNav({
                     isActive ? "text-emerald-200" : "text-slate-500"
                   }`}
                 />
-                {!isCollapsed && <span className="truncate">{item.label}</span>}
+                <span className={`truncate ${isCollapsed ? "lg:hidden" : ""}`}>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
         {/* Sidebar Footer — User Info & Sign Out */}
-        <div className={`p-3 border-t border-slate-200 bg-slate-50/70 ${isCollapsed ? "flex flex-col items-center gap-2" : ""}`}>
-          {isCollapsed ? (
-            <div className="flex flex-col items-center gap-2">
+        <div className="p-3 border-t border-slate-200 bg-slate-50/70">
+          {/* Desktop Collapsed View */}
+          {isCollapsed && (
+            <div className="hidden lg:flex flex-col items-center gap-2">
               <div
                 title={`${effectiveName} (${effectiveRank || "Personnel Officer"})`}
                 className="cursor-default"
@@ -439,53 +441,54 @@ export function DashboardNav({
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              {/* User Avatar */}
-              {userImage ? (
-                <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-300 shrink-0">
-                  <Image
-                    src={userImage}
-                    alt={userName}
-                    fill
-                    unoptimized
-                    className="object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-emerald-800 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
-                  {userName.charAt(0).toUpperCase()}
-                </div>
-              )}
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1">
-                  <p className="text-xs font-bold text-slate-900 truncate">
-                    {effectiveName}
-                  </p>
-                  {effectiveRole === "COMMANDER" && (
-                    <Crown className="w-3 h-3 text-amber-600 shrink-0" />
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-500 truncate">
-                  {effectiveRank || "Personnel Officer"}
-                </p>
-              </div>
-
-              <button
-                onClick={() => setShowSignOutModal(true)}
-                title="Sign Out"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
           )}
+
+          {/* Expanded View (always used on Mobile Drawer) */}
+          <div className={`flex items-center gap-3 ${isCollapsed ? "lg:hidden" : ""}`}>
+            {/* User Avatar */}
+            {userImage ? (
+              <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-300 shrink-0">
+                <Image
+                  src={userImage}
+                  alt={userName}
+                  fill
+                  unoptimized
+                  className="object-cover"
+                />
+              </div>
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-emerald-800 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+                {userName.charAt(0).toUpperCase()}
+              </div>
+            )}
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1">
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  {effectiveName}
+                </p>
+                {effectiveRole === "COMMANDER" && (
+                  <Crown className="w-3 h-3 text-amber-600 shrink-0" />
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 truncate">
+                {effectiveRank || "Personnel Officer"}
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowSignOutModal(true)}
+              title="Sign Out"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto bg-[#f8fafc]">
+      <main className="flex-1 min-h-0 overflow-y-auto bg-[#f8fafc] overscroll-y-contain">
         {children}
       </main>
 

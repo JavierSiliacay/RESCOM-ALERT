@@ -72,9 +72,11 @@ export default function TacticalMapView() {
   const [selectedUnit, setSelectedUnit] = useState<string>("ALL");
   const [selectedSoldierId, setSelectedSoldierId] = useState<string | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isMobileUnitsOpen, setIsMobileUnitsOpen] = useState(false);
 
   // Geo-fence dispatch mode
   const [isGeoFenceMode, setIsGeoFenceMode] = useState(false);
+  const [isGeoSheetCollapsed, setIsGeoSheetCollapsed] = useState(false);
   const [geoFenceRadiusKm, setGeoFenceRadiusKm] = useState<number>(10);
   const [geoFenceCenter, setGeoFenceCenter] = useState<[number, number]>(REGION_X_CENTER);
 
@@ -157,7 +159,22 @@ export default function TacticalMapView() {
 
     mapInstanceRef.current = map;
 
+    // Trigger immediate & deferred invalidateSize to guarantee full canvas rendering on mobile
+    map.invalidateSize();
+    const resizeTimer1 = setTimeout(() => map.invalidateSize(), 150);
+    const resizeTimer2 = setTimeout(() => map.invalidateSize(), 500);
+
+    const handleWindowResize = () => {
+      map.invalidateSize();
+    };
+    window.addEventListener("resize", handleWindowResize);
+    window.addEventListener("orientationchange", handleWindowResize);
+
     return () => {
+      clearTimeout(resizeTimer1);
+      clearTimeout(resizeTimer2);
+      window.removeEventListener("resize", handleWindowResize);
+      window.removeEventListener("orientationchange", handleWindowResize);
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -275,7 +292,7 @@ export default function TacticalMapView() {
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-4rem)] overflow-hidden bg-slate-100 font-sans">
+    <div className="relative w-full h-full overflow-hidden bg-slate-100 font-sans">
       
       {/* ====================================================
           MAP CANVAS CONTAINER
@@ -285,9 +302,9 @@ export default function TacticalMapView() {
       {/* ====================================================
           TOP-LEFT FLOATING HUD SEARCH BAR
          ==================================================== */}
-      <div className="absolute top-4 left-4 z-20 w-80 sm:w-96 max-w-[calc(100vw-2rem)]">
-        <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 p-1.5 transition-all focus-within:ring-2 focus-within:ring-emerald-700/40">
-          <div className="flex items-center gap-2 px-2.5 py-1.5">
+      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 w-[calc(100vw-1.5rem)] sm:w-96 max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-2rem)]">
+        <div className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 p-1 sm:p-1.5 transition-all focus-within:ring-2 focus-within:ring-emerald-700/40">
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5">
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
@@ -313,7 +330,7 @@ export default function TacticalMapView() {
 
           {/* Autocomplete Dropdown */}
           {isSearchFocused && searchResults.length > 0 && (
-            <div className="mt-1 pt-1 border-t border-slate-100 max-h-64 overflow-y-auto divide-y divide-slate-50">
+            <div className="mt-1 pt-1 border-t border-slate-100 max-h-60 overflow-y-auto divide-y divide-slate-50">
               {searchResults.map((soldier) => {
                 const hasLocation =
                   typeof soldier.latitude === "number" && typeof soldier.longitude === "number";
@@ -321,14 +338,14 @@ export default function TacticalMapView() {
                   <button
                     key={String(soldier._id)}
                     onClick={() => handleSelectSoldier(soldier)}
-                    className="w-full text-left p-2.5 hover:bg-slate-50 rounded-xl flex items-center justify-between gap-2 transition-colors"
+                    className="w-full text-left p-2.5 hover:bg-slate-50 rounded-xl flex items-center justify-between gap-2 transition-colors cursor-pointer"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-xs text-slate-900 truncate">
                           {soldier.rank} {soldier.firstName} {soldier.lastName}
                         </span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 truncate">
                           {soldier.unit || soldier.groupName}
                         </span>
                       </div>
@@ -353,16 +370,51 @@ export default function TacticalMapView() {
       </div>
 
       {/* ====================================================
-          TOP-RIGHT CONTROLS: LAYER TOGGLE & RESET
+          TOP-RIGHT CONTROLS: LAYER TOGGLE, GEO-FENCE & RESET
          ==================================================== */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+      <div className="absolute top-16 right-3 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2">
+        {/* Geo-fence Quick Toggle Button (Prominent on Mobile & Desktop) */}
+        <button
+          onClick={() => {
+            setIsGeoFenceMode((prev) => !prev);
+            setIsGeoSheetCollapsed(false);
+            setIsMobileUnitsOpen(false);
+          }}
+          className={`px-2.5 py-1.5 rounded-xl shadow-lg border transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer backdrop-blur-md ${
+            isGeoFenceMode
+              ? "bg-emerald-600 text-white border-emerald-500 shadow-emerald-600/20"
+              : "bg-white/95 text-slate-700 hover:bg-slate-50 border-slate-200/80"
+          }`}
+          title={isGeoFenceMode ? "Disable Geo-Fence" : "Enable Radius Geo-Fence"}
+        >
+          <Radio className={`w-3.5 h-3.5 ${isGeoFenceMode ? "animate-pulse text-white" : "text-emerald-700"}`} />
+          <span className="hidden xs:inline sm:inline">
+            {isGeoFenceMode ? "Geo-Fence" : "Geo-Fence"}
+          </span>
+          {isGeoFenceMode && (
+            <span className="bg-white text-emerald-800 text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+              {geoFenceRadiusKm}k
+            </span>
+          )}
+        </button>
+
+        {/* Mobile Contact Group Toggle Button */}
+        <button
+          onClick={() => setIsMobileUnitsOpen((prev) => !prev)}
+          className="md:hidden bg-white/95 backdrop-blur-md hover:bg-slate-50 text-slate-700 px-2.5 py-1.5 rounded-xl shadow-lg border border-slate-200/80 transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+          title="Toggle contact groups"
+        >
+          <Users className="w-3.5 h-3.5 text-emerald-800" />
+          <span className="text-[11px] font-mono">{filteredSoldiers.length}</span>
+        </button>
+
         {/* Layer Switcher: Street & Satellite (100% Free) */}
-        <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-lg border border-slate-200/80 p-1 flex items-center gap-1">
+        <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-lg border border-slate-200/80 p-0.5 sm:p-1 flex items-center gap-0.5 sm:gap-1">
           {(["street", "satellite"] as const).map((key) => (
             <button
               key={key}
               onClick={() => setActiveTileKey(key)}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize transition-all ${
+              className={`px-2 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-semibold capitalize transition-all cursor-pointer ${
                 activeTileKey === key
                   ? "bg-emerald-900 text-white shadow-xs"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
@@ -377,7 +429,7 @@ export default function TacticalMapView() {
         <button
           onClick={handleResetView}
           title="Reset to 10RCDG Northern Mindanao"
-          className="bg-white/95 backdrop-blur-md hover:bg-slate-50 text-slate-700 p-2 rounded-xl shadow-lg border border-slate-200/80 transition-colors"
+          className="bg-white/95 backdrop-blur-md hover:bg-slate-50 text-slate-700 p-1.5 sm:p-2 rounded-xl shadow-lg border border-slate-200/80 transition-colors cursor-pointer"
         >
           <Compass className="w-4 h-4 text-emerald-800" />
         </button>
@@ -396,24 +448,39 @@ export default function TacticalMapView() {
       )}
 
       {/* ====================================================
-          LEFT CONTACT GROUPS FILTER STRIP
+          LEFT CONTACT GROUPS FILTER STRIP (DESKTOP + MOBILE SLIDE-OVER)
          ==================================================== */}
-      <div className="absolute bottom-6 left-4 z-20 hidden md:block">
-        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 p-3 w-64 space-y-2">
+      <div
+        className={`absolute bottom-4 left-3 sm:bottom-6 sm:left-4 z-20 ${
+          isMobileUnitsOpen ? "block" : "hidden md:block"
+        }`}
+      >
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 p-3 w-72 max-w-[calc(100vw-2rem)] sm:w-64 space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-slate-800 border-b border-slate-100 pb-1.5">
             <div className="flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-emerald-800" />
               <span>Contact Groups</span>
             </div>
-            <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-mono">
-              {filteredSoldiers.length} Plotted
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-mono">
+                {filteredSoldiers.length} Plotted
+              </span>
+              <button
+                onClick={() => setIsMobileUnitsOpen(false)}
+                className="md:hidden text-slate-400 hover:text-slate-600 p-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-1 text-xs max-h-56 overflow-y-auto pr-0.5">
+          <div className="space-y-1 text-xs max-h-48 sm:max-h-56 overflow-y-auto pr-0.5">
             <button
-              onClick={() => setSelectedUnit("ALL")}
-              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between transition-colors ${
+              onClick={() => {
+                setSelectedUnit("ALL");
+                setIsMobileUnitsOpen(false);
+              }}
+              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
                 selectedUnit === "ALL"
                   ? "bg-emerald-800 text-white font-semibold"
                   : "text-slate-700 hover:bg-slate-100"
@@ -428,8 +495,11 @@ export default function TacticalMapView() {
               return (
                 <button
                   key={String(g._id)}
-                  onClick={() => setSelectedUnit(String(g._id))}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-colors ${
+                  onClick={() => {
+                    setSelectedUnit(String(g._id));
+                    setIsMobileUnitsOpen(false);
+                  }}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer ${
                     isSelected
                       ? "bg-emerald-800 text-white font-semibold"
                       : "text-slate-700 hover:bg-slate-100"
@@ -451,8 +521,12 @@ export default function TacticalMapView() {
           {/* Geo-fence Toggle */}
           <div className="pt-2 border-t border-slate-100">
             <button
-              onClick={() => setIsGeoFenceMode((prev) => !prev)}
-              className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+              onClick={() => {
+                setIsGeoFenceMode((prev) => !prev);
+                setIsGeoSheetCollapsed(false);
+                setIsMobileUnitsOpen(false);
+              }}
+              className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 isGeoFenceMode
                   ? "bg-emerald-600 text-white shadow-sm"
                   : "bg-slate-100 hover:bg-slate-200 text-slate-700"
@@ -465,56 +539,148 @@ export default function TacticalMapView() {
         </div>
       </div>
 
+      {/* Mobile: fixed crosshair marks the map center while geo-fence is active */}
+      {isGeoFenceMode && (
+        <div className="md:hidden pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+          <Crosshair className="w-7 h-7 text-emerald-700 drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]" />
+        </div>
+      )}
+
       {/* ====================================================
           GEO-FENCE RADIUS DISPATCH DOCK (WHEN ACTIVE)
+          Mobile: collapsible bottom sheet · Desktop: floating card top-right
+         ==================================================== */}
+      {/* ====================================================
+          GEO-FENCE RADIUS DISPATCH DOCK (WHEN ACTIVE)
+          Mobile: ergonomic bottom sheet with drag handle & quick-dispatch peek
+          Desktop: floating tactical card top-right
          ==================================================== */}
       {isGeoFenceMode && (
-        <div className="absolute top-20 right-4 z-20 w-80 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-emerald-300 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
-              <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
-              <span>Emergency Geo-Fence Alert</span>
-            </div>
+        <div className="absolute z-30 left-0 right-0 bottom-0 md:left-auto md:bottom-auto md:top-20 md:right-4 md:w-80 bg-white/97 backdrop-blur-md rounded-t-3xl md:rounded-2xl shadow-[0_-10px_35px_rgba(15,23,42,0.22)] md:shadow-2xl border-t md:border border-emerald-300/80 px-4 pt-2.5 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-4 space-y-3 transition-all duration-200 animate-in slide-in-from-bottom-6 md:fade-in">
+          {/* Mobile Drag-handle Bar */}
+          <button
+            onClick={() => setIsGeoSheetCollapsed((prev) => !prev)}
+            className="md:hidden w-full flex justify-center py-1 cursor-pointer focus:outline-none"
+            aria-label={isGeoSheetCollapsed ? "Expand geo-fence panel" : "Collapse geo-fence panel"}
+          >
+            <span className="w-12 h-1.5 rounded-full bg-slate-300 hover:bg-slate-400 transition-colors" />
+          </button>
+
+          {/* Header Row */}
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => setIsGeoSheetCollapsed((prev) => !prev)}
+              className="flex items-center gap-2 text-xs font-bold text-emerald-950 min-w-0 md:cursor-default cursor-pointer focus:outline-none"
+            >
+              <div className="p-1 rounded-lg bg-emerald-100 text-emerald-800 shrink-0">
+                <Radio className="w-4 h-4 animate-pulse" />
+              </div>
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="truncate">Geo-Fence Perimeter</span>
+                <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full shrink-0">
+                  {geoFenceRadiusKm} km · {soldiersInGeoFence.length}
+                </span>
+              </div>
+              <ChevronRight
+                className={`md:hidden w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${
+                  isGeoSheetCollapsed ? "-rotate-90" : "rotate-90"
+                }`}
+              />
+            </button>
             <button
               onClick={() => setIsGeoFenceMode(false)}
-              className="text-slate-400 hover:text-slate-600 p-1"
+              className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer shrink-0 transition-colors"
+              aria-label="Close geo-fence"
+              title="Close Geo-Fence"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <p className="text-[11px] text-slate-600">
-            Click anywhere on the map to set epicenter. Alert will be sent exclusively to troops inside this perimeter.
-          </p>
+          {/* Expanded Controls Section */}
+          <div className={`space-y-3 pt-1 ${isGeoSheetCollapsed ? "hidden md:block" : "block"}`}>
+            <p className="text-[11px] text-slate-600 leading-snug">
+              <span className="hidden md:inline">Click map to set epicenter.</span>
+              <span className="md:inline"> Pan map to target area or tap to re-position epicenter.</span>
+            </p>
 
-          <div>
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
-              <span>Perimeter Radius:</span>
-              <span className="font-bold text-emerald-700 font-mono">{geoFenceRadiusKm} km</span>
+            {/* Quick Action Epicenter Buttons on Mobile */}
+            <div className="grid grid-cols-2 gap-2 md:hidden">
+              <button
+                onClick={() => {
+                  const map = mapInstanceRef.current;
+                  if (!map) return;
+                  const c = map.getCenter();
+                  setGeoFenceCenter([c.lat, c.lng]);
+                }}
+                className="py-1.5 px-2 rounded-xl text-[11px] font-bold border border-emerald-300 text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+              >
+                <Crosshair className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Map Center</span>
+              </button>
+              <button
+                onClick={() => {
+                  setGeoFenceCenter(REGION_X_CENTER);
+                  const map = mapInstanceRef.current;
+                  if (map) map.panTo(REGION_X_CENTER);
+                }}
+                className="py-1.5 px-2 rounded-xl text-[11px] font-bold border border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+              >
+                <Compass className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                <span className="truncate">HQ CDO Center</span>
+              </button>
             </div>
-            <input
-              type="range"
-              min="2"
-              max="50"
-              value={geoFenceRadiusKm}
-              onChange={(e) => setGeoFenceRadiusKm(Number(e.target.value))}
-              className="w-full accent-emerald-700 cursor-pointer"
-            />
+
+            {/* Radius Slider with Quick Presets */}
+            <div className="bg-slate-50/90 rounded-2xl p-2.5 border border-slate-200/70 space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                <span className="text-[11px] text-slate-500 uppercase tracking-wider font-bold">Perimeter Radius</span>
+                <span className="font-extrabold text-emerald-800 font-mono text-sm">{geoFenceRadiusKm} km</span>
+              </div>
+              <input
+                type="range"
+                min="2"
+                max="50"
+                step="1"
+                value={geoFenceRadiusKm}
+                onChange={(e) => setGeoFenceRadiusKm(Number(e.target.value))}
+                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-700"
+              />
+              <div className="flex items-center justify-between pt-0.5">
+                {[5, 15, 25, 40].map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => setGeoFenceRadiusKm(preset)}
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded-md cursor-pointer transition-colors ${
+                      geoFenceRadiusKm === preset
+                        ? "bg-emerald-800 text-white font-bold"
+                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/70"
+                    }`}
+                  >
+                    {preset}km
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Troop Summary Pill */}
+            <div className="bg-emerald-50 rounded-xl p-2.5 flex items-center justify-between text-xs border border-emerald-200/60">
+              <span className="text-slate-700 font-semibold text-[11px]">Units inside perimeter:</span>
+              <span className="font-extrabold text-emerald-900 text-sm font-mono">
+                {soldiersInGeoFence.length} {soldiersInGeoFence.length === 1 ? "Soldier" : "Personnel"}
+              </span>
+            </div>
           </div>
 
-          <div className="bg-emerald-50 rounded-xl p-2.5 flex items-center justify-between text-xs">
-            <span className="text-slate-600 font-medium">Troops in Perimeter:</span>
-            <span className="font-extrabold text-emerald-900 text-sm">
-              {soldiersInGeoFence.length} Personnel
-            </span>
-          </div>
-
+          {/* Primary Siren Broadcast CTA */}
           <Link
             href={`/dashboard/messaging?tab=send&geoRadius=${geoFenceRadiusKm}&geoLat=${geoFenceCenter[0]}&geoLng=${geoFenceCenter[1]}&geoRecipients=${encodeURIComponent(soldiersInGeoFence.map((s) => s.mobileNumber).join(","))}`}
-            className="w-full bg-emerald-800 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+            className="w-full bg-emerald-800 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold py-2.5 md:py-2 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-950/10 cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>Dispatch Siren Broadcast</span>
+            <span>
+              Dispatch Siren Broadcast ({soldiersInGeoFence.length})
+            </span>
           </Link>
         </div>
       )}
@@ -523,10 +689,12 @@ export default function TacticalMapView() {
           SELECTED SOLDIER INTEL CARD (FLOATING HUD)
          ==================================================== */}
       {selectedSoldier && (
-        <div className="absolute bottom-6 right-4 z-20 w-80 sm:w-96 max-w-[calc(100vw-2rem)] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 p-4 space-y-3.5 transition-all animate-in fade-in slide-in-from-bottom-4">
+        <div className={`absolute right-3 sm:bottom-6 sm:right-4 z-40 w-[calc(100vw-1.5rem)] sm:w-96 max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-2rem)] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 p-3.5 sm:p-4 space-y-3 sm:space-y-3.5 transition-all animate-in fade-in slide-in-from-bottom-4 ${
+          isGeoFenceMode ? "bottom-20 sm:bottom-6" : "bottom-4"
+        }`}>
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-emerald-900 border-2 border-emerald-400/80 flex items-center justify-center text-white font-extrabold text-sm shadow-md shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-900 border-2 border-emerald-400/80 flex items-center justify-center text-white font-extrabold text-xs sm:text-sm shadow-md shrink-0">
                 {selectedSoldier.rank?.slice(0, 3) || "SOL"}
               </div>
               <div className="min-w-0">
@@ -550,7 +718,7 @@ export default function TacticalMapView() {
 
             <button
               onClick={() => setSelectedSoldierId(null)}
-              className="text-slate-400 hover:text-slate-600 p-1"
+              className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>

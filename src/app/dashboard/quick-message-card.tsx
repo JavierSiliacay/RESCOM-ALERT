@@ -630,15 +630,15 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
         </div>
 
         {/* Footer & Button */}
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-xs text-slate-400 font-mono">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+          <span className="text-xs text-slate-400 font-mono order-2 sm:order-1">
             {message.length} characters
           </span>
 
           <button
             type="submit"
             disabled={isSending || !message.trim() || activeRecipientCount === 0}
-            className={`px-6 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all shadow-xs inline-flex items-center gap-2 cursor-pointer ${
+            className={`w-full sm:w-auto px-5 sm:px-6 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all shadow-xs inline-flex items-center justify-center gap-2 cursor-pointer order-1 sm:order-2 ${
               recipientMode === "MANUAL"
                 ? "bg-blue-700 hover:bg-blue-800"
                 : "bg-emerald-800 hover:bg-emerald-900"
@@ -652,10 +652,10 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
             ) : (
               <>
                 <Send className="w-3.5 h-3.5" />
-                <span>
+                <span className="truncate">
                   {recipientMode === "MANUAL"
                     ? `Send to ${manualRecipients.length} Direct Recipient${manualRecipients.length === 1 ? `: ${manualRecipients[0].name || manualRecipients[0].number}` : "s"}`
-                    : `Broadcast to Group: ${selectedGroup === "ALL" ? "All 10RCDG Personnel" : selectedGroup} (${activeRecipientCount})`}
+                    : `Broadcast to: ${selectedGroup === "ALL" ? "All 10RCDG Personnel" : selectedGroup} (${activeRecipientCount})`}
                 </span>
               </>
             )}

@@ -90,18 +90,18 @@ export function SettingsClient() {
   };
 
   return (
-    <div className="p-4 sm:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="p-3.5 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-4 sm:space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800 uppercase mb-1">
-            <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-semibold text-emerald-800 uppercase mb-0.5 sm:mb-1">
+            <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 animate-pulse" />
             Developer Hardware Console
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight">
             SMS Gateway Settings
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Configure your Infinix Android phone gateway, SIM card selection, and test live transmissions.
           </p>
         </div>

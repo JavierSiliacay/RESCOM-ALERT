@@ -65,10 +65,12 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
         targetPersonnel = active.filter((p) => p.groupName === selectedGroup || p.groupId === selectedGroup);
       }
     } else {
-      targetPersonnel = manualRecipients.map((r) => {
-        const found = personnel.find((p) => isSamePhMobileNumber(p.mobileNumber, r.number));
-        return found || ({ mobileNumber: r.number, deviceType: "ANDROID" } as any);
-      });
+      targetPersonnel = manualRecipients
+        .map((r) => {
+          const found = personnel.find((p) => isSamePhMobileNumber(p.mobileNumber, r.number));
+          return found || ({ mobileNumber: r.number, deviceType: "ANDROID", status: "ACTIVE" } as any);
+        })
+        .filter((p) => p.status !== "INACTIVE");
     }
 
     const androidTroops = targetPersonnel.filter((p) => ((p as any).deviceType || "ANDROID") === "ANDROID");

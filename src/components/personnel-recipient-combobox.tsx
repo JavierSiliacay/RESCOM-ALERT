@@ -150,6 +150,9 @@ export function PersonnelRecipientCombobox({
 
     return personnel
       .filter((p) => {
+        // Exclude INACTIVE personnel from being targeted in alert dispatches
+        if (p.status === "INACTIVE") return false;
+
         // Exclude if already selected (handles 09 vs +639)
         const isAlreadyAdded = recipients.some((r) =>
           isSamePhMobileNumber(r.number, p.mobileNumber)

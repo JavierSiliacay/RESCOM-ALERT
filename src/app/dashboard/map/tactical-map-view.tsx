@@ -105,10 +105,11 @@ export default function TacticalMapView() {
     return personnel.find((p) => String(p._id) === selectedSoldierId) || null;
   }, [personnel, selectedSoldierId]);
 
-  // Soldiers inside active geo-fence radius
+  // Soldiers inside active geo-fence radius (active troops only)
   const soldiersInGeoFence = useMemo(() => {
     if (!isGeoFenceMode) return [];
     return locatedSoldiers.filter((s) => {
+      if (s.status === "INACTIVE") return false;
       if (typeof s.latitude !== "number" || typeof s.longitude !== "number") return false;
       const d = getDistanceKm(geoFenceCenter[0], geoFenceCenter[1], s.latitude, s.longitude);
       return d <= geoFenceRadiusKm;
@@ -209,20 +210,27 @@ export default function TacticalMapView() {
 
       const isSelected = String(soldier._id) === selectedSoldierId;
       const rank = soldier.rank || "PVT";
+      const isInactive = soldier.status === "INACTIVE";
+
+      // Tactical pin styling: Active (Emerald), Selected (Amber), Inactive (Muted Slate / Gray)
+      let pinBgClass = "bg-emerald-800 border-emerald-400/80 shadow-emerald-950/60";
+      let arrowBgClass = "bg-emerald-400";
+
+      if (isSelected) {
+        pinBgClass = "bg-amber-500 border-white ring-4 ring-amber-400/50 shadow-amber-950/60";
+        arrowBgClass = "bg-white";
+      } else if (isInactive) {
+        pinBgClass = "bg-slate-600 border-slate-400/80 opacity-75 shadow-slate-900/40";
+        arrowBgClass = "bg-slate-400";
+      }
 
       // Custom Clean Military Tactical Pin HTML
       const pinHtml = `
-        <div class="relative cursor-pointer transition-transform duration-200 ${isSelected ? "scale-125 z-50" : "hover:scale-110"}">
-          <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[10px] text-white shadow-lg border-2 ${
-            isSelected
-              ? "bg-amber-500 border-white ring-4 ring-amber-400/50"
-              : "bg-emerald-800 border-emerald-400/80 shadow-emerald-950/60"
-          }">
+        <div class="relative cursor-pointer transition-transform duration-200 ${isSelected ? "scale-125 z-50" : "hover:scale-110"} ${isInactive ? "filter grayscale-[60%]" : ""}">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[10px] text-white shadow-lg border-2 ${pinBgClass}">
             ${rank.slice(0, 3)}
           </div>
-          <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 ${
-            isSelected ? "bg-white" : "bg-emerald-400"
-          }"></div>
+          <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 ${arrowBgClass}"></div>
         </div>
       `;
 
@@ -351,10 +359,19 @@ export default function TacticalMapView() {
                       </div>
                       <p className="text-[10px] text-slate-400 font-mono">{soldier.mobileNumber}</p>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {soldier.status === "INACTIVE" ? (
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full">
+                          Inactive
+                        </span>
+                      ) : null}
                       {hasLocation ? (
-                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-emerald-600" />
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                          soldier.status === "INACTIVE"
+                            ? "text-slate-600 bg-slate-100"
+                            : "text-emerald-700 bg-emerald-50"
+                        }`}>
+                          <MapPin className={`w-3 h-3 ${soldier.status === "INACTIVE" ? "text-slate-500" : "text-emerald-600"}`} />
                           <span>Track</span>
                         </span>
                       ) : (
@@ -694,7 +711,11 @@ export default function TacticalMapView() {
         }`}>
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-900 border-2 border-emerald-400/80 flex items-center justify-center text-white font-extrabold text-xs sm:text-sm shadow-md shrink-0">
+              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 flex items-center justify-center text-white font-extrabold text-xs sm:text-sm shadow-md shrink-0 ${
+                selectedSoldier.status === "INACTIVE"
+                  ? "bg-slate-700 border-slate-400"
+                  : "bg-emerald-900 border-emerald-400/80"
+              }`}>
                 {selectedSoldier.rank?.slice(0, 3) || "SOL"}
               </div>
               <div className="min-w-0">
@@ -702,10 +723,17 @@ export default function TacticalMapView() {
                   <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-mono">
                     {selectedSoldier.rank}
                   </span>
-                  <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                    <span>Active</span>
-                  </span>
+                  {selectedSoldier.status === "INACTIVE" ? (
+                    <span className="text-xs text-slate-600 font-bold bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                      <span>Inactive</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                      <span>Active</span>
+                    </span>
+                  )}
                 </div>
                 <h4 className="font-extrabold text-slate-950 text-sm sm:text-base leading-tight truncate mt-0.5">
                   {selectedSoldier.firstName} {selectedSoldier.lastName}
@@ -740,13 +768,23 @@ export default function TacticalMapView() {
 
           {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-2 pt-1">
-            <Link
-              href={`/dashboard/messaging?tab=send&recipient=${encodeURIComponent(selectedSoldier.mobileNumber)}`}
-              className="bg-emerald-800 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>Direct Alert</span>
-            </Link>
+            {selectedSoldier.status === "INACTIVE" ? (
+              <div
+                title="Personnel is currently inactive in roster"
+                className="bg-slate-200 text-slate-400 font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-not-allowed select-none"
+              >
+                <Send className="w-3.5 h-3.5 text-slate-400" />
+                <span>Alert Disabled</span>
+              </div>
+            ) : (
+              <Link
+                href={`/dashboard/messaging?tab=send&recipient=${encodeURIComponent(selectedSoldier.mobileNumber)}`}
+                className="bg-emerald-800 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Direct Alert</span>
+              </Link>
+            )}
 
             <button
               onClick={() => {
@@ -762,7 +800,7 @@ export default function TacticalMapView() {
                   );
                 }
               }}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-200"
+              className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-200 cursor-pointer"
             >
               <Crosshair className="w-3.5 h-3.5 text-emerald-800" />
               <span>Center Pin</span>

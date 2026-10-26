@@ -668,7 +668,7 @@ export const updateLocation = mutation({
   },
 });
 
-// Admin: Purge all simulated/fake location coordinates from personnel
+// Admin: Clear/delete all simulated/fake location coordinates from personnel
 export const clearAllLocations = mutation({
   args: {
     adminEmail: v.optional(v.string()),

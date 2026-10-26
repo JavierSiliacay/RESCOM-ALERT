@@ -3503,7 +3503,7 @@ export default function PersonnelPage() {
                   </h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-100 text-rose-900 border border-rose-300">
-                      IRREVERSIBLE PURGE
+                      PERMANENT DELETION
                     </span>
                   </div>
                 </div>
@@ -3546,7 +3546,7 @@ export default function PersonnelPage() {
                   <span className="font-semibold text-slate-600">Closed / Concluded</span>
                 </div>
                 <div className="flex justify-between pt-1 border-t border-slate-200 text-rose-700 font-bold">
-                  <span>Submissions to be purged:</span>
+                  <span>Submissions to be deleted:</span>
                   <span>{campaignDeleteTarget.totalSubmissions} records</span>
                 </div>
               </div>

@@ -162,7 +162,7 @@ export const removeMany = mutation({
       userEmail: args.senderEmail,
       userRole: "COMMANDER",
       category: "BROADCAST",
-      action: "PURGE_BROADCASTS",
+      action: "DELETE_BROADCASTS",
       details: `Deleted ${deletedCount} broadcast records from sent outbox to clean up database`,
       ipAddress: "127.0.0.1",
       timestamp,

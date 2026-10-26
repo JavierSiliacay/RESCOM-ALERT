@@ -672,7 +672,7 @@ function MessagingContent() {
       guardAction("bulk delete broadcast records");
       return;
     }
-    const idsToPurge = [...selectedBroadcastIds];
+    const idsToDelete = [...selectedBroadcastIds];
     setShowBulkDeleteConfirm(false); // Close modal immediately
 
     // Show initial circling animation in upper right toast
@@ -680,33 +680,33 @@ function MessagingContent() {
     setDeleteToast({
       id: Date.now().toString(),
       status: "loading",
-      title: `Purging ${idsToPurge.length} Alert Records...`,
-      message: "Wiping telemetry and outbox records from database...",
-      count: idsToPurge.length,
+      title: `Deleting ${idsToDelete.length} Alert Records...`,
+      message: "Removing telemetry and outbox records from database...",
+      count: idsToDelete.length,
     });
 
     // 1. Trigger simultaneous wipeout animation on all selected rows
-    setWipingOutIds((prev) => new Set([...prev, ...idsToPurge]));
+    setWipingOutIds((prev) => new Set([...prev, ...idsToDelete]));
     setIsBulkDeleting(true);
 
     // 2. Allow 550ms for smooth circling animation & row wipe-out
     await new Promise((resolve) => setTimeout(resolve, 550));
 
     try {
-      const purgedCount = await removeManyBroadcasts({
-        ids: idsToPurge as any,
+      const deletedCount = await removeManyBroadcasts({
+        ids: idsToDelete as any,
         senderEmail: currentOfficer.email,
         senderName: currentOfficer.name,
       });
-      if (selectedMessage && idsToPurge.includes(selectedMessage._id)) {
+      if (selectedMessage && idsToDelete.includes(selectedMessage._id)) {
         setSelectedMessage(null);
       }
       setSelectedBroadcastIds([]);
       // Transition from circling animation to checkmark!
       triggerDeleteToast(
-        "Bulk Cleanup Completed",
-        `Successfully wiped ${purgedCount || idsToPurge.length} alert records from the database.`,
-        idsToPurge.length
+        "Bulk Delete Completed",
+        `Successfully deleted ${deletedCount || idsToDelete.length} alert records from the database.`,
+        idsToDelete.length
       );
     } catch (err: any) {
       setDeleteToast(null);
@@ -715,7 +715,7 @@ function MessagingContent() {
       setIsBulkDeleting(false);
       setWipingOutIds((prev) => {
         const next = new Set(prev);
-        idsToPurge.forEach((id) => next.delete(id));
+        idsToDelete.forEach((id) => next.delete(id));
         return next;
       });
     }
@@ -3090,10 +3090,10 @@ function MessagingContent() {
 
               <div className="space-y-1">
                 <h3 className="text-lg font-bold text-slate-900 tracking-tight">
-                  Purge {selectedBroadcastIds.length} Sent Alert Records?
+                  Delete {selectedBroadcastIds.length} Sent Alert Records?
                 </h3>
                 <p className="text-xs text-slate-500">
-                  You are about to permanently purge {selectedBroadcastIds.length} broadcast records from the database.
+                  You are about to permanently delete {selectedBroadcastIds.length} broadcast records from the database.
                 </p>
               </div>
 
@@ -3120,7 +3120,7 @@ function MessagingContent() {
                   className="w-full py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>{isBulkDeleting ? "Purging..." : `Purge ${selectedBroadcastIds.length} Records`}</span>
+                  <span>{isBulkDeleting ? "Deleting..." : `Delete ${selectedBroadcastIds.length} Records`}</span>
                 </button>
               </div>
             </div>

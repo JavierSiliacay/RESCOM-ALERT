@@ -23,7 +23,9 @@ export const proxy = auth((req) => {
   const isPublicFile =
     req.nextUrl.pathname === "/robots.txt" ||
     req.nextUrl.pathname === "/sitemap.xml" ||
-    req.nextUrl.pathname.startsWith("/sitemap");
+    req.nextUrl.pathname.startsWith("/sitemap") ||
+    req.nextUrl.pathname.endsWith(".apk") ||
+    req.nextUrl.pathname.startsWith("/rescom-alert");
 
   if (
     isLandingPage ||
@@ -73,6 +75,6 @@ export const proxy = auth((req) => {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:jpg|jpeg|gif|png|svg|webp)).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:jpg|jpeg|gif|png|svg|webp|apk)).*)",
   ],
 };

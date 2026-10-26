@@ -297,8 +297,13 @@ export default function SoldierDownloadPage() {
       setIsRecording(false);
       setDownloadStarted(true);
 
-      // Trigger APK download cleanly without spawning zombie blank tabs
-      window.location.href = apkUrl;
+      // Trigger APK download cleanly via anchor click to prevent page redirection
+      const link = document.createElement("a");
+      link.href = apkUrl;
+      link.setAttribute("download", "rescom-alert-v1.3.0.apk");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 

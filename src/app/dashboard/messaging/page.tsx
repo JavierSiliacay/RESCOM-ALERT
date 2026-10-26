@@ -570,10 +570,24 @@ function MessagingContent() {
     message: string;
     count: number;
   } | null>(null);
+  const [isToastFadingOut, setIsToastFadingOut] = useState(false);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const fadeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const dismissToastWithFade = () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    setIsToastFadingOut(true);
+    fadeTimerRef.current = setTimeout(() => {
+      setDeleteToast(null);
+      setIsToastFadingOut(false);
+    }, 700);
+  };
 
   const triggerDeleteToast = (title: string, message: string, count: number = 1) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    setIsToastFadingOut(false);
     setDeleteToast({
       id: Date.now().toString(),
       status: "success",
@@ -581,9 +595,15 @@ function MessagingContent() {
       message,
       count,
     });
+
+    // Display checkmark for 1.8 seconds, then trigger slow 700ms fade away
     toastTimerRef.current = setTimeout(() => {
-      setDeleteToast(null);
-    }, 4500);
+      setIsToastFadingOut(true);
+      fadeTimerRef.current = setTimeout(() => {
+        setDeleteToast(null);
+        setIsToastFadingOut(false);
+      }, 700);
+    }, 1800);
   };
 
   const handleDeleteBroadcast = (msg: (typeof messages)[number]) => {
@@ -3070,7 +3090,13 @@ function MessagingContent() {
 
       {/* Clean Tactical Deletion Toast Notification (Upper-Right) */}
       {deleteToast && (
-        <div className="fixed top-20 right-4 sm:right-6 z-50 animate-in slide-in-from-top-4 fade-in duration-200">
+        <div
+          className={`fixed top-20 right-4 sm:right-6 z-50 transition-all duration-700 ease-out ${
+            isToastFadingOut
+              ? "opacity-0 -translate-y-3 scale-95 pointer-events-none"
+              : "opacity-100 translate-y-0 scale-100 animate-in slide-in-from-top-4 fade-in duration-200"
+          }`}
+        >
           <div className="bg-white text-slate-800 rounded-2xl p-3.5 shadow-xl border border-slate-200/90 max-w-sm w-full flex items-start gap-3 relative overflow-hidden">
             {/* Subtle top indicator line */}
             {deleteToast.status === "loading" ? (
@@ -3114,7 +3140,7 @@ function MessagingContent() {
 
             <button
               type="button"
-              onClick={() => setDeleteToast(null)}
+              onClick={dismissToastWithFade}
               className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
               title="Dismiss"
             >

@@ -3041,29 +3041,27 @@ function MessagingContent() {
         </div>
       )}
 
-      {/* Sleek Tactical Deletion Toast Notification */}
+      {/* Clean Tactical Deletion Toast Notification (Upper-Right) */}
       {deleteToast && (
-        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
-          <div className="bg-slate-900/95 text-white rounded-2xl p-4 shadow-2xl border border-slate-700/80 max-w-sm w-full flex items-start gap-3 relative overflow-hidden backdrop-blur-md">
-            {/* Animated progress bar along top */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-red-500/20">
-              <div className="h-full bg-gradient-to-r from-red-500 via-amber-400 to-emerald-400 animate-pulse w-full" />
+        <div className="fixed top-20 right-4 sm:right-6 z-50 animate-in slide-in-from-top-4 fade-in duration-200">
+          <div className="bg-white text-slate-800 rounded-2xl p-3.5 shadow-xl border border-slate-200/90 max-w-sm w-full flex items-start gap-3 relative overflow-hidden">
+            {/* Subtle emerald indicator line */}
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-600" />
+
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             </div>
 
-            <div className="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center shrink-0 mt-0.5">
-              <Trash2 className="w-4 h-4" />
-            </div>
-
-            <div className="flex-1 space-y-1 pr-2">
+            <div className="flex-1 space-y-0.5 pr-1">
               <div className="flex items-center gap-2">
-                <h4 className="text-xs font-black tracking-wide text-white uppercase">
+                <h4 className="text-xs font-extrabold text-slate-900 tracking-tight uppercase">
                   {deleteToast.title}
                 </h4>
-                <span className="text-[9px] font-bold px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded font-mono">
-                  DB CLEANED
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md font-mono">
+                  CLEANED
                 </span>
               </div>
-              <p className="text-[11px] text-slate-300 leading-snug">
+              <p className="text-xs text-slate-500 leading-snug">
                 {deleteToast.message}
               </p>
             </div>
@@ -3071,7 +3069,8 @@ function MessagingContent() {
             <button
               type="button"
               onClick={() => setDeleteToast(null)}
-              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              title="Dismiss"
             >
               <X className="w-4 h-4" />
             </button>

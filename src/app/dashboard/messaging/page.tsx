@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, useMemo } from "react";
+import { useState, useEffect, Suspense, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   Send,
@@ -555,12 +555,33 @@ function MessagingContent() {
   const [selectedMessage, setSelectedMessage] = useState<(typeof messages)[number] | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
 
-  // Deletion States
+  // Deletion States & Animations
   const [deleteTarget, setDeleteTarget] = useState<(typeof messages)[number] | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedBroadcastIds, setSelectedBroadcastIds] = useState<string[]>([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [wipingOutIds, setWipingOutIds] = useState<Set<string>>(new Set());
+  const [deleteToast, setDeleteToast] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    count: number;
+  } | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerDeleteToast = (title: string, message: string, count: number = 1) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setDeleteToast({
+      id: Date.now().toString(),
+      title,
+      message,
+      count,
+    });
+    toastTimerRef.current = setTimeout(() => {
+      setDeleteToast(null);
+    }, 4500);
+  };
 
   const handleDeleteBroadcast = (msg: (typeof messages)[number]) => {
     if (isViewer) {
@@ -572,22 +593,40 @@ function MessagingContent() {
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null); // Close modal immediately so user watches the row wipe away
+
+    // 1. Trigger wipeout animation on target row
+    setWipingOutIds((prev) => new Set([...prev, target._id]));
     setIsDeleting(true);
+
+    // 2. Allow 450ms for smooth wipe-out / slide / fade
+    await new Promise((resolve) => setTimeout(resolve, 450));
+
     try {
       await removeBroadcast({
-        id: deleteTarget._id,
+        id: target._id,
         senderEmail: currentOfficer.email,
         senderName: currentOfficer.name,
       });
-      if (selectedMessage?._id === deleteTarget._id) {
+      if (selectedMessage?._id === target._id) {
         setSelectedMessage(null);
       }
-      setSelectedBroadcastIds((prev) => prev.filter((id) => id !== deleteTarget._id));
-      setDeleteTarget(null);
+      setSelectedBroadcastIds((prev) => prev.filter((id) => id !== target._id));
+      triggerDeleteToast(
+        "Alert Record Wiped",
+        `"${target.title}" permanently deleted from database. Storage capacity freed.`,
+        1
+      );
     } catch (err: any) {
       alert(err?.message || "Failed to delete broadcast record.");
     } finally {
       setIsDeleting(false);
+      setWipingOutIds((prev) => {
+        const next = new Set(prev);
+        next.delete(target._id);
+        return next;
+      });
     }
   };
 
@@ -597,22 +636,40 @@ function MessagingContent() {
       guardAction("bulk purge broadcast records");
       return;
     }
+    const idsToPurge = [...selectedBroadcastIds];
+    setShowBulkDeleteConfirm(false); // Close modal immediately
+
+    // 1. Trigger simultaneous wipeout animation on all selected rows
+    setWipingOutIds((prev) => new Set([...prev, ...idsToPurge]));
     setIsBulkDeleting(true);
+
+    // 2. Allow 450ms for smooth wipe-out / slide / fade
+    await new Promise((resolve) => setTimeout(resolve, 450));
+
     try {
-      await removeManyBroadcasts({
-        ids: selectedBroadcastIds as any,
+      const purgedCount = await removeManyBroadcasts({
+        ids: idsToPurge as any,
         senderEmail: currentOfficer.email,
         senderName: currentOfficer.name,
       });
-      if (selectedMessage && selectedBroadcastIds.includes(selectedMessage._id)) {
+      if (selectedMessage && idsToPurge.includes(selectedMessage._id)) {
         setSelectedMessage(null);
       }
       setSelectedBroadcastIds([]);
-      setShowBulkDeleteConfirm(false);
+      triggerDeleteToast(
+        "Bulk Cleanup Completed",
+        `Successfully wiped ${purgedCount || idsToPurge.length} alert records from the database.`,
+        idsToPurge.length
+      );
     } catch (err: any) {
       alert(err?.message || "Failed to purge broadcast records.");
     } finally {
       setIsBulkDeleting(false);
+      setWipingOutIds((prev) => {
+        const next = new Set(prev);
+        idsToPurge.forEach((id) => next.delete(id));
+        return next;
+      });
     }
   };
 
@@ -1781,18 +1838,24 @@ function MessagingContent() {
                   {filteredMessages.map((msg) => {
                     const isUnread = isBroadcastUnread(msg);
                     const isSelected = selectedBroadcastIds.includes(msg._id);
+                    const isWiping = wipingOutIds.has(msg._id);
                     return (
                     <tr
                       key={msg._id}
-                      onClick={() => handleOpenMessageDetails(msg)}
-                      className={`cursor-pointer transition-colors group border-l-4 ${
-                        isUnread
-                          ? "bg-emerald-50/70 border-l-emerald-600 hover:bg-emerald-100/70"
+                      onClick={() => !isWiping && handleOpenMessageDetails(msg)}
+                      className={`transition-all duration-500 ease-in-out group border-l-4 ${
+                        isWiping
+                          ? "opacity-0 -translate-x-full scale-y-75 bg-red-100/90 pointer-events-none select-none"
+                          : isUnread
+                          ? "cursor-pointer bg-emerald-50/70 border-l-emerald-600 hover:bg-emerald-100/70"
                           : isSelected
-                          ? "bg-emerald-50/40 border-l-emerald-400 hover:bg-emerald-50/60"
-                          : "hover:bg-slate-50/80 border-l-transparent"
+                          ? "cursor-pointer bg-emerald-50/40 border-l-emerald-400 hover:bg-emerald-50/60"
+                          : "cursor-pointer hover:bg-slate-50/80 border-l-transparent"
                       }`}
-                      title="Click to view full dispatch & recipient delivery details"
+                      style={{
+                        transformOrigin: "left center",
+                      }}
+                      title={isWiping ? "Deleting..." : "Click to view full dispatch & recipient delivery details"}
                     >
                       <td className="py-3.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <input
@@ -2974,6 +3037,44 @@ function MessagingContent() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sleek Tactical Deletion Toast Notification */}
+      {deleteToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className="bg-slate-900/95 text-white rounded-2xl p-4 shadow-2xl border border-slate-700/80 max-w-sm w-full flex items-start gap-3 relative overflow-hidden backdrop-blur-md">
+            {/* Animated progress bar along top */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-red-500/20">
+              <div className="h-full bg-gradient-to-r from-red-500 via-amber-400 to-emerald-400 animate-pulse w-full" />
+            </div>
+
+            <div className="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center shrink-0 mt-0.5">
+              <Trash2 className="w-4 h-4" />
+            </div>
+
+            <div className="flex-1 space-y-1 pr-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-black tracking-wide text-white uppercase">
+                  {deleteToast.title}
+                </h4>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded font-mono">
+                  DB CLEANED
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-snug">
+                {deleteToast.message}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setDeleteToast(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}

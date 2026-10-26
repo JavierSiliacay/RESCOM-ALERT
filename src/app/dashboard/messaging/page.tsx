@@ -18,6 +18,7 @@ import {
   Save,
   Search,
   RefreshCw,
+  Loader2,
   Download,
   Printer,
   Lock,
@@ -564,6 +565,7 @@ function MessagingContent() {
   const [wipingOutIds, setWipingOutIds] = useState<Set<string>>(new Set());
   const [deleteToast, setDeleteToast] = useState<{
     id: string;
+    status: "loading" | "success";
     title: string;
     message: string;
     count: number;
@@ -574,6 +576,7 @@ function MessagingContent() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setDeleteToast({
       id: Date.now().toString(),
+      status: "success",
       title,
       message,
       count,
@@ -594,14 +597,24 @@ function MessagingContent() {
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     const target = deleteTarget;
-    setDeleteTarget(null); // Close modal immediately so user watches the row wipe away
+    setDeleteTarget(null); // Close modal immediately so user watches the animation
+
+    // Show initial circling animation in upper right toast
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setDeleteToast({
+      id: Date.now().toString(),
+      status: "loading",
+      title: "Purging Alert Record...",
+      message: `Wiping "${target.title}" from database...`,
+      count: 1,
+    });
 
     // 1. Trigger wipeout animation on target row
     setWipingOutIds((prev) => new Set([...prev, target._id]));
     setIsDeleting(true);
 
-    // 2. Allow 450ms for smooth wipe-out / slide / fade
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    // 2. Allow 550ms for smooth circling animation & row wipe-out
+    await new Promise((resolve) => setTimeout(resolve, 550));
 
     try {
       await removeBroadcast({
@@ -613,12 +626,14 @@ function MessagingContent() {
         setSelectedMessage(null);
       }
       setSelectedBroadcastIds((prev) => prev.filter((id) => id !== target._id));
+      // Transition from circling animation to checkmark!
       triggerDeleteToast(
         "Alert Record Wiped",
         `"${target.title}" permanently deleted from database. Storage capacity freed.`,
         1
       );
     } catch (err: any) {
+      setDeleteToast(null);
       alert(err?.message || "Failed to delete broadcast record.");
     } finally {
       setIsDeleting(false);
@@ -639,12 +654,22 @@ function MessagingContent() {
     const idsToPurge = [...selectedBroadcastIds];
     setShowBulkDeleteConfirm(false); // Close modal immediately
 
+    // Show initial circling animation in upper right toast
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setDeleteToast({
+      id: Date.now().toString(),
+      status: "loading",
+      title: `Purging ${idsToPurge.length} Alert Records...`,
+      message: "Wiping telemetry and outbox records from database...",
+      count: idsToPurge.length,
+    });
+
     // 1. Trigger simultaneous wipeout animation on all selected rows
     setWipingOutIds((prev) => new Set([...prev, ...idsToPurge]));
     setIsBulkDeleting(true);
 
-    // 2. Allow 450ms for smooth wipe-out / slide / fade
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    // 2. Allow 550ms for smooth circling animation & row wipe-out
+    await new Promise((resolve) => setTimeout(resolve, 550));
 
     try {
       const purgedCount = await removeManyBroadcasts({
@@ -656,12 +681,14 @@ function MessagingContent() {
         setSelectedMessage(null);
       }
       setSelectedBroadcastIds([]);
+      // Transition from circling animation to checkmark!
       triggerDeleteToast(
         "Bulk Cleanup Completed",
         `Successfully wiped ${purgedCount || idsToPurge.length} alert records from the database.`,
         idsToPurge.length
       );
     } catch (err: any) {
+      setDeleteToast(null);
       alert(err?.message || "Failed to purge broadcast records.");
     } finally {
       setIsBulkDeleting(false);
@@ -3045,11 +3072,23 @@ function MessagingContent() {
       {deleteToast && (
         <div className="fixed top-20 right-4 sm:right-6 z-50 animate-in slide-in-from-top-4 fade-in duration-200">
           <div className="bg-white text-slate-800 rounded-2xl p-3.5 shadow-xl border border-slate-200/90 max-w-sm w-full flex items-start gap-3 relative overflow-hidden">
-            {/* Subtle emerald indicator line */}
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-600" />
+            {/* Subtle top indicator line */}
+            {deleteToast.status === "loading" ? (
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-slate-100 overflow-hidden">
+                <div className="h-full bg-emerald-600 w-1/2 animate-pulse" />
+              </div>
+            ) : (
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-600 transition-all duration-300" />
+            )}
 
             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              {deleteToast.status === "loading" ? (
+                <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+              ) : (
+                <div className="animate-in zoom-in-50 duration-300">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+              )}
             </div>
 
             <div className="flex-1 space-y-0.5 pr-1">
@@ -3057,9 +3096,16 @@ function MessagingContent() {
                 <h4 className="text-xs font-extrabold text-slate-900 tracking-tight uppercase">
                   {deleteToast.title}
                 </h4>
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md font-mono">
-                  CLEANED
-                </span>
+                {deleteToast.status === "loading" ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-md font-mono flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                    PURGING...
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md font-mono animate-in fade-in duration-200">
+                    CLEANED
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 leading-snug">
                 {deleteToast.message}

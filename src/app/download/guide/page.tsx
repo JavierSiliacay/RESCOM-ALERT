@@ -113,7 +113,7 @@ const STEPS: GuideStep[] = [
       "Bumalik sa inyong Downloads folder at pindutin muli ang rescom-alert-v1.3.0.apk.",
       'Pindutin ang "Install" — magtutuloy na ang pag-install nang walang harang!',
     ],
-    imageSrc: "/installation-guide/Step7.jpg",
+    imageSrc: "/installation-guide/Step_PlayProtect_Toggle.jpg",
     imageAlt: "Step 7: Turn off or pause Play Protect app scanning",
     badgeText: "BYPASS COMPLETE",
   },

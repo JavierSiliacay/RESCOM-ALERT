@@ -105,15 +105,16 @@ const STEPS: GuideStep[] = [
   {
     step: 7,
     phase: "INSTALL",
-    title: 'Turn Off "Scan apps with Play Protect" & Re-Install',
-    tagalogSummary: "I-off ang toggle at bumalik sa Downloads para i-install ang APK.",
+    title: 'Turn Off or Pause "Scan apps with Play Protect" & Re-Install',
+    tagalogSummary: 'I-toggle patayin ang switch (piliin ang "Pause" o "Turn off") at i-install ang APK.',
     instructions: [
-      'I-toggle patayin ang "Scan apps with Play Protect" (pindutin ang "Turn off" sa confirmation dialog).',
+      'Pindutin ang berdeng nakakahong toggle switch sa tapat ng "Scan apps with Play Protect".',
+      'Sa lalabas na confirmation pop-up, pindutin ang "Pause" (o "Turn off").',
       "Bumalik sa inyong Downloads folder at pindutin muli ang rescom-alert-v1.3.0.apk.",
-      'Pindutin ang "Install" — magtutuloy na ang pag-install nang maayos!',
+      'Pindutin ang "Install" — magtutuloy na ang pag-install nang walang harang!',
     ],
     imageSrc: "/installation-guide/Step7.jpg",
-    imageAlt: "Step 7: Turn off Play Protect app scanning",
+    imageAlt: "Step 7: Turn off or pause Play Protect app scanning",
     badgeText: "BYPASS COMPLETE",
   },
   {

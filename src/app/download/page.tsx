@@ -215,7 +215,8 @@ export default function SoldierDownloadPage() {
   const recordSessionUnlock = useMutation(api.downloads.recordSessionUnlock);
   const stats = useQuery(api.downloads.getStats);
 
-  const apkUrl = "/rescom-alert-v1.3.0.apk";
+  const apkUrl =
+    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.3.0/rescom-alert-v1.3.0.apk";
 
   useEffect(() => {
     // 1. Persistent Device ID (Deduplication)

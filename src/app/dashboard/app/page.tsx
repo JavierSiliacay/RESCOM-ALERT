@@ -207,7 +207,8 @@ export default function MobileAppPage() {
     }
   }, []);
 
-  const apkDownloadUrl = "/rescom-alert-v1.3.0.apk";
+  const apkDownloadUrl =
+    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.3.0/rescom-alert-v1.3.0.apk";
 
   const handleCopyLink = () => {
     const urlToCopy = downloadPortalUrl || `${window.location.origin}/download`;

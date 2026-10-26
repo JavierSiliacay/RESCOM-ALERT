@@ -105,3 +105,70 @@ export const updateBatchDetails = mutation({
   },
 });
 
+// Delete a single broadcast transmission record from outbox
+export const remove = mutation({
+  args: {
+    id: v.id("broadcasts"),
+    senderEmail: v.optional(v.string()),
+    senderName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.senderEmail, "delete broadcast record");
+    const existing = await ctx.db.get(args.id);
+    if (!existing) {
+      return false;
+    }
+
+    await ctx.db.delete(args.id);
+
+    // Record audit log
+    const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" });
+    await ctx.db.insert("auditLogs", {
+      userName: args.senderName || "Commander",
+      userEmail: args.senderEmail,
+      userRole: "COMMANDER",
+      category: "BROADCAST",
+      action: "DELETE_BROADCAST",
+      details: `Deleted broadcast record [${existing.title}] sent at ${existing.sentAt} (${existing.totalRecipients} recipients)`,
+      ipAddress: "127.0.0.1",
+      timestamp,
+    });
+
+    return true;
+  },
+});
+
+// Bulk purge broadcast transmission records from outbox
+export const removeMany = mutation({
+  args: {
+    ids: v.array(v.id("broadcasts")),
+    senderEmail: v.optional(v.string()),
+    senderName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await assertCallerAuthorized(ctx, args.senderEmail, "bulk purge broadcast records");
+    let deletedCount = 0;
+    for (const id of args.ids) {
+      const existing = await ctx.db.get(id);
+      if (existing) {
+        await ctx.db.delete(id);
+        deletedCount++;
+      }
+    }
+
+    const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" });
+    await ctx.db.insert("auditLogs", {
+      userName: args.senderName || "Commander",
+      userEmail: args.senderEmail,
+      userRole: "COMMANDER",
+      category: "BROADCAST",
+      action: "PURGE_BROADCASTS",
+      details: `Purged ${deletedCount} broadcast records from sent outbox to clean up database`,
+      ipAddress: "127.0.0.1",
+      timestamp,
+    });
+
+    return deletedCount;
+  },
+});
+

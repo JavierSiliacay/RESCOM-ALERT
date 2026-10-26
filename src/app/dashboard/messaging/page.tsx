@@ -157,6 +157,8 @@ function MessagingContent() {
   const recordBroadcast = useMutation(api.broadcasts.record);
   const updateBroadcastStatus = useMutation(api.broadcasts.updateStatus);
   const updateBatchDetails = useMutation(api.broadcasts.updateBatchDetails);
+  const removeBroadcast = useMutation(api.broadcasts.remove);
+  const removeManyBroadcasts = useMutation(api.broadcasts.removeMany);
 
   const isLoadingOutbox = broadcastsData === undefined;
   const isLoadingAudit = auditLogsData === undefined;
@@ -552,6 +554,67 @@ function MessagingContent() {
   const [historySearchQuery, setHistorySearchQuery] = useState("");
   const [selectedMessage, setSelectedMessage] = useState<(typeof messages)[number] | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  // Deletion States
+  const [deleteTarget, setDeleteTarget] = useState<(typeof messages)[number] | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedBroadcastIds, setSelectedBroadcastIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  const handleDeleteBroadcast = (msg: (typeof messages)[number]) => {
+    if (isViewer) {
+      guardAction("delete broadcast record");
+      return;
+    }
+    setDeleteTarget(msg);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await removeBroadcast({
+        id: deleteTarget._id,
+        senderEmail: currentOfficer.email,
+        senderName: currentOfficer.name,
+      });
+      if (selectedMessage?._id === deleteTarget._id) {
+        setSelectedMessage(null);
+      }
+      setSelectedBroadcastIds((prev) => prev.filter((id) => id !== deleteTarget._id));
+      setDeleteTarget(null);
+    } catch (err: any) {
+      alert(err?.message || "Failed to delete broadcast record.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (selectedBroadcastIds.length === 0) return;
+    if (isViewer) {
+      guardAction("bulk purge broadcast records");
+      return;
+    }
+    setIsBulkDeleting(true);
+    try {
+      await removeManyBroadcasts({
+        ids: selectedBroadcastIds as any,
+        senderEmail: currentOfficer.email,
+        senderName: currentOfficer.name,
+      });
+      if (selectedMessage && selectedBroadcastIds.includes(selectedMessage._id)) {
+        setSelectedMessage(null);
+      }
+      setSelectedBroadcastIds([]);
+      setShowBulkDeleteConfirm(false);
+    } catch (err: any) {
+      alert(err?.message || "Failed to purge broadcast records.");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
 
   // Read / Reviewed state for Outbox Broadcasts (persisted per device)
   const [reviewedBroadcastIds, setReviewedBroadcastIds] = useState<Set<string>>(new Set());
@@ -1636,6 +1699,22 @@ function MessagingContent() {
               </div>
 
               <div className="flex items-center gap-2.5">
+                {selectedBroadcastIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isViewer) {
+                        guardAction("bulk purge broadcast records");
+                        return;
+                      }
+                      setShowBulkDeleteConfirm(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-all cursor-pointer shadow-2xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Selected ({selectedBroadcastIds.length})</span>
+                  </button>
+                )}
                 {(() => {
                   const unreadCount = messages.filter(isBroadcastUnread).length;
                   if (unreadCount === 0) return null;
@@ -1663,7 +1742,7 @@ function MessagingContent() {
             </div>
 
             {isLoadingOutbox ? (
-              <TableSkeleton rows={5} cols={5} />
+              <TableSkeleton rows={5} cols={6} />
             ) : filteredMessages.length === 0 ? (
               <div className="py-12 text-center text-slate-400 text-xs">
                 No broadcast messages found.
@@ -1673,6 +1752,24 @@ function MessagingContent() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredMessages.length > 0 &&
+                          selectedBroadcastIds.length === filteredMessages.length
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedBroadcastIds(filteredMessages.map((m) => m._id));
+                          } else {
+                            setSelectedBroadcastIds([]);
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                        title="Select all"
+                      />
+                    </th>
                     <th className="py-3 px-4">Title & Details</th>
                     <th className="py-3 px-4">Recipients</th>
                     <th className="py-3 px-4">Delivery Status</th>
@@ -1683,6 +1780,7 @@ function MessagingContent() {
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                   {filteredMessages.map((msg) => {
                     const isUnread = isBroadcastUnread(msg);
+                    const isSelected = selectedBroadcastIds.includes(msg._id);
                     return (
                     <tr
                       key={msg._id}
@@ -1690,10 +1788,26 @@ function MessagingContent() {
                       className={`cursor-pointer transition-colors group border-l-4 ${
                         isUnread
                           ? "bg-emerald-50/70 border-l-emerald-600 hover:bg-emerald-100/70"
+                          : isSelected
+                          ? "bg-emerald-50/40 border-l-emerald-400 hover:bg-emerald-50/60"
                           : "hover:bg-slate-50/80 border-l-transparent"
                       }`}
                       title="Click to view full dispatch & recipient delivery details"
                     >
+                      <td className="py-3.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedBroadcastIds((prev) => [...prev, msg._id]);
+                            } else {
+                              setSelectedBroadcastIds((prev) => prev.filter((id) => id !== msg._id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3.5 px-4 max-w-sm">
                         {(() => {
                           const { title: displayTitle, isTemplate } = formatBroadcastTitle(msg.title);
@@ -1840,6 +1954,17 @@ function MessagingContent() {
                             className="px-2.5 py-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
                           >
                             Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteBroadcast(msg);
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-colors cursor-pointer"
+                            title="Delete this sent alert to clean up database"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -2706,20 +2831,148 @@ function MessagingContent() {
 
             {/* Footer Buttons */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <span className="text-[11px] text-slate-500 font-mono">
-                10RCDG RESCOM-ALERT • Official Command Telemetry
-              </span>
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedMessage(null);
-                  setModalRecipientSearch("");
-                  setGatewaySyncFeedback(null);
+                  handleDeleteBroadcast(selectedMessage);
                 }}
-                className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+                title="Delete this broadcast record to clean up database"
               >
-                Close
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Record</span>
               </button>
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline text-[11px] text-slate-400 font-mono">
+                  10RCDG RESCOM-ALERT • Official Command Telemetry
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMessage(null);
+                    setModalRecipientSearch("");
+                    setGatewaySyncFeedback(null);
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Single Broadcast Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 sm:p-6 text-center space-y-4">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 border border-red-200 text-red-600 flex items-center justify-center shadow-xs">
+                <Trash2 className="w-6 h-6" />
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Delete Sent Alert Record?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  This will permanently delete this dispatch record and telemetry data from the database.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500 uppercase text-[10px]">Alert Title:</span>
+                  <span className="font-bold text-slate-900 truncate max-w-[220px]">
+                    {deleteTarget.title}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500 uppercase text-[10px]">Dispatched At:</span>
+                  <span className="font-mono text-slate-700 font-medium">{deleteTarget.sentAt}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500 uppercase text-[10px]">Recipients:</span>
+                  <span className="font-mono text-slate-700 font-medium">{deleteTarget.totalRecipients} soldiers</span>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-left text-[11px] text-amber-900 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  Deleting this alert will free database storage. This action cannot be reversed.
+                </span>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={isDeleting}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                  className="w-full py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isDeleting ? "Deleting..." : "Delete Record"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 sm:p-6 text-center space-y-4">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 border border-red-200 text-red-600 flex items-center justify-center shadow-xs">
+                <Trash2 className="w-6 h-6" />
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Purge {selectedBroadcastIds.length} Sent Alert Records?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  You are about to permanently purge {selectedBroadcastIds.length} broadcast records from the database.
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-left text-[11px] text-amber-900 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  This will clean up unnecessary records and free database capacity. This action is permanent.
+                </span>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkDeleteConfirm(false)}
+                  disabled={isBulkDeleting}
+                  className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmBulkDelete}
+                  disabled={isBulkDeleting}
+                  className="w-full py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isBulkDeleting ? "Purging..." : `Purge ${selectedBroadcastIds.length} Records`}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

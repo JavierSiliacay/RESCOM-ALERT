@@ -208,7 +208,7 @@ const STEPS: GuideStep[] = [
       'Makikita sa itaas ang berdeng status: "SIREN ACTIVE & ARMED" at "All set — your phone will ring for alerts".',
       'Pindutin ang "TEST SIREN NOW" sa Alerts tab upang masubukan ang emergency klaxon alarm.',
     ],
-    imageSrc: "/installation-guide/Step_Armed_Status.jpg",
+    imageSrc: "/installation-guide/Step_Armed_Complete.jpg",
     imageAlt: "Step 14: Verification complete and armed status",
     badgeText: "10RCDG READY & ARMED",
   },

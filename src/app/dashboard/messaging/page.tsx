@@ -52,6 +52,7 @@ import { StatCardSkeleton, TableSkeleton } from "@/components/skeleton";
 import { useCurrentOfficer } from "@/components/officer-context";
 import { PersonnelRecipientCombobox, RecipientChip } from "@/components/personnel-recipient-combobox";
 import { AndroidIcon, KeypadPhoneIcon, HybridIcon, ForceSmsIcon } from "@/components/device-icons";
+import { TablePagination } from "@/components/table-pagination";
 
 /**
  * Highlight matching words/characters with a light-green badge.
@@ -668,7 +669,7 @@ function MessagingContent() {
   const handleConfirmBulkDelete = async () => {
     if (selectedBroadcastIds.length === 0) return;
     if (isViewer) {
-      guardAction("bulk purge broadcast records");
+      guardAction("bulk delete broadcast records");
       return;
     }
     const idsToPurge = [...selectedBroadcastIds];
@@ -709,7 +710,7 @@ function MessagingContent() {
       );
     } catch (err: any) {
       setDeleteToast(null);
-      alert(err?.message || "Failed to purge broadcast records.");
+      alert(err?.message || "Failed to delete broadcast records.");
     } finally {
       setIsBulkDeleting(false);
       setWipingOutIds((prev) => {
@@ -784,6 +785,26 @@ function MessagingContent() {
       matchesRecipient
     );
   });
+
+  const [outboxPage, setOutboxPage] = useState(1);
+  const [outboxPageSize, setOutboxPageSize] = useState(15);
+
+  // Reset page when user types in search
+  useEffect(() => {
+    setOutboxPage(1);
+  }, [historySearchQuery]);
+
+  const totalOutboxPages = Math.max(1, Math.ceil(filteredMessages.length / outboxPageSize));
+  useEffect(() => {
+    if (outboxPage > totalOutboxPages) {
+      setOutboxPage(totalOutboxPages);
+    }
+  }, [totalOutboxPages, outboxPage]);
+
+  const paginatedMessages = useMemo(() => {
+    const start = (outboxPage - 1) * outboxPageSize;
+    return filteredMessages.slice(start, start + outboxPageSize);
+  }, [filteredMessages, outboxPage, outboxPageSize]);
 
   const totalDispatches = messages.length;
   const totalRecipientsSent = messages.reduce((acc, m) => acc + m.totalRecipients, 0);
@@ -1808,7 +1829,7 @@ function MessagingContent() {
                     type="button"
                     onClick={() => {
                       if (isViewer) {
-                        guardAction("bulk purge broadcast records");
+                        guardAction("bulk delete broadcast records");
                         return;
                       }
                       setShowBulkDeleteConfirm(true);
@@ -1840,7 +1861,11 @@ function MessagingContent() {
                   );
                 })()}
                 <div className="text-xs text-slate-500 font-medium">
-                  Showing {filteredMessages.length} broadcast records
+                  {historySearchQuery.trim() ? (
+                    <span>Found <strong className="font-mono text-slate-800 font-bold">{filteredMessages.length}</strong> matching records</span>
+                  ) : (
+                    <span><strong className="font-mono text-slate-800 font-bold">{filteredMessages.length}</strong> total records</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1860,18 +1885,20 @@ function MessagingContent() {
                       <input
                         type="checkbox"
                         checked={
-                          filteredMessages.length > 0 &&
-                          selectedBroadcastIds.length === filteredMessages.length
+                          paginatedMessages.length > 0 &&
+                          paginatedMessages.every((m) => selectedBroadcastIds.includes(m._id))
                         }
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedBroadcastIds(filteredMessages.map((m) => m._id));
+                            const pageIds = paginatedMessages.map((m) => m._id as string);
+                            setSelectedBroadcastIds((prev) => Array.from(new Set([...prev, ...pageIds])));
                           } else {
-                            setSelectedBroadcastIds([]);
+                            const pageIds = new Set<string>(paginatedMessages.map((m) => m._id as string));
+                            setSelectedBroadcastIds((prev) => prev.filter((id) => !pageIds.has(id)));
                           }
                         }}
                         className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
-                        title="Select all"
+                        title="Select visible alerts on this page"
                       />
                     </th>
                     <th className="py-3 px-4">Title & Details</th>
@@ -1882,7 +1909,7 @@ function MessagingContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                  {filteredMessages.map((msg) => {
+                  {paginatedMessages.map((msg) => {
                     const isUnread = isBroadcastUnread(msg);
                     const isSelected = selectedBroadcastIds.includes(msg._id);
                     const isWiping = wipingOutIds.has(msg._id);
@@ -2085,6 +2112,19 @@ function MessagingContent() {
               </table>
             </div>
             )}
+
+            <TablePagination
+              currentPage={outboxPage}
+              totalItems={filteredMessages.length}
+              pageSize={outboxPageSize}
+              pageSizeOptions={[15, 25, 50, 100]}
+              onPageChange={setOutboxPage}
+              onPageSizeChange={(sz) => {
+                setOutboxPageSize(sz);
+                setOutboxPage(1);
+              }}
+              itemName="broadcasts"
+            />
           </div>
         </div>
       )}

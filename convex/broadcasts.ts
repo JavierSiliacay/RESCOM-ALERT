@@ -138,7 +138,7 @@ export const remove = mutation({
   },
 });
 
-// Bulk purge broadcast transmission records from outbox
+// Bulk delete broadcast transmission records from outbox
 export const removeMany = mutation({
   args: {
     ids: v.array(v.id("broadcasts")),
@@ -146,7 +146,7 @@ export const removeMany = mutation({
     senderName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await assertCallerAuthorized(ctx, args.senderEmail, "bulk purge broadcast records");
+    await assertCallerAuthorized(ctx, args.senderEmail, "bulk delete broadcast records");
     let deletedCount = 0;
     for (const id of args.ids) {
       const existing = await ctx.db.get(id);
@@ -163,7 +163,7 @@ export const removeMany = mutation({
       userRole: "COMMANDER",
       category: "BROADCAST",
       action: "PURGE_BROADCASTS",
-      details: `Purged ${deletedCount} broadcast records from sent outbox to clean up database`,
+      details: `Deleted ${deletedCount} broadcast records from sent outbox to clean up database`,
       ipAddress: "127.0.0.1",
       timestamp,
     });

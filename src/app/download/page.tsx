@@ -215,7 +215,7 @@ export default function SoldierDownloadPage() {
   const recordSessionUnlock = useMutation(api.downloads.recordSessionUnlock);
   const stats = useQuery(api.downloads.getStats);
 
-  const apkUrl = "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.2.0/rescom-alert-v1.2.0.apk";
+  const apkUrl = "/rescom-alert-v1.3.0.apk";
 
   useEffect(() => {
     // 1. Persistent Device ID (Deduplication)
@@ -719,7 +719,7 @@ export default function SoldierDownloadPage() {
                 Release Package
               </div>
               <div className="text-lg font-extrabold text-slate-900">
-                RESCOM ALERT v1.2.0
+                RESCOM ALERT v1.3.0
               </div>
             </div>
             <div className="text-right">
@@ -824,7 +824,7 @@ export default function SoldierDownloadPage() {
                 ) : (
                   <>
                     <Download className="w-5 h-5" />
-                    <span>DOWNLOAD RESCOM ALERT (v1.2.0 APK)</span>
+                    <span>DOWNLOAD RESCOM ALERT (v1.3.0 APK)</span>
                   </>
                 )}
               </button>
@@ -1128,7 +1128,7 @@ export default function SoldierDownloadPage() {
                       <span>Built-in Android 15/16 Zero-Permission Engine:</span>
                     </div>
                     <p>
-                      RESCOM ALERT v1.2.0 features <strong>Google SMS Retriever (Layer 2)</strong>. Even if Android greys out SMS permissions or Samsung Auto Blocker hides the menu, <strong>emergency sirens will still trigger 100% offline</strong> with zero permissions needed!
+                      RESCOM ALERT v1.3.0 features <strong>Google SMS Retriever (Layer 2)</strong>. Even if Android greys out SMS permissions or Samsung Auto Blocker hides the menu, <strong>emergency sirens will still trigger 100% offline</strong> with zero permissions needed!
                     </p>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed">

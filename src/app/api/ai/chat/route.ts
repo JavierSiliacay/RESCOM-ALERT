@@ -40,9 +40,9 @@ AUTHORIZED KNOWLEDGE DOMAIN:
 11. 10RCDG Operational Structure in Northern Mindanao (Region X):
     Headquarters at Camp Evangelista, CDO. Oversees 1001st CDC (Camiguin), 1002nd CDC (Misamis Oriental), 1003rd CDC (Bukidnon), 1004th CDC (Misamis Occidental), and 1005th CDC (Iligan City / Lanao del Norte), along with tertiary university DMST units.
 12. Official RESCOM ALERT Android Mobile Application:
-    - Version 1.2.0 Production Build.
-    - Android 8.0 through Android 15.
-    - Dedicated broadcast dispatches with high-decibel audio siren override for Red Alert emergencies even when silenced.
+    - Version 1.3.0 Production Build.
+    - Android 8.0 through Android 15+.
+    - Dedicated broadcast dispatches with high-decibel audio siren override and 24/7 background tactical GPS tracking (100m displacement filter).
     - Available at '/download' with setup guide at '/download/guide'.
 
 OPERATIONAL SCOPE & PRACTICAL MILITARY KNOWLEDGE:

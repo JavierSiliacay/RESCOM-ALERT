@@ -207,8 +207,7 @@ export default function MobileAppPage() {
     }
   }, []);
 
-  const apkDownloadUrl =
-    "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.2.0/rescom-alert-v1.2.0.apk";
+  const apkDownloadUrl = "/rescom-alert-v1.3.0.apk";
 
   const handleCopyLink = () => {
     const urlToCopy = downloadPortalUrl || `${window.location.origin}/download`;
@@ -1006,7 +1005,7 @@ export default function MobileAppPage() {
                     rel="noopener noreferrer"
                     className="block text-[11px] text-slate-500 hover:text-slate-800 underline transition-colors pt-1"
                   >
-                    Direct APK Binary (rescom-alert-v1.2.0.apk)
+                    Direct APK Binary (rescom-alert-v1.3.0.apk)
                   </a>
                 </div>
               </div>

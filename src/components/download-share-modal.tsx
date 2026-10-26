@@ -71,7 +71,7 @@ export function DownloadShareModal({
   };
 
   const viberTemplate = `🇵🇭 10RCDG OFFICIAL SOLDIER APP PROVISIONING
-App: 10RCDG RESCOM ALERT (v1.2.0)
+App: 10RCDG RESCOM ALERT (v1.3.0)
 Companion Emergency Siren & Mobilization Alert System
 
 All Army reservists and field personnel are directed to download and install the official soldier companion application:

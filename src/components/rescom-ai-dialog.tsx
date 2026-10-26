@@ -298,8 +298,8 @@ Karangalan, Katapatan, at Kagitingan ang aking gabay sa bawat laban at tungkulin
     keywords: ["download", "app", "apk", "install", "android", "version", "mobile", "siren"],
     response: `Official RESCOM ALERT Android Mobile Application:
 
-• Current Release: Version 1.2.0 
-• Android Compatibility: Android 8.0 through Android 15
+• Current Release: Version 1.3.0 
+• Android Compatibility: Android 8.0 through Android 15+ (24/7 Background Tactical Duty Tracking)
 • Purpose: Secure mass notification and mobilization system for Ready Reservists, ROTC cadre, and command personnel.
 • Key Capability: Android audio service override capable of sounding high-decibel alert sirens during Red Alert emergencies even when phones are silenced.
 • Direct APK Link: Available for direct download at the official download hub.`,

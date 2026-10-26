@@ -174,20 +174,55 @@ export const convexHttpService = {
   },
 
   /**
-   * Syncs the soldier's GPS coordinates to Convex for the Tactical Map (v1.2.0)
+   * Syncs the soldier's GPS coordinates through Cloudflare Edge (/api/mobile/location)
+   * with 100m displacement filter (v1.3.0)
    */
   updateLocation: async ({
     soldierId,
     latitude,
     longitude,
     accuracy,
+    isEmergency = false,
   }: {
     soldierId: string;
     latitude: number;
     longitude: number;
     accuracy?: number;
+    isEmergency?: boolean;
   }): Promise<boolean> => {
     try {
+      // 1. Primary: Cloudflare Edge Worker (Sub-15ms Ingestion)
+      const workerRes = await fetch("https://rescom-location-ingest.siliacay-javier.workers.dev", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Rescom-Client": "mobile-app",
+        },
+        body: JSON.stringify({
+          soldierId,
+          latitude,
+          longitude,
+          accuracy,
+          isEmergency,
+        }),
+      });
+
+      if (workerRes.ok) {
+        return true;
+      }
+
+      // 2. Secondary Fallback: Next.js Site Ingestion Endpoint
+      const siteRes = await fetch("https://rescom-alert.site/api/mobile/location", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ soldierId, latitude, longitude, accuracy, isEmergency }),
+      });
+
+      if (siteRes.ok) {
+        return true;
+      }
+
+      // 3. Tertiary Fallback: Direct Convex Mutation
       const response = await fetch(`${CONVEX_URL}/api/mutation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -199,7 +234,7 @@ export const convexHttpService = {
       });
       return response.ok;
     } catch (err) {
-      console.error("Convex updateLocation error:", err);
+      console.error("Location update error:", err);
       return false;
     }
   },

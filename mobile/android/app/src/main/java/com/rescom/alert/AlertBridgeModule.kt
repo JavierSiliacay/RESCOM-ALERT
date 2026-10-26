@@ -492,4 +492,24 @@ class AlertBridgeModule(private val reactContext: ReactApplicationContext) :
             promise.reject("LOCATION_ERROR", e.message, e)
         }
     }
+
+    @ReactMethod
+    fun startTacticalTracking(emergency: Boolean, promise: Promise) {
+        try {
+            TacticalLocationService.startService(reactContext, emergency)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("START_TRACKING_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun stopTacticalTracking(promise: Promise) {
+        try {
+            TacticalLocationService.stopService(reactContext)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("STOP_TRACKING_FAILED", e.message, e)
+        }
+    }
 }

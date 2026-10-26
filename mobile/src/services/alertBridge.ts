@@ -330,5 +330,32 @@ export const alertBridgeService = {
       return null;
     }
   },
+
+  /**
+   * Starts 24/7 background tactical location service with 100m displacement filter (v1.3.0)
+   */
+  startTacticalTracking: async (emergency: boolean = false): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge?.startTacticalTracking) return false;
+    try {
+      return await AlertBridge.startTacticalTracking(emergency);
+    } catch (e) {
+      console.error("Failed to start tactical tracking:", e);
+      return false;
+    }
+  },
+
+  /**
+   * Stops the background tracking service
+   */
+  stopTacticalTracking: async (): Promise<boolean> => {
+    if (Platform.OS !== "android" || !AlertBridge?.stopTacticalTracking) return false;
+    try {
+      return await AlertBridge.stopTacticalTracking();
+    } catch (e) {
+      console.error("Failed to stop tactical tracking:", e);
+      return false;
+    }
+  },
 };
+
 

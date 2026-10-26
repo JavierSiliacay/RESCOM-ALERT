@@ -12,9 +12,13 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- Real-time Tactical GPS Location Tracking (v1.2.0) -->
+    <!-- Real-time Tactical GPS Location Tracking & Background Duty Service (v1.3.0) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
       android:name=".MainApplication"
@@ -79,6 +83,24 @@
           <action android:name="com.google.firebase.MESSAGING_EVENT" />
         </intent-filter>
       </service>
+
+      <!-- Tactical Background Location Service (Runs 24/7 with 100m displacement filter) -->
+      <service
+        android:name=".TacticalLocationService"
+        android:enabled="true"
+        android:exported="false"
+        android:foregroundServiceType="location" />
+
+      <!-- Boot Receiver to re-arm background tracking when device restarts -->
+      <receiver
+        android:name=".TacticalBootReceiver"
+        android:enabled="true"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.intent.action.BOOT_COMPLETED" />
+          <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+        </intent-filter>
+      </receiver>
 
     </application>
 </manifest>

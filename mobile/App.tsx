@@ -67,8 +67,9 @@ function Shell(): React.JSX.Element {
         // Only executes silently if the phone has active internet; never blocks offline alerts
         checkRemotePairingStatus(saved).catch(() => {});
 
-        // Sync GPS coordinates to Convex for Tactical Map (v1.2.0)
+        // Sync GPS coordinates to Convex for Tactical Map & Arm 24/7 Background Duty Service (v1.3.0)
         syncLocationToCloud(saved).catch(() => {});
+        alertBridgeService.startTacticalTracking(false).catch(() => {});
       } else {
         // First install / unlinked: prompt soldier to pair mobile number
         setTimeout(() => setPairingModalOpen(true), 600);
@@ -86,6 +87,10 @@ function Shell(): React.JSX.Element {
       if (!soldierId) return;
       const hasLoc = await alertBridgeService.checkLocationPermission();
       if (!hasLoc) return;
+
+      // Arm the 24/7 Android foreground tracking service
+      await alertBridgeService.startTacticalTracking(false);
+
       const coords = await alertBridgeService.getCurrentLocation();
       if (coords && coords.latitude && coords.longitude) {
         await convexHttpService.updateLocation({

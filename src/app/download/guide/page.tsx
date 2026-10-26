@@ -201,10 +201,11 @@ const STEPS: GuideStep[] = [
   {
     step: 14,
     phase: "PERMISSIONS",
-    title: 'Verification Complete — 10RCDG Ready',
-    tagalogSummary: 'Makikitang berde ang Emergency SMS at Tactical GPS Location.',
+    title: 'Verification Complete — 10RCDG Ready & Armed',
+    tagalogSummary: 'Lahat ng 4 na switches ay "ON" at makikita ang "SIREN ACTIVE & ARMED".',
     instructions: [
-      'Kapag berde na ang Emergency SMS (ON) at Tactical GPS Location (ON), ganap nang aktibo ang inyong telepono.',
+      'Siguraduhing lahat ng 4 na security items ay kulay berde (ON): Emergency SMS, Keep running in background, Display over apps, at Tactical GPS Location.',
+      'Makikita sa itaas ang berdeng status: "SIREN ACTIVE & ARMED" at "All set — your phone will ring for alerts".',
       'Pindutin ang "TEST SIREN NOW" sa Alerts tab upang masubukan ang emergency klaxon alarm.',
     ],
     imageSrc: "/installation-guide/Step_Armed_Status.jpg",
@@ -365,6 +366,7 @@ export default function InstallationGuidePage() {
                     fill
                     sizes="(max-width: 768px) 220px, 260px"
                     className="object-contain"
+                    priority={s.step === 1}
                   />
                 </div>
               </div>
@@ -430,6 +432,7 @@ export default function InstallationGuidePage() {
                     fill
                     sizes="(max-width: 768px) 220px, 260px"
                     className="object-contain"
+                    priority={s.step === 14}
                   />
                 </div>
               </div>

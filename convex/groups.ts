@@ -57,7 +57,7 @@ export const update = mutation({
   },
 });
 
-// Delete contact group
+// Delete contact group with automatic troop reassignment to prevent orphaned members
 export const remove = mutation({
   args: {
     id: v.id("contactGroups"),
@@ -65,6 +65,42 @@ export const remove = mutation({
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.officerEmail, "delete contact group");
+    const group = await ctx.db.get(args.id);
+    if (!group) return;
+
+    // Find a fallback group (prefer 1001st, RRIBn or first remaining group)
+    const allGroups = await ctx.db.query("contactGroups").collect();
+    const fallbackGroup =
+      allGroups.find((g) => g._id !== args.id && g.name.includes("1001st")) ||
+      allGroups.find((g) => g._id !== args.id);
+
+    if (fallbackGroup) {
+      // Reassign personnel in this group to fallback group
+      const allPersonnel = await ctx.db.query("personnel").collect();
+      for (const p of allPersonnel) {
+        if (p.groupId === args.id || p.groupName === group.name) {
+          await ctx.db.patch(p._id, {
+            groupId: fallbackGroup._id,
+            groupName: fallbackGroup.name,
+            unit: fallbackGroup.unit || p.unit || "10RCDG",
+            updatedAt: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+            updatedBy: "System (Group Deletion Reassignment)",
+          });
+        }
+      }
+
+      // Reassign enlistment submissions
+      const allSubmissions = await ctx.db.query("enlistmentSubmissions").collect();
+      for (const s of allSubmissions) {
+        if (s.groupId === args.id || s.groupName === group.name) {
+          await ctx.db.patch(s._id, {
+            groupId: fallbackGroup._id,
+            groupName: fallbackGroup.name,
+          });
+        }
+      }
+    }
+
     await ctx.db.delete(args.id);
   },
 });

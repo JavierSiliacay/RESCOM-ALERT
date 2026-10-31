@@ -11,6 +11,7 @@ export default defineSchema({
     groupId: v.optional(v.string()), // ID of contact group
     groupName: v.string(),
     unit: v.string(), // e.g. "10RCDG HQ", "1001st CDC"
+    company: v.optional(v.string()), // e.g. "HHC", "Alpha", "Bravo", "Charlie", "Delta"
     status: v.union(v.literal("ACTIVE"), v.literal("INACTIVE")),
     email: v.optional(v.string()),
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
@@ -36,6 +37,7 @@ export default defineSchema({
   })
     .index("by_mobileNumber", ["mobileNumber"])
     .index("by_groupName", ["groupName"])
+    .index("by_company", ["company"])
     .index("by_status", ["status"]),
 
   // Contact Groups / Units
@@ -159,6 +161,7 @@ export default defineSchema({
     instructions: v.optional(v.string()), // Custom soldier guidance
     passcode: v.string(), // e.g. "10RCDG-RESCOM"
     targetUnit: v.string(), // e.g. "1001st CDC" or "All Units"
+    targetCompany: v.optional(v.string()), // e.g. "HHC", "Alpha", "Bravo", "Charlie", "Delta"
     groupId: v.optional(v.string()), // target contact group ID
     groupName: v.string(), // target contact group name
     expiresAt: v.number(), // Unix timestamp in ms
@@ -179,6 +182,7 @@ export default defineSchema({
     rank: v.string(),
     mobileNumber: v.string(),
     unit: v.string(),
+    company: v.optional(v.string()), // e.g. "HHC", "Alpha", "Bravo", "Charlie", "Delta"
     groupId: v.optional(v.string()),
     groupName: v.string(),
     email: v.optional(v.string()),
@@ -212,6 +216,7 @@ export default defineSchema({
     soldierRank: v.optional(v.string()),
     mobileNumber: v.optional(v.string()),
     unit: v.optional(v.string()),
+    company: v.optional(v.string()),
     groupName: v.optional(v.string()),
     previousDeviceModel: v.optional(v.string()),
     isDeviceSwitch: v.optional(v.boolean()),

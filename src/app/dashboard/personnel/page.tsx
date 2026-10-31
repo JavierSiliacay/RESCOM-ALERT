@@ -50,6 +50,10 @@ import {
   getRankFullName,
   getRankBadgeStyle,
 } from "@/lib/military-ranks";
+import {
+  getCompanyBadgeStyle,
+  PRESET_COMPANIES,
+} from "@/lib/military-companies";
 import { RankSearchSelect } from "@/components/rank-search-select";
 import { EnlistmentShareModal } from "@/components/enlistment-share-modal";
 import {
@@ -330,6 +334,7 @@ export default function PersonnelPage() {
   // Roster Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("ALL");
+  const [selectedCompany, setSelectedCompany] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedDevice, setSelectedDevice] = useState<"ALL" | "PAIRED" | "UNPAIRED" | "ANDROID" | "KEYPAD">("ALL");
 
@@ -385,6 +390,7 @@ export default function PersonnelPage() {
     mobileNumber: "09",
     groupId: "",
     unit: "10RCDG HQ",
+    company: "HHC",
     email: "",
     deviceType: "ANDROID" as "ANDROID" | "KEYPAD" | "IOS",
   });
@@ -396,7 +402,8 @@ export default function PersonnelPage() {
     title: "",
     instructions: "",
     passcode: "10RCDG-RESCOM",
-    targetUnit: "1001st CDC",
+    targetUnit: "10RCDG",
+    targetCompany: "HHC",
     groupId: "",
     groupName: "Ready Reserve",
     durationPreset: "24 Hours",
@@ -409,6 +416,7 @@ export default function PersonnelPage() {
     campaignCode: string;
     passcode: string;
     targetUnit: string;
+    targetCompany?: string;
     duration: string;
     expiresAt: number;
   } | null>(null);
@@ -503,8 +511,9 @@ export default function PersonnelPage() {
 
     if (!trimmedQuery) {
       const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
+      const matchesCompany = selectedCompany === "ALL" || (person as any).company === selectedCompany;
       const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
-      return matchesGroup && matchesStatus;
+      return matchesGroup && matchesCompany && matchesStatus;
     }
 
     // 1. Mobile number normalization (strips all spaces, dashes, +, (), etc.)
@@ -560,6 +569,8 @@ export default function PersonnelPage() {
     const cleanUnit = unit.replace(/[\s\-_]/g, "");
 
     const groupName = (person.groupName || "").toLowerCase();
+    const company = ((person as any).company || "").toLowerCase();
+    const cleanCompany = company.replace(/[\s\-_]/g, "");
 
     // Multi-word tokens: "cruz juan" or "juan bgen" matches "BGEN Juan Dela Cruz"
     const words = trimmedQuery.split(/\s+/).filter(Boolean);
@@ -573,6 +584,8 @@ export default function PersonnelPage() {
         rankCode.includes(w) ||
         rankFullName.includes(w) ||
         unit.includes(w) ||
+        company.includes(w) ||
+        cleanCompany.includes(wClean) ||
         groupName.includes(w) ||
         cleanMobile.includes(wClean) ||
         matchesPhMobileSearch(person.mobileNumber, w) ||
@@ -600,18 +613,21 @@ export default function PersonnelPage() {
       cleanUnit.includes(qClean);
 
     const matchesGroupText = groupName.includes(trimmedQuery);
+    const matchesCompanyText = company.includes(trimmedQuery) || cleanCompany.includes(qClean);
 
     const matchesSearch =
       matchesMobile ||
       matchesName ||
       matchesRank ||
       matchesUnit ||
+      matchesCompanyText ||
       matchesGroupText;
 
     const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
+    const matchesCompany = selectedCompany === "ALL" || (person as any).company === selectedCompany;
     const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
 
-    return matchesSearch && matchesGroup && matchesStatus;
+    return matchesSearch && matchesGroup && matchesCompany && matchesStatus;
   });
 
   const totalMatches = filteredPersonnel.length;
@@ -624,7 +640,7 @@ export default function PersonnelPage() {
   // Auto-reset personnel page when filters change
   useEffect(() => {
     setPersonnelPage(1);
-  }, [searchQuery, selectedGroup, selectedStatus, selectedDevice]);
+  }, [searchQuery, selectedGroup, selectedCompany, selectedStatus, selectedDevice]);
 
   // Paginated Personnel Slice
   const paginatedPersonnel = useMemo(() => {
@@ -668,7 +684,8 @@ export default function PersonnelPage() {
         rank: "PVT",
         mobileNumber: "09",
         groupId: groupsList[0]?._id || "",
-        unit: "10RCDG HQ",
+        unit: "10RCDG",
+        company: "HHC",
         email: "",
         deviceType: "ANDROID",
       });
@@ -683,14 +700,17 @@ export default function PersonnelPage() {
       const matchedGroup = groupsList.find(
         (g) => g._id === person.groupId || g.name === person.groupName
       );
+      // If soldier's group was deleted, default to first available active group
+      const initialGroupId = matchedGroup ? matchedGroup._id : (groupsList[0]?._id || "");
 
       setFormData({
         firstName: person.firstName || "",
         lastName: person.lastName || "",
         rank: person.rank || "PVT",
         mobileNumber: person.mobileNumber || "09",
-        groupId: matchedGroup ? matchedGroup._id : (person.groupId || groupsList[0]?._id || ""),
-        unit: person.unit || "10RCDG HQ",
+        groupId: initialGroupId,
+        unit: person.unit || "10RCDG",
+        company: (person as any).company || "HHC",
         email: person.email || "",
         deviceType: (person as any).deviceType || "ANDROID",
       });
@@ -943,12 +963,38 @@ export default function PersonnelPage() {
       setPhoneError("Please enter a valid Philippine mobile number (e.g., 09171234567 or +639171234567).");
       return;
     }
+
+    // Duplicate Phone Number Validation
+    const cleanDigits = cleanMobile.replace(/\D/g, "");
+    const incomingCore = cleanDigits.startsWith("639")
+      ? cleanDigits.slice(2)
+      : cleanDigits.startsWith("09")
+      ? cleanDigits.slice(1)
+      : cleanDigits;
+
+    const duplicateSoldier = personnelList.find((p) => {
+      if (editingId && p._id === editingId) return false;
+      const pDigits = (p.mobileNumber || "").replace(/\D/g, "");
+      const pCore = pDigits.startsWith("639")
+        ? pDigits.slice(2)
+        : pDigits.startsWith("09")
+        ? pDigits.slice(1)
+        : pDigits;
+      return pCore === incomingCore;
+    });
+
+    if (duplicateSoldier) {
+      setPhoneError(
+        `Mobile number (${cleanMobile}) is already registered to ${duplicateSoldier.rank} ${duplicateSoldier.firstName} ${duplicateSoldier.lastName} (${duplicateSoldier.groupName}). Duplicate numbers are strictly prohibited.`
+      );
+      return;
+    }
     setPhoneError(null);
 
     setIsSaving(true);
     try {
       const selectedGrp = groupsList.find((g) => g._id === formData.groupId);
-      const groupName = selectedGrp ? selectedGrp.name : "Ready Reserve";
+      const groupName = selectedGrp ? selectedGrp.name : (groupsList[0]?.name || "1001st, RRIBn");
 
       if (editingId) {
         await updatePersonnel({
@@ -960,6 +1006,7 @@ export default function PersonnelPage() {
           groupId: formData.groupId || undefined,
           groupName,
           unit: formData.unit.trim(),
+          company: formData.company?.trim() || undefined,
           email: formData.email.trim() || undefined,
           deviceType: formData.deviceType,
           updatedBy: currentOfficer.displayName,
@@ -974,6 +1021,7 @@ export default function PersonnelPage() {
           groupId: formData.groupId || undefined,
           groupName,
           unit: formData.unit.trim(),
+          company: formData.company?.trim() || undefined,
           email: formData.email.trim() || undefined,
           deviceType: formData.deviceType,
           createdBy: currentOfficer.displayName,
@@ -982,7 +1030,12 @@ export default function PersonnelPage() {
       }
       setIsAddModalOpen(false);
     } catch (err: any) {
-      alert(err?.message || "Failed to save personnel record");
+      const msg = err?.data || err?.message || "Failed to save personnel record";
+      if (msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("already registered")) {
+        setPhoneError(msg.replace(/^Uncaught (?:Error|ConvexError):\s*/i, ""));
+      } else {
+        alert(msg);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -1064,12 +1117,15 @@ export default function PersonnelPage() {
     try {
       const selectedGrp = groupsList.find((g) => g._id === campaignFormData.groupId);
       const groupName = selectedGrp ? selectedGrp.name : campaignFormData.groupName;
+      const targetUnit = campaignFormData.targetUnit.trim() || "10RCDG";
+      const targetCompany = campaignFormData.targetCompany === "ALL" ? undefined : campaignFormData.targetCompany;
 
       const res = await createCampaign({
         title: campaignFormData.title.trim(),
         instructions: campaignFormData.instructions.trim() || undefined,
         passcode: campaignFormData.passcode.trim().toUpperCase(),
-        targetUnit: groupName,
+        targetUnit,
+        targetCompany,
         groupId: campaignFormData.groupId || undefined,
         groupName,
         durationStr,
@@ -1083,7 +1139,8 @@ export default function PersonnelPage() {
         title: campaignFormData.title.trim(),
         campaignCode: res.campaignCode,
         passcode: campaignFormData.passcode.trim().toUpperCase(),
-        targetUnit: groupName,
+        targetUnit,
+        targetCompany,
         duration: durationStr,
         expiresAt: res.expiresAt,
       });
@@ -1222,10 +1279,11 @@ export default function PersonnelPage() {
             onClick={() => {
               guardAction("generate enlistment link", () => {
                 setCampaignFormData({
-                  title: "1001st CDC Mobilization Roster",
+                  title: "10RCDG Mobilization Roster",
                   instructions: "Please submit your active mobile number for official mobilization alerts.",
                   passcode: "10RCDG-RESCOM",
-                  targetUnit: "1001st CDC",
+                  targetUnit: "10RCDG",
+                  targetCompany: "HHC",
                   groupId: groupsList[0]?._id || "",
                   groupName: groupsList[0]?.name || "Ready Reserve",
                   durationPreset: "24 Hours",
@@ -1532,6 +1590,20 @@ export default function PersonnelPage() {
                 </select>
 
                 <select
+                  value={selectedCompany}
+                  onChange={(e) => setSelectedCompany(e.target.value)}
+                  className="flex-1 sm:flex-none px-2.5 sm:px-3 py-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer transition-all max-w-[140px] sm:max-w-[160px] truncate"
+                  title="Filter roster by Company (HHC, Alpha, Bravo, Charlie, Delta)"
+                >
+                  <option value="ALL">All Companies</option>
+                  <option value="HHC">HHC</option>
+                  <option value="Alpha">Alpha Company</option>
+                  <option value="Bravo">Bravo Company</option>
+                  <option value="Charlie">Charlie Company</option>
+                  <option value="Delta">Delta Company</option>
+                </select>
+
+                <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
                   className="flex-1 sm:flex-none px-2.5 sm:px-3 py-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer transition-all"
@@ -1541,12 +1613,13 @@ export default function PersonnelPage() {
                   <option value="INACTIVE">Inactive</option>
                 </select>
 
-                {(selectedDevice !== "ALL" || selectedGroup !== "ALL" || selectedStatus !== "ALL" || searchQuery) && (
+                {(selectedDevice !== "ALL" || selectedGroup !== "ALL" || selectedCompany !== "ALL" || selectedStatus !== "ALL" || searchQuery) && (
                   <button
                     type="button"
                     onClick={() => {
                       setSelectedDevice("ALL");
                       setSelectedGroup("ALL");
+                      setSelectedCompany("ALL");
                       setSelectedStatus("ALL");
                       setSearchQuery("");
                     }}
@@ -1756,6 +1829,7 @@ export default function PersonnelPage() {
                       <th className="py-3.5 px-3">Mobile Number</th>
                       <th className="py-3.5 px-3">Device / App Status</th>
                       <th className="py-3.5 px-3">Unit / CDC</th>
+                      <th className="py-3.5 px-3">Company</th>
                       <th className="py-3.5 px-3">Group</th>
                       <th className="py-3.5 px-3">Status</th>
                       <th className="py-3.5 px-3 text-right pr-6">Actions</th>
@@ -1864,6 +1938,20 @@ export default function PersonnelPage() {
 
                         <td className="py-3.5 px-3 font-medium text-slate-600">
                           <HighlightMatch text={person.unit} query={searchQuery} />
+                        </td>
+
+                        <td className="py-3.5 px-3">
+                          {(() => {
+                            const compBadge = getCompanyBadgeStyle((person as any).company);
+                            if (!compBadge) {
+                              return <span className="text-[11px] text-slate-300 font-mono font-medium">—</span>;
+                            }
+                            return (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold font-mono border ${compBadge.bg} ${compBadge.text} ${compBadge.border}`}>
+                                {compBadge.label}
+                              </span>
+                            );
+                          })()}
                         </td>
 
                         <td className="py-3.5 px-3">
@@ -1982,9 +2070,16 @@ export default function PersonnelPage() {
                     <div>
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                            {camp.targetUnit}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              {camp.targetUnit}
+                            </span>
+                            {(camp as any).targetCompany && (
+                              <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                                {(camp as any).targetCompany}
+                              </span>
+                            )}
+                          </div>
                           <h4 className="text-sm font-bold text-slate-900 mt-1 line-clamp-1">
                             {camp.title}
                           </h4>
@@ -2040,6 +2135,7 @@ export default function PersonnelPage() {
                             campaignCode: camp.campaignCode,
                             passcode: camp.passcode,
                             targetUnit: camp.targetUnit,
+                            targetCompany: (camp as any).targetCompany,
                             duration: camp.duration,
                             expiresAt: camp.expiresAt,
                           })
@@ -2339,7 +2435,16 @@ export default function PersonnelPage() {
                             </td>
 
                             <td className="py-3 px-4 font-medium text-slate-600">
-                              {sub.unit}
+                              <div>{sub.unit}</div>
+                              {(() => {
+                                const b = getCompanyBadgeStyle((sub as any).company);
+                                if (!b) return null;
+                                return (
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold font-mono border mt-1 ${b.bg} ${b.text} ${b.border}`}>
+                                    {b.label}
+                                  </span>
+                                );
+                              })()}
                             </td>
 
                             <td className="py-3 px-4 font-mono text-[11px] text-amber-700">
@@ -2470,6 +2575,51 @@ export default function PersonnelPage() {
                   }
                   className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium resize-none shadow-2xs"
                 />
+              </div>
+
+              {/* Pre-assigned Unit & Company */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Pre-assigned Unit / CDC <span className="text-amber-700">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 10RCDG"
+                    value={campaignFormData.targetUnit}
+                    onChange={(e) =>
+                      setCampaignFormData((prev) => ({ ...prev, targetUnit: e.target.value }))
+                    }
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium shadow-2xs"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Soldiers will be locked to this unit upon registration.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Pre-assigned Company <span className="text-amber-700">*</span>
+                  </label>
+                  <select
+                    value={campaignFormData.targetCompany}
+                    onChange={(e) =>
+                      setCampaignFormData((prev) => ({ ...prev, targetCompany: e.target.value }))
+                    }
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer shadow-2xs"
+                  >
+                    <option value="HHC">HHC (Headquarters & HQ Company)</option>
+                    <option value="Alpha">Alpha Company (A Coy)</option>
+                    <option value="Bravo">Bravo Company (B Coy)</option>
+                    <option value="Charlie">Charlie Company (C Coy)</option>
+                    <option value="Delta">Delta Company (D Coy)</option>
+                    <option value="ALL">Allow Soldier to Choose Company</option>
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Locks soldiers to this company so they cannot change it.
+                  </p>
+                </div>
               </div>
 
               {/* Assign to SMS Group */}
@@ -2733,36 +2883,71 @@ export default function PersonnelPage() {
                   onChange={(e) => {
                     const val = sanitizePhMobileInput(e.target.value);
                     setFormData({ ...formData, mobileNumber: val });
-                    if (phoneError) setPhoneError(null);
+                    
+                    const valDigits = val.replace(/\D/g, "");
+                    const valCore = valDigits.startsWith("639")
+                      ? valDigits.slice(2)
+                      : valDigits.startsWith("09")
+                      ? valDigits.slice(1)
+                      : valDigits;
+
+                    if (valCore.length === 10) {
+                      const dup = personnelList.find((p) => {
+                        if (editingId && p._id === editingId) return false;
+                        const pDigits = (p.mobileNumber || "").replace(/\D/g, "");
+                        const pCore = pDigits.startsWith("639")
+                          ? pDigits.slice(2)
+                          : pDigits.startsWith("09")
+                          ? pDigits.slice(1)
+                          : pDigits;
+                        return pCore === valCore;
+                      });
+                      if (dup) {
+                        setPhoneError(`Already registered to ${dup.rank} ${dup.firstName} ${dup.lastName} (${dup.groupName})`);
+                      } else {
+                        setPhoneError(null);
+                      }
+                    } else if (phoneError) {
+                      setPhoneError(null);
+                    }
                   }}
                   placeholder="09171234567"
-                  className={`w-full px-3 py-2 font-mono bg-slate-50 border rounded-xl text-xs focus:outline-none focus:bg-white ${
-                    phoneError ? "border-red-500" : "border-slate-200 focus:border-emerald-600"
+                  className={`w-full px-3 py-2 font-mono bg-slate-50 border rounded-xl text-xs focus:outline-none focus:bg-white transition-all ${
+                    phoneError ? "border-red-500 bg-red-50/30 text-red-950 font-bold" : "border-slate-200 focus:border-emerald-600"
                   }`}
                 />
-                {phoneError && <p className="text-[11px] text-red-600 mt-1">{phoneError}</p>}
+                {phoneError && (
+                  <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-start gap-2 mt-1.5 animate-in fade-in">
+                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block text-red-900">Duplicate Number Detected</span>
+                      <span className="text-[11px] leading-tight text-red-700">{phoneError}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Assigned Group *
-                  </label>
-                  <select
-                    value={formData.groupId}
-                    onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600"
-                  >
-                    <option value="">
-                      {isScopedAdmin ? "Select an Assigned Group..." : "All 10RCDG Personnel (General Roster)"}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Assigned Group *
+                </label>
+                <select
+                  value={formData.groupId}
+                  onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600"
+                >
+                  <option value="">
+                    {isScopedAdmin ? "Select an Assigned Group..." : "All 10RCDG Personnel (General Roster)"}
+                  </option>
+                  {groupsList.map((g) => (
+                    <option key={g._id} value={g._id}>
+                      {g.name}
                     </option>
-                    {groupsList.map((g) => (
-                      <option key={g._id} value={g._id}>
-                        {g.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Unit / Station
@@ -2771,9 +2956,26 @@ export default function PersonnelPage() {
                     type="text"
                     value={formData.unit}
                     onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                    placeholder="e.g. 1001st CDC"
+                    placeholder="e.g. 10RCDG"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Company</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Sub-unit</span>
+                  </label>
+                  <select
+                    value={formData.company}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 cursor-pointer"
+                  >
+                    <option value="HHC">HHC (Headquarters & HQ Company)</option>
+                    <option value="Alpha">Alpha Company (A Coy)</option>
+                    <option value="Bravo">Bravo Company (B Coy)</option>
+                    <option value="Charlie">Charlie Company (C Coy)</option>
+                    <option value="Delta">Delta Company (D Coy)</option>
+                  </select>
                 </div>
               </div>
 
@@ -3640,6 +3842,12 @@ export default function PersonnelPage() {
                   <span className="text-slate-500">Unit:</span>
                   <span className="font-semibold text-slate-800">{campaignCloseEarlyTarget.targetUnit}</span>
                 </div>
+                {(campaignCloseEarlyTarget as any).targetCompany && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Company:</span>
+                    <span className="font-semibold text-slate-800">{(campaignCloseEarlyTarget as any).targetCompany}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-slate-500">Target Group:</span>
                   <span className="font-semibold text-slate-800">{campaignCloseEarlyTarget.groupName}</span>

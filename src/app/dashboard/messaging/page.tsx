@@ -53,6 +53,7 @@ import { useCurrentOfficer } from "@/components/officer-context";
 import { PersonnelRecipientCombobox, RecipientChip } from "@/components/personnel-recipient-combobox";
 import { AndroidIcon, KeypadPhoneIcon, HybridIcon, ForceSmsIcon } from "@/components/device-icons";
 import { TablePagination } from "@/components/table-pagination";
+import { PRESET_COMPANIES } from "@/lib/military-companies";
 
 /**
  * Highlight matching words/characters with a light-green badge.
@@ -207,6 +208,9 @@ function MessagingContent() {
     initialGroupQuery ? [initialGroupQuery] : ["ALL"]
   );
 
+  // Company Sub-Unit Targeting State
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>(["ALL"]);
+
   // Personnel / Direct Mode State
   const [manualRecipients, setManualRecipients] = useState<RecipientChip[]>([]);
 
@@ -275,16 +279,56 @@ function MessagingContent() {
     }
   };
 
+  // Company selection helpers
+  const toggleCompany = (companyCode: string) => {
+    if (companyCode === "ALL") {
+      setSelectedCompanies(["ALL"]);
+    } else {
+      const withoutAll = selectedCompanies.filter((c) => c !== "ALL");
+      if (withoutAll.includes(companyCode)) {
+        const updated = withoutAll.filter((c) => c !== companyCode);
+        setSelectedCompanies(updated.length === 0 ? ["ALL"] : updated);
+      } else {
+        setSelectedCompanies([...withoutAll, companyCode]);
+      }
+    }
+  };
+
+  // Dynamic troop counts per company based on currently selected groups
+  const companyCounts = useMemo(() => {
+    const activeTroops = personnel.filter((p) => p.status === "ACTIVE");
+    const troopsInSelectedGroups = activeTroops.filter((p) => {
+      if (selectedGroups.includes("ALL")) return true;
+      return selectedGroups.some((gId) => p.groupId === gId || p.groupName === gId);
+    });
+
+    const counts: Record<string, number> = {
+      ALL: troopsInSelectedGroups.length,
+      HHC: troopsInSelectedGroups.filter((p) => ((p as any).company || "HHC") === "HHC").length,
+      Alpha: troopsInSelectedGroups.filter((p) => (p as any).company === "Alpha").length,
+      Bravo: troopsInSelectedGroups.filter((p) => (p as any).company === "Bravo").length,
+      Charlie: troopsInSelectedGroups.filter((p) => (p as any).company === "Charlie").length,
+      Delta: troopsInSelectedGroups.filter((p) => (p as any).company === "Delta").length,
+    };
+    return counts;
+  }, [personnel, selectedGroups]);
+
   // Categorize active recipients into Android and Keypad
   const getCategorizedRecipients = () => {
     let targetPersonnel: typeof personnel = [];
     if (recipientMode === "GROUP") {
       const activePersonnel = personnel.filter((p) => p.status === "ACTIVE");
       targetPersonnel = activePersonnel.filter((p) => {
-        if (selectedGroups.includes("ALL")) return true;
-        return selectedGroups.some((gId) => {
-          return p.groupId === gId || p.groupName === gId;
-        });
+        const matchesGroup =
+          selectedGroups.includes("ALL") ||
+          selectedGroups.some((gId) => p.groupId === gId || p.groupName === gId);
+
+        if (!matchesGroup) return false;
+
+        if (selectedCompanies.includes("ALL")) return true;
+
+        const pCompany = (p as any).company || "HHC";
+        return selectedCompanies.includes(pCompany) || selectedCompanies.includes((p as any).company);
       });
     } else {
       targetPersonnel = manualRecipients
@@ -511,9 +555,13 @@ function MessagingContent() {
             recipientMode === "GROUP"
               ? selectedGroups.includes("ALL")
                 ? isScopedAdmin
-                  ? groups.map((g) => g.name)
-                  : ["All 10RCDG Personnel"]
-                : selectedGroups
+                  ? groups.map((g) => `${g.name}${selectedCompanies.includes("ALL") ? "" : ` (${selectedCompanies.join(", ")})`}`)
+                  : [`All 10RCDG Personnel${selectedCompanies.includes("ALL") ? "" : ` (${selectedCompanies.join(", ")})`}`]
+                : selectedGroups.map((gId) => {
+                    const grp = groups.find((g) => g._id === gId || g.name === gId);
+                    const name = grp ? grp.name : gId;
+                    return selectedCompanies.includes("ALL") ? name : `${name} (${selectedCompanies.join(", ")})`;
+                  })
               : ["Direct SMS"],
           recipients: [...smsNumbers, ...pushNumbers],
           totalRecipients: totalCount,
@@ -1214,47 +1262,111 @@ function MessagingContent() {
 
                   {/* Mode A: Clean Contact Group Selection */}
                   {recipientMode === "GROUP" && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500">
-                          Select official units or battalions to receive this broadcast:
-                        </span>
-                        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-mono">
-                          {activeRecipientCount} Personnel
-                        </span>
+                    <div className="space-y-4">
+                      {/* Section 1: Units / Battalions */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">
+                            1. Select Unit or Battalion:
+                          </span>
+                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-mono">
+                            {activeRecipientCount} Personnel Targeted
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleGroup("ALL")}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                              selectedGroups.includes("ALL")
+                                ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {isScopedAdmin
+                              ? `All My Assigned Units (${personnel.length})`
+                              : `All 10RCDG Personnel (${personnel.length})`}
+                          </button>
+                          {groups.map((grp) => {
+                            const isSelected = selectedGroups.includes(grp._id) || selectedGroups.includes(grp.name);
+                            return (
+                              <button
+                                key={grp._id}
+                                type="button"
+                                onClick={() => toggleGroup(grp._id)}
+                                className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                                  isSelected && !selectedGroups.includes("ALL")
+                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                                }`}
+                              >
+                                {grp.name} ({grp.memberCount})
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleGroup("ALL")}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-                            selectedGroups.includes("ALL")
-                              ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                              : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                          }`}
-                        >
-                          {isScopedAdmin
-                            ? `All My Assigned Units (${personnel.length})`
-                            : `All 10RCDG Personnel (${personnel.length})`}
-                        </button>
-                        {groups.map((grp) => {
-                          const isSelected = selectedGroups.includes(grp._id) || selectedGroups.includes(grp.name);
-                          return (
-                            <button
-                              key={grp._id}
-                              type="button"
-                              onClick={() => toggleGroup(grp._id)}
-                              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
-                                isSelected && !selectedGroups.includes("ALL")
-                                  ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                              }`}
-                            >
-                              {grp.name} ({grp.memberCount})
-                            </button>
-                          );
-                        })}
+                      {/* Section 2: Sub-Unit Company Targeting */}
+                      <div className="pt-3 border-t border-slate-100 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>2. Target Company (Sub-Unit):</span>
+                            <span className="text-[10px] text-slate-400 font-normal">Multi-select available</span>
+                          </span>
+                          <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            {selectedCompanies.includes("ALL")
+                              ? "ALL COMPANIES"
+                              : selectedCompanies.join(" + ")}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleCompany("ALL")}
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                              selectedCompanies.includes("ALL")
+                                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            All Companies ({companyCounts.ALL})
+                          </button>
+                          {PRESET_COMPANIES.map((comp) => {
+                            const isSelected = selectedCompanies.includes(comp.code);
+                            const count = companyCounts[comp.code] || 0;
+                            return (
+                              <button
+                                key={comp.code}
+                                type="button"
+                                onClick={() => toggleCompany(comp.code)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer flex items-center gap-1.5 ${
+                                  isSelected && !selectedCompanies.includes("ALL")
+                                    ? "bg-emerald-700 text-white border-emerald-700 shadow-xs ring-1 ring-emerald-700"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                                }`}
+                              >
+                                <span>{comp.code === "HHC" ? "HHC" : `${comp.code} Coy`}</span>
+                                <span
+                                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                                    isSelected && !selectedCompanies.includes("ALL")
+                                      ? "bg-emerald-800 text-white"
+                                      : "bg-slate-200 text-slate-700"
+                                  }`}
+                                >
+                                  {count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          {selectedCompanies.includes("ALL")
+                            ? "Broadcast will reach all companies across selected units."
+                            : `Filtered strictly to ${selectedCompanies.join(", ")} personnel within selected units.`}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -1703,6 +1815,14 @@ function MessagingContent() {
                       : `${selectedGroups.length} Unit(s)`}
                   </span>
                 </div>
+                {recipientMode === "GROUP" && !selectedCompanies.includes("ALL") && (
+                  <div className="flex items-center justify-between text-slate-700">
+                    <span className="text-slate-400 uppercase text-[10px] font-bold">Company:</span>
+                    <span className="font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-200 px-1.5 py-0.2 rounded text-[10px] truncate max-w-[170px]">
+                      {selectedCompanies.join(", ")}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-slate-700">
                   <span className="text-slate-400 uppercase text-[10px] font-bold">Channel:</span>
                   <span className="font-bold text-emerald-700">
@@ -2396,6 +2516,7 @@ function MessagingContent() {
                   ) : (
                     <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-mono">
                       MASS GROUP ({selectedGroups.includes("ALL") ? "ALL 10RCDG PERSONNEL" : selectedGroups.join(", ")})
+                      {!selectedCompanies.includes("ALL") && ` • COY: ${selectedCompanies.join(", ")}`}
                     </span>
                   )}
                 </span>

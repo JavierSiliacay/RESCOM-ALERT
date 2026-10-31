@@ -122,7 +122,7 @@ export default function TacticalMapView() {
     if (!q) return [];
     return personnel
       .filter((p) => {
-        const full = `${p.rank || ""} ${p.firstName || ""} ${p.lastName || ""} ${p.unit || ""} ${p.groupName || ""} ${p.mobileNumber || ""}`.toLowerCase();
+        const full = `${p.rank || ""} ${p.firstName || ""} ${p.lastName || ""} ${p.unit || ""} ${(p as any).company || ""} ${p.groupName || ""} ${p.mobileNumber || ""}`.toLowerCase();
         return full.includes(q);
       })
       .slice(0, 8);
@@ -354,7 +354,7 @@ export default function TacticalMapView() {
                           {soldier.rank} {soldier.firstName} {soldier.lastName}
                         </span>
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 truncate">
-                          {soldier.unit || soldier.groupName}
+                          {(soldier as any).company ? `${(soldier as any).company} • ` : ""}{soldier.unit || soldier.groupName}
                         </span>
                       </div>
                       <p className="text-[10px] text-slate-400 font-mono">{soldier.mobileNumber}</p>
@@ -739,7 +739,7 @@ export default function TacticalMapView() {
                   {selectedSoldier.firstName} {selectedSoldier.lastName}
                 </h4>
                 <p className="text-[11px] text-slate-500 font-medium truncate">
-                  {selectedSoldier.unit || selectedSoldier.groupName}
+                  {(selectedSoldier as any).company ? `${(selectedSoldier as any).company} • ` : ""}{selectedSoldier.unit || selectedSoldier.groupName}
                 </p>
               </div>
             </div>

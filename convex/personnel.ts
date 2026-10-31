@@ -2,6 +2,20 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { assertCallerAuthorized, assertCallerAuthorizedGroup } from "./access";
 
+// Helper: Normalize Philippine mobile number core 10 digits (e.g. 9XXXXXXXXX)
+function normalizePhMobile(raw: string): string {
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("6309")) return digits.slice(3); // 9XXXXXXXXX
+  if (digits.startsWith("639")) return digits.slice(2);  // 9XXXXXXXXX
+  if (digits.startsWith("09")) return digits.slice(1);   // 9XXXXXXXXX
+  if (digits.startsWith("9") && digits.length === 10) return digits;
+  if (digits.length >= 10 && digits.slice(-10).startsWith("9")) {
+    return digits.slice(-10);
+  }
+  return digits;
+}
+
 // List all personnel
 export const list = query({
   args: {},
@@ -20,6 +34,7 @@ export const create = mutation({
     groupId: v.optional(v.string()),
     groupName: v.string(),
     unit: v.string(),
+    company: v.optional(v.string()),
     email: v.optional(v.string()),
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     createdBy: v.optional(v.string()),
@@ -28,6 +43,19 @@ export const create = mutation({
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.createdByEmail, "create personnel");
     await assertCallerAuthorizedGroup(ctx, args.createdByEmail, [args.groupName], "create personnel");
+
+    // Duplicate Phone Number Validation
+    const incomingCore = normalizePhMobile(args.mobileNumber);
+    if (incomingCore.length >= 10) {
+      const allPersonnel = await ctx.db.query("personnel").collect();
+      const duplicate = allPersonnel.find((p) => normalizePhMobile(p.mobileNumber) === incomingCore);
+      if (duplicate) {
+        throw new Error(
+          `Mobile number (${args.mobileNumber}) is already registered to ${duplicate.rank} ${duplicate.firstName} ${duplicate.lastName} (${duplicate.groupName}). Duplicate numbers are not allowed.`
+        );
+      }
+    }
+
     const creatorName = args.createdBy || "Authorized Officer";
 
     const id = await ctx.db.insert("personnel", {
@@ -38,6 +66,7 @@ export const create = mutation({
       groupId: args.groupId,
       groupName: args.groupName,
       unit: args.unit,
+      company: args.company?.trim() || undefined,
       email: args.email,
       deviceType: args.deviceType || "ANDROID",
       status: "ACTIVE",
@@ -71,6 +100,7 @@ export const update = mutation({
     groupId: v.optional(v.string()),
     groupName: v.string(),
     unit: v.string(),
+    company: v.optional(v.string()),
     email: v.optional(v.string()),
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     updatedBy: v.optional(v.string()),
@@ -81,7 +111,29 @@ export const update = mutation({
     const { id, ...data } = args;
     const existing = await ctx.db.get(id);
     if (!existing) throw new Error("Personnel record not found");
-    await assertCallerAuthorizedGroup(ctx, args.updatedByEmail, [data.groupName, existing.groupName], "update personnel");
+
+    // Check authorization on active groups (do not block migration if soldier's previous group was deleted)
+    const activeGroups = await ctx.db.query("contactGroups").collect();
+    const activeGroupNames = new Set(activeGroups.map((g) => g.name));
+    const groupsToCheck = [data.groupName];
+    if (existing.groupName && activeGroupNames.has(existing.groupName)) {
+      groupsToCheck.push(existing.groupName);
+    }
+    await assertCallerAuthorizedGroup(ctx, args.updatedByEmail, groupsToCheck, "update personnel");
+
+    // Duplicate Phone Number Validation (Exclude self)
+    const incomingCore = normalizePhMobile(data.mobileNumber);
+    if (incomingCore.length >= 10) {
+      const allPersonnel = await ctx.db.query("personnel").collect();
+      const duplicate = allPersonnel.find(
+        (p) => p._id !== id && normalizePhMobile(p.mobileNumber) === incomingCore
+      );
+      if (duplicate) {
+        throw new Error(
+          `Mobile number (${data.mobileNumber}) is already registered to ${duplicate.rank} ${duplicate.firstName} ${duplicate.lastName} (${duplicate.groupName}). Duplicate numbers are not allowed.`
+        );
+      }
+    }
 
     const editorName = data.updatedBy || "Authorized Officer";
     const updateTimestamp = new Date().toLocaleString("en-US", {
@@ -100,6 +152,7 @@ export const update = mutation({
       groupId: data.groupId || "",
       groupName: data.groupName,
       unit: data.unit,
+      company: data.company !== undefined ? (data.company.trim() || undefined) : existing.company,
       email: data.email || "",
       deviceType: data.deviceType || existing.deviceType || "ANDROID",
       updatedBy: editorName,
@@ -226,18 +279,19 @@ export const remove = mutation({
   },
 });
 
-// Helper: Normalize Philippine mobile number core 10 digits (e.g. 9XXXXXXXXX)
-function normalizePhMobile(raw: string): string {
-  if (!raw) return "";
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("6309")) return digits.slice(3); // 9XXXXXXXXX
-  if (digits.startsWith("639")) return digits.slice(2);  // 9XXXXXXXXX
-  if (digits.startsWith("09")) return digits.slice(1);   // 9XXXXXXXXX
-  if (digits.startsWith("9") && digits.length === 10) return digits;
-  if (digits.length >= 10 && digits.slice(-10).startsWith("9")) {
-    return digits.slice(-10);
-  }
-  return digits;
+// Helper: Smart format unit with company for mobile app display
+function formatUnitForMobile(unit: string, company?: string): string {
+  if (!company || !company.trim()) return unit || "10RCDG HQ";
+  const c = company.trim();
+  const u = (unit || "10RCDG HQ").trim();
+  if (u.toLowerCase().includes(c.toLowerCase())) return u;
+  const label =
+    c.toUpperCase() === "HHC"
+      ? "HHC"
+      : c.toLowerCase().includes("coy") || c.toLowerCase().includes("company")
+      ? c
+      : `${c} Coy`;
+  return `${label} • ${u}`;
 }
 
 // Mobile Device Query: Verify if phone number is in active roster or pending enlistment
@@ -318,7 +372,8 @@ export const verifyMobile = query({
           firstName: matchedSoldier.firstName,
           lastName: matchedSoldier.lastName,
           rank: matchedSoldier.rank,
-          unit: matchedSoldier.unit,
+          unit: formatUnitForMobile(matchedSoldier.unit, matchedSoldier.company),
+          company: matchedSoldier.company,
           groupName: matchedSoldier.groupName,
           mobileNumber: matchedSoldier.mobileNumber,
           deviceType: matchedSoldier.deviceType || "ANDROID",
@@ -617,7 +672,8 @@ export const checkDevicePairing = query({
         firstName: soldier.firstName,
         lastName: soldier.lastName,
         rank: soldier.rank,
-        unit: soldier.unit,
+        unit: formatUnitForMobile(soldier.unit, soldier.company),
+        company: soldier.company,
         groupName: soldier.groupName,
         mobileNumber: soldier.mobileNumber,
         deviceType: soldier.deviceType || "ANDROID",
@@ -700,4 +756,170 @@ export const clearAllLocations = mutation({
     return { success: true, clearedCount };
   },
 });
+
+// Bulk Mutation: Update Unit / CDC to "10RCDG" for all existing members of "1001st, RRIBn"
+export const update1001stMembersUnitTo10RCDG = mutation({
+  args: {
+    targetGroupName: v.optional(v.string()),
+    newUnit: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const targetGroup = args.targetGroupName || "1001st, RRIBn";
+    const newUnit = args.newUnit || "10RCDG";
+
+    // 1. Find group in contactGroups
+    const groups = await ctx.db.query("contactGroups").collect();
+    const matchedGroups = groups.filter((g) => {
+      const clean = g.name.toLowerCase().replace(/[\s,_\-]/g, "");
+      return (
+        clean.includes("1001strribn") ||
+        (g.name.toLowerCase().includes("1001st") && g.name.toLowerCase().includes("rribn"))
+      );
+    });
+
+    const matchedGroupIds = matchedGroups.map((g) => g._id as string);
+    const matchedGroupNames = matchedGroups.map((g) => g.name);
+
+    // Update contactGroups unit as well
+    for (const g of matchedGroups) {
+      await ctx.db.patch(g._id, { unit: newUnit });
+    }
+
+    // 2. Query all personnel and update
+    const allPersonnel = await ctx.db.query("personnel").collect();
+    let updatedCount = 0;
+    const updatedSoldiers: { id: string; name: string; oldUnit: string; newUnit: string }[] = [];
+
+    for (const p of allPersonnel) {
+      const isMatch =
+        (p.groupId && matchedGroupIds.includes(p.groupId)) ||
+        matchedGroupNames.includes(p.groupName) ||
+        (p.groupName && p.groupName.toLowerCase().replace(/[\s,_\-]/g, "").includes("1001strribn")) ||
+        (p.groupName && p.groupName.toLowerCase().includes("1001st") && p.groupName.toLowerCase().includes("rribn"));
+
+      if (isMatch) {
+        await ctx.db.patch(p._id, {
+          unit: newUnit,
+          updatedAt: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+          updatedBy: "System Developer Javier Siliacay",
+        });
+        updatedCount++;
+        updatedSoldiers.push({
+          id: p._id,
+          name: `${p.rank} ${p.firstName} ${p.lastName}`,
+          oldUnit: p.unit,
+          newUnit,
+        });
+      }
+    }
+
+    // 3. Also update any pending or approved submissions from this group
+    const allSubs = await ctx.db.query("enlistmentSubmissions").collect();
+    let updatedSubCount = 0;
+    for (const sub of allSubs) {
+      const isSubMatch =
+        (sub.groupId && matchedGroupIds.includes(sub.groupId)) ||
+        matchedGroupNames.includes(sub.groupName) ||
+        (sub.groupName && sub.groupName.toLowerCase().replace(/[\s,_\-]/g, "").includes("1001strribn")) ||
+        (sub.groupName && sub.groupName.toLowerCase().includes("1001st") && sub.groupName.toLowerCase().includes("rribn"));
+
+      if (isSubMatch) {
+        await ctx.db.patch(sub._id, { unit: newUnit });
+        updatedSubCount++;
+      }
+    }
+
+    // 4. Record OPSEC Audit Log
+    await ctx.db.insert("auditLogs", {
+      userName: "System Developer Javier Siliacay",
+      userRole: "DEVELOPER",
+      category: "PERSONNEL",
+      action: "BATCH_UNIT_UPDATE",
+      details: `Updated UNIT / CDC to "${newUnit}" for all ${updatedCount} personnel and ${updatedSubCount} enlistment submission(s) in group "${targetGroup}".`,
+      ipAddress: "127.0.0.1",
+      timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+    });
+
+    return {
+      success: true,
+      updatedCount,
+      updatedSubCount,
+      matchedGroupNames,
+      updatedSoldiers,
+    };
+  },
+});
+
+// Bulk Mutation: Reassign any orphaned or deleted-group personnel to "1001st, RRIBn"
+export const reassignOrphanedPersonnelTo1001st = mutation({
+  args: {
+    targetGroupName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const targetGroupName = args.targetGroupName || "1001st, RRIBn";
+    const allGroups = await ctx.db.query("contactGroups").collect();
+    const targetGroup = allGroups.find(
+      (g) => g.name.toLowerCase().trim() === targetGroupName.toLowerCase().trim()
+    );
+
+    if (!targetGroup) {
+      throw new Error(`Target group "${targetGroupName}" not found in database.`);
+    }
+
+    const validGroupIds = new Set(allGroups.map((g) => g._id as string));
+    const validGroupNames = new Set(allGroups.map((g) => g.name.trim().toLowerCase()));
+
+    const allPersonnel = await ctx.db.query("personnel").collect();
+    let reassignedCount = 0;
+    const reassignedSoldiers: { id: string; name: string; oldGroup: string; newGroup: string }[] = [];
+
+    const nowTimestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" });
+
+    for (const p of allPersonnel) {
+      const isOrphaned =
+        !p.groupId ||
+        !validGroupIds.has(p.groupId) ||
+        !validGroupNames.has((p.groupName || "").trim().toLowerCase()) ||
+        p.groupName === "TEST USERS" ||
+        p.groupName === "TEST FLIGHT GROUP";
+
+      if (isOrphaned) {
+        await ctx.db.patch(p._id, {
+          groupId: targetGroup._id,
+          groupName: targetGroup.name,
+          unit: targetGroup.unit || "10RCDG",
+          updatedAt: nowTimestamp,
+          updatedBy: "System Developer Javier Siliacay",
+        });
+        reassignedCount++;
+        reassignedSoldiers.push({
+          id: p._id,
+          name: `${p.rank} ${p.firstName} ${p.lastName}`,
+          oldGroup: p.groupName || "Unknown",
+          newGroup: targetGroup.name,
+        });
+      }
+    }
+
+    // Record OPSEC Audit Log
+    await ctx.db.insert("auditLogs", {
+      userName: "System Developer Javier Siliacay",
+      userRole: "DEVELOPER",
+      category: "PERSONNEL",
+      action: "REASSIGN_ORPHANED_GROUP",
+      details: `Reassigned ${reassignedCount} personnel with deleted/orphaned groups to "${targetGroup.name}".`,
+      ipAddress: "127.0.0.1",
+      timestamp: nowTimestamp,
+    });
+
+    return {
+      success: true,
+      reassignedCount,
+      targetGroup: targetGroup.name,
+      reassignedSoldiers,
+    };
+  },
+});
+
+
 

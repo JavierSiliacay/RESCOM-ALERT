@@ -87,6 +87,7 @@ export default function PublicEnlistmentPage() {
     groupId: "",
     groupName: "All 10RCDG Personnel",
     unit: "",
+    company: "HHC",
   });
 
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -158,13 +159,22 @@ export default function PublicEnlistmentPage() {
         ...prev,
         groupId: campaign.groupId || "",
         groupName: campaign.groupName || "All 10RCDG Personnel",
-        unit: prev.unit || (campaign.targetUnit === "All Units" ? "10RCDG HQ" : campaign.targetUnit),
+        unit: (campaign.targetUnit && campaign.targetUnit !== "All Units") ? campaign.targetUnit : (prev.unit || "10RCDG HQ"),
+        company: (campaign as any).targetCompany || prev.company || "HHC",
       }));
     }
   }, [campaign]);
 
   const isGroupLocked = Boolean(
     (campaign?.groupName && campaign.groupName !== "All 10RCDG Personnel") || campaign?.groupId
+  );
+  const isUnitLocked = Boolean(
+    campaign?.targetUnit && campaign.targetUnit.trim().length > 0 && campaign.targetUnit !== "All Units"
+  );
+  const isCompanyLocked = Boolean(
+    (campaign as any)?.targetCompany &&
+    (campaign as any).targetCompany.trim().length > 0 &&
+    (campaign as any).targetCompany !== "ALL"
   );
 
   // Live Countdown State
@@ -303,7 +313,8 @@ export default function PublicEnlistmentPage() {
         lastName: formData.lastName.trim(),
         rank: formData.rank,
         mobileNumber: formData.mobileNumber,
-        unit: formData.unit.trim() || (campaign?.targetUnit || "10RCDG HQ"),
+        unit: isUnitLocked ? campaign!.targetUnit : (formData.unit.trim() || campaign?.targetUnit || "10RCDG HQ"),
+        company: isCompanyLocked ? (campaign as any)!.targetCompany : (formData.company?.trim() || undefined),
         groupId: isGroupLocked ? (campaign?.groupId || undefined) : (formData.groupId || undefined),
         groupName: isGroupLocked ? (campaign?.groupName || "All 10RCDG Personnel") : (formData.groupName || "All 10RCDG Personnel"),
         deviceType: formData.deviceType,
@@ -835,16 +846,97 @@ export default function PublicEnlistmentPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Unit / Station
+                    Unit / Station <span className="text-emerald-700">*</span>
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 1001st CDC / 10RCDG HQ"
-                    value={formData.unit}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, unit: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs"
-                  />
+                  {isUnitLocked ? (
+                    <div>
+                      <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-900 text-xs font-bold shadow-2xs">
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
+                          <span className="truncate">{campaign?.targetUnit}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-extrabold shrink-0 flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>LOCKED</span>
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Pre-assigned to {campaign?.targetUnit} by Command.
+                      </p>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="e.g. 1001st CDC / 10RCDG HQ"
+                      value={formData.unit}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, unit: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-600 shadow-2xs"
+                    />
+                  )}
                 </div>
+              </div>
+
+              {/* Company Designation */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                  <span>Assigned Company <span className="text-emerald-700">*</span></span>
+                  <span className="text-[10px] text-slate-400 font-normal">Battalion / CDC Sub-unit</span>
+                </label>
+                {isCompanyLocked ? (
+                  <div>
+                    <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-900 text-xs font-bold shadow-2xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
+                        <span className="truncate">
+                          {(campaign as any)?.targetCompany === "HHC"
+                            ? "Headquarters & HQ Company (HHC)"
+                            : `${(campaign as any)?.targetCompany} Company`}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-extrabold shrink-0 flex items-center gap-1">
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>LOCKED</span>
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Pre-assigned to {(campaign as any)?.targetCompany} Company by Command.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                    {[
+                      { code: "HHC", label: "HHC", sub: "Headquarters" },
+                      { code: "Alpha", label: "Alpha", sub: "A Company" },
+                      { code: "Bravo", label: "Bravo", sub: "B Company" },
+                      { code: "Charlie", label: "Charlie", sub: "C Company" },
+                      { code: "Delta", label: "Delta", sub: "D Company" },
+                    ].map((c) => {
+                      const isSelected = formData.company === c.code;
+                      return (
+                        <button
+                          key={c.code}
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, company: c.code }))}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-emerald-50/90 border-emerald-600 ring-1 ring-emerald-600 shadow-2xs"
+                              : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs font-bold ${isSelected ? "text-emerald-950 font-extrabold" : "text-slate-800"}`}>
+                              {c.label}
+                            </span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-emerald-700" />}
+                          </div>
+                          <span className={`text-[10px] block truncate ${isSelected ? "text-emerald-700 font-medium" : "text-slate-400"}`}>
+                            {c.sub}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Primary Phone Capability */}

@@ -24,6 +24,7 @@ interface EnlistmentShareModalProps {
     campaignCode: string;
     passcode: string;
     targetUnit: string;
+    targetCompany?: string;
     duration: string;
     expiresAt: number;
   } | null;
@@ -73,7 +74,7 @@ export function EnlistmentShareModal({
 
   const viberTemplate = `🇵🇭 10RCDG OFFICIAL ENLISTMENT REGISTRATION
 Batch: ${campaign.title}
-Target Unit: ${campaign.targetUnit}
+Target Unit: ${campaign.targetUnit}${campaign.targetCompany ? ` (${campaign.targetCompany === "HHC" ? "HHC" : `${campaign.targetCompany} Company`})` : ""}
 
 All personnel are directed to register their active mobile number for official military SMS alerts & mobilization orders:
 

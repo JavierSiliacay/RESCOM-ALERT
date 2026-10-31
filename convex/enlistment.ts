@@ -2,6 +2,20 @@ import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { calculateSuspensionExpiry, assertCallerAuthorized } from "./access";
 
+// Helper: Normalize Philippine mobile number core 10 digits (e.g. 9XXXXXXXXX)
+function normalizePhMobile(raw: string): string {
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("6309")) return digits.slice(3); // 9XXXXXXXXX
+  if (digits.startsWith("639")) return digits.slice(2);  // 9XXXXXXXXX
+  if (digits.startsWith("09")) return digits.slice(1);   // 9XXXXXXXXX
+  if (digits.startsWith("9") && digits.length === 10) return digits;
+  if (digits.length >= 10 && digits.slice(-10).startsWith("9")) {
+    return digits.slice(-10);
+  }
+  return digits;
+}
+
 // Helper to generate a clean, readable campaign slug code (e.g. "1001-muster-8N2K")
 function generateCampaignCode(title: string): string {
   const cleanTitle = title
@@ -20,6 +34,7 @@ export const createCampaign = mutation({
     instructions: v.optional(v.string()),
     passcode: v.string(),
     targetUnit: v.optional(v.string()),
+    targetCompany: v.optional(v.string()),
     groupId: v.optional(v.string()),
     groupName: v.string(),
     durationStr: v.string(),
@@ -42,7 +57,7 @@ export const createCampaign = mutation({
     }
 
     const campaignCode = generateCampaignCode(args.title);
-    const targetUnit = args.targetUnit?.trim() || args.groupName || "All Units";
+    const targetUnit = args.targetUnit?.trim() || "10RCDG";
 
     const campaignId = await ctx.db.insert("enlistmentCampaigns", {
       campaignCode,
@@ -50,6 +65,7 @@ export const createCampaign = mutation({
       instructions: args.instructions?.trim() || undefined,
       passcode: cleanPasscode,
       targetUnit,
+      targetCompany: args.targetCompany?.trim() || undefined,
       groupId: args.groupId,
       groupName: args.groupName.trim() || "All 10RCDG Personnel",
       expiresAt,
@@ -113,6 +129,7 @@ export const getCampaignPublic = query({
       title: campaign.title,
       instructions: campaign.instructions,
       targetUnit: campaign.targetUnit,
+      targetCompany: campaign.targetCompany,
       groupName: campaign.groupName,
       groupId: campaign.groupId,
       expiresAt: campaign.expiresAt,
@@ -187,6 +204,7 @@ export const submitEnlistment = mutation({
     rank: v.string(),
     mobileNumber: v.string(),
     unit: v.string(),
+    company: v.optional(v.string()),
     groupId: v.optional(v.string()),
     groupName: v.string(),
     email: v.optional(v.string()),
@@ -263,6 +281,7 @@ export const submitEnlistment = mutation({
       rank: args.rank.trim(),
       mobileNumber: cleanMobile,
       unit: args.unit.trim() || campaign.targetUnit,
+      company: args.company?.trim() || undefined,
       groupId: campaign.groupId || args.groupId,
       groupName:
         campaign.groupName && campaign.groupName !== "All 10RCDG Personnel"
@@ -326,7 +345,8 @@ export const approveSubmission = mutation({
 
     // Check if soldier already exists in personnel roster
     const allPersonnel = await ctx.db.query("personnel").collect();
-    const existing = allPersonnel.find((p) => p.mobileNumber === sub.mobileNumber);
+    const subCore = normalizePhMobile(sub.mobileNumber);
+    const existing = allPersonnel.find((p) => normalizePhMobile(p.mobileNumber) === subCore);
 
     if (existing) {
       // Update existing record
@@ -335,6 +355,7 @@ export const approveSubmission = mutation({
         lastName: sub.lastName,
         rank: sub.rank,
         unit: sub.unit,
+        company: sub.company || existing.company,
         groupName: sub.groupName,
         groupId: sub.groupId,
         status: "ACTIVE",
@@ -353,6 +374,7 @@ export const approveSubmission = mutation({
         rank: sub.rank,
         mobileNumber: sub.mobileNumber,
         unit: sub.unit,
+        company: sub.company,
         groupId: sub.groupId,
         groupName: sub.groupName,
         deviceType: sub.deviceType || "ANDROID",
@@ -411,13 +433,15 @@ export const bulkApproveSubmissions = mutation({
         reviewedBy: approverName,
       });
 
-      const existing = allPersonnel.find((p) => p.mobileNumber === sub.mobileNumber);
+      const subCore = normalizePhMobile(sub.mobileNumber);
+      const existing = allPersonnel.find((p) => normalizePhMobile(p.mobileNumber) === subCore);
       if (existing) {
         await ctx.db.patch(existing._id, {
           firstName: sub.firstName,
           lastName: sub.lastName,
           rank: sub.rank,
           unit: sub.unit,
+          company: sub.company || existing.company,
           groupName: sub.groupName,
           groupId: sub.groupId,
           status: "ACTIVE",
@@ -436,6 +460,7 @@ export const bulkApproveSubmissions = mutation({
           rank: sub.rank,
           mobileNumber: sub.mobileNumber,
           unit: sub.unit,
+          company: sub.company,
           groupId: sub.groupId,
           groupName: sub.groupName,
           deviceType: sub.deviceType || "ANDROID",

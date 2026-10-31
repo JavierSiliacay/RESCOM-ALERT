@@ -14,6 +14,7 @@ export interface RecipientChip {
   name?: string;
   rank?: string;
   unit?: string;
+  company?: string;
   number: string;
 }
 
@@ -26,6 +27,7 @@ interface PersonnelRecipientComboboxProps {
     lastName: string;
     rank?: string;
     unit?: string;
+    company?: string;
     groupName?: string;
     mobileNumber: string;
     status: string;
@@ -161,12 +163,16 @@ export function PersonnelRecipientCombobox({
 
         const fullName = `${p.rank || ""} ${p.firstName} ${p.lastName} ${p.lastName}, ${p.firstName}`.toLowerCase();
         const unit = (p.unit || p.groupName || "").toLowerCase();
+        const company = ((p as any).company || "").toLowerCase();
 
         const matchName = fullName.includes(query);
         const matchUnit = unit.includes(query);
+        const matchCompany =
+          company.includes(query) ||
+          (company ? `${company} coy`.includes(query) || `${company} company`.includes(query) : false);
         const matchPhone = matchesPhMobileSearch(p.mobileNumber, query);
 
-        return matchName || matchUnit || matchPhone;
+        return matchName || matchUnit || matchCompany || matchPhone;
       })
       .slice(0, 8); // Top 8 suggestions
   }, [personnel, query, recipients]);
@@ -212,6 +218,7 @@ export function PersonnelRecipientCombobox({
       name: `${soldier.firstName} ${soldier.lastName}`,
       rank: soldier.rank,
       unit: soldier.unit || soldier.groupName,
+      company: (soldier as any).company,
       number: formatPhMobileDisplay(soldier.mobileNumber),
     };
     onChange([...recipients, chip]);
@@ -483,8 +490,13 @@ export function PersonnelRecipientCombobox({
                         query={inputValue}
                       />
                     </div>
-                    <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                      {person.unit || person.groupName || "10RCDG Personnel"}
+                    <div className="text-[10px] text-slate-500 truncate mt-0.5 flex items-center gap-1.5">
+                      {(person as any).company && (
+                        <span className="font-semibold text-emerald-800 bg-emerald-100/90 border border-emerald-200 px-1 py-0.2 rounded text-[9px] font-mono">
+                          {(person as any).company} Coy
+                        </span>
+                      )}
+                      <span>{person.unit || person.groupName || "10RCDG Personnel"}</span>
                     </div>
                   </div>
                 </div>

@@ -158,6 +158,12 @@ export default function GroupsPage() {
   const [transferMode, setTransferMode] = useState<"SELECTED" | "ALL">("SELECTED");
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferFeedback, setTransferFeedback] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [transferSuccessData, setTransferSuccessData] = useState<{
+    transferredCount: number;
+    sourceGroupName: string;
+    targetGroupName: string;
+    targetCompany?: string;
+  } | null>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -311,6 +317,7 @@ export default function GroupsPage() {
       setTransferTargetGroupId(defaultTarget ? defaultTarget._id : "");
       setTransferTargetCompany("");
       setTransferFeedback(null);
+      setTransferSuccessData(null);
       setIsTransferModalOpen(true);
     });
   };
@@ -324,6 +331,7 @@ export default function GroupsPage() {
       setTransferTargetGroupId(defaultTarget ? defaultTarget._id : "");
       setTransferTargetCompany("");
       setTransferFeedback(null);
+      setTransferSuccessData(null);
       setIsTransferModalOpen(true);
     });
   };
@@ -354,6 +362,7 @@ export default function GroupsPage() {
     if (!transferSourceGroup || !transferTargetGroupId) return;
     setIsTransferring(true);
     setTransferFeedback(null);
+    setTransferSuccessData(null);
     try {
       if (transferMode === "ALL") {
         const res = await transferEntireGroup({
@@ -362,9 +371,11 @@ export default function GroupsPage() {
           targetCompany: transferTargetCompany || undefined,
           officerEmail: currentOfficer.email,
         });
-        setTransferFeedback({
-          type: "success",
-          message: `Successfully transferred all ${res.transferredCount} troops from ${res.sourceGroupName} to ${res.targetGroupName}!`,
+        setTransferSuccessData({
+          transferredCount: res.transferredCount,
+          sourceGroupName: res.sourceGroupName,
+          targetGroupName: res.targetGroupName,
+          targetCompany: transferTargetCompany || undefined,
         });
       } else {
         const res = await bulkReassignGroup({
@@ -373,16 +384,14 @@ export default function GroupsPage() {
           targetCompany: transferTargetCompany || undefined,
           officerEmail: currentOfficer.email,
         });
-        setTransferFeedback({
-          type: "success",
-          message: `Successfully transferred ${res.transferredCount} troops to ${res.targetGroupName}!`,
+        setTransferSuccessData({
+          transferredCount: res.transferredCount,
+          sourceGroupName: transferSourceGroup.name,
+          targetGroupName: res.targetGroupName,
+          targetCompany: transferTargetCompany || undefined,
         });
         setSelectedMemberIds([]);
       }
-      setTimeout(() => {
-        setIsTransferModalOpen(false);
-        setTransferFeedback(null);
-      }, 1500);
     } catch (err: any) {
       setTransferFeedback({
         type: "error",
@@ -1166,200 +1175,264 @@ export default function GroupsPage() {
       {isTransferModalOpen && transferSourceGroup && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-indigo-50/70">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-100 border border-indigo-200 text-indigo-700 flex items-center justify-center shrink-0 shadow-xs">
-                  <ArrowRightLeft className="w-5 h-5" />
+            {transferSuccessData ? (
+              /* Success Celebration Animation View */
+              <div className="p-6 sm:p-8 text-center space-y-5 animate-in zoom-in-95 duration-200">
+                <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-emerald-100 animate-ping opacity-35" />
+                  <div className="relative w-20 h-20 rounded-full bg-emerald-100 border-2 border-emerald-500 text-emerald-600 flex items-center justify-center shadow-lg">
+                    <CheckCircle2 className="w-10 h-10 animate-in zoom-in-75 duration-300" />
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-base">
-                    Transfer Personnel to Another Group
+
+                <div className="space-y-1.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-bold text-[10px] font-mono uppercase tracking-wider">
+                    <Shield className="w-3 h-3 text-emerald-700" />
+                    Roster Reassignment Verified
+                  </span>
+                  <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                    Troops Successfully Transferred!
                   </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Bulk reassign ROTC graduates, Standby Reserve, or GMA units
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                    Personnel records, SMS emergency alert dispatch groups, and mobile phone profiles have been synchronized.
+                  </p>
+                </div>
+
+                {/* Summary Card */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-left space-y-2.5 shadow-2xs">
+                  <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200/70">
+                    <span className="text-slate-500 font-medium">Troops Moved</span>
+                    <span className="font-extrabold text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-md border border-emerald-200 font-mono text-xs">
+                      {transferSuccessData.transferredCount} {transferSuccessData.transferredCount === 1 ? "Soldier" : "Soldiers"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs pt-1">
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-slate-400">From Group</p>
+                      <p className="font-bold text-slate-800 truncate">{transferSuccessData.sourceGroupName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-indigo-500">To Group</p>
+                      <p className="font-bold text-indigo-900 truncate">{transferSuccessData.targetGroupName}</p>
+                    </div>
+                  </div>
+
+                  {transferSuccessData.targetCompany && (
+                    <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between text-xs">
+                      <span className="text-slate-500">Target Company</span>
+                      <span className="font-bold text-slate-800 bg-white px-2 py-0.5 rounded text-[11px] border border-slate-200">
+                        {transferSuccessData.targetCompany} Company
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTransferModalOpen(false);
+                      setTransferSuccessData(null);
+                      setTransferFeedback(null);
+                    }}
+                    className="w-full py-3 bg-emerald-800 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Done & Return to Groups</span>
+                  </button>
+                </div>
+              </div>
+            ) : isTransferring ? (
+              /* High-polish Loading State */
+              <div className="p-8 sm:p-12 text-center space-y-5 animate-in fade-in duration-150">
+                <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full border-4 border-indigo-200 border-t-indigo-700 animate-spin" />
+                  <FolderSync className="w-6 h-6 text-indigo-700 absolute inset-0 m-auto animate-pulse" />
+                </div>
+                <div className="space-y-1.5">
+                  <h4 className="text-base font-bold text-slate-900">
+                    Reassigning Troops & Syncing Roster...
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                    Updating database records, SMS broadcast routing, and pushing live sync to paired mobile devices.
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isTransferring) {
-                    setIsTransferModalOpen(false);
-                    setTransferFeedback(null);
-                  }
-                }}
-                disabled={isTransferring}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-5 sm:p-6 space-y-4 text-xs">
-              {/* Feedback Alert */}
-              {transferFeedback && (
-                <div
-                  className={`p-3 rounded-xl border flex items-start gap-2.5 ${
-                    transferFeedback.type === "success"
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                      : "bg-red-50 border-red-200 text-red-900"
-                  }`}
-                >
-                  {transferFeedback.type === "success" ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                  )}
-                  <p className="font-semibold leading-relaxed">
-                    {transferFeedback.message}
-                  </p>
+            ) : (
+              /* Regular Form View */
+              <>
+                {/* Header */}
+                <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-indigo-50/70">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 border border-indigo-200 text-indigo-700 flex items-center justify-center shrink-0 shadow-xs">
+                      <ArrowRightLeft className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-base">
+                        Transfer Personnel to Another Group
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Bulk reassign ROTC graduates, Standby Reserve, or GMA units
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTransferModalOpen(false);
+                      setTransferFeedback(null);
+                    }}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-              )}
 
-              {/* Source vs Target Visual Flow */}
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                {/* Source */}
-                <div className="sm:col-span-2 min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                    Source Group
-                  </p>
-                  <p className="font-bold text-slate-900 truncate">
-                    {transferSourceGroup.name}
-                  </p>
-                  <p className="text-[11px] text-slate-500 font-mono truncate">
-                    {transferSourceGroup.unit}
-                  </p>
-                  <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 font-bold text-[10px]">
-                    <Users className="w-3 h-3" />
+                {/* Modal Body */}
+                <div className="p-5 sm:p-6 space-y-4 text-xs">
+                  {/* Feedback Alert */}
+                  {transferFeedback && (
+                    <div className="p-3 rounded-xl border flex items-start gap-2.5 bg-red-50 border-red-200 text-red-900">
+                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      <p className="font-semibold leading-relaxed">
+                        {transferFeedback.message}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Source vs Target Visual Flow */}
+                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                    {/* Source */}
+                    <div className="sm:col-span-2 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                        Source Group
+                      </p>
+                      <p className="font-bold text-slate-900 truncate">
+                        {transferSourceGroup.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-mono truncate">
+                        {transferSourceGroup.unit}
+                      </p>
+                      <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 font-bold text-[10px]">
+                        <Users className="w-3 h-3" />
+                        <span>
+                          {transferMode === "ALL"
+                            ? `All ${transferSourceGroup.memberCount} Troops`
+                            : `${selectedMemberIds.length} Selected`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Arrow */}
+                    <div className="sm:col-span-1 flex justify-center py-1 sm:py-0">
+                      <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+                        <ArrowRight className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    {/* Destination Preview */}
+                    <div className="sm:col-span-2 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                        Destination Group
+                      </p>
+                      {(() => {
+                        const target = groups.find((g) => g._id === transferTargetGroupId);
+                        if (!target) return <p className="text-slate-400 italic">Select below...</p>;
+                        return (
+                          <>
+                            <p className="font-bold text-indigo-900 truncate">
+                              {target.name}
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-mono truncate">
+                              {target.unit}
+                            </p>
+                            <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 font-bold text-[10px]">
+                              <span>Current: {target.memberCount} Troops</span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Target Group Selector */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      Select Destination Contact Group <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={transferTargetGroupId}
+                      onChange={(e) => setTransferTargetGroupId(e.target.value as Id<"contactGroups">)}
+                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-300 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent shadow-2xs"
+                    >
+                      <option value="" disabled>-- Select Destination Group --</option>
+                      {groups
+                        .filter((g) => g._id !== transferSourceGroup._id)
+                        .map((g) => (
+                          <option key={g._id} value={g._id}>
+                            {g.name} ({g.unit}) — {g.memberCount} troops
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* Target Company Selector (Optional) */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      Company Assignment (Optional)
+                    </label>
+                    <select
+                      value={transferTargetCompany}
+                      onChange={(e) => setTransferTargetCompany(e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-300 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent shadow-2xs"
+                    >
+                      <option value="">Keep Existing Company Assignment</option>
+                      {PRESET_COMPANIES.map((co) => (
+                        <option key={co.code} value={co.code}>
+                          {co.code} — {co.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Assign all transferred troops to a specific company (e.g. HHC, Alpha, Bravo, Charlie, Delta), or leave as-is to preserve their current company.
+                    </p>
+                  </div>
+
+                  {/* Security & OPSEC Advisory */}
+                  <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">
+                    <Shield className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
                     <span>
-                      {transferMode === "ALL"
-                        ? `All ${transferSourceGroup.memberCount} Troops`
-                        : `${selectedMemberIds.length} Selected`}
+                      Transferred troops will immediately receive SMS broadcasts sent to the new group. Their unit field will sync to the destination group&apos;s unit. An audit log will be recorded.
                     </span>
                   </div>
                 </div>
 
-                {/* Arrow */}
-                <div className="sm:col-span-1 flex justify-center py-1 sm:py-0">
-                  <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
-                    <ArrowRight className="w-4 h-4" />
-                  </div>
-                </div>
+                {/* Modal Footer */}
+                <div className="px-5 sm:px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTransferModalOpen(false);
+                      setTransferFeedback(null);
+                    }}
+                    className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
 
-                {/* Destination Preview */}
-                <div className="sm:col-span-2 min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                    Destination Group
-                  </p>
-                  {(() => {
-                    const target = groups.find((g) => g._id === transferTargetGroupId);
-                    if (!target) return <p className="text-slate-400 italic">Select below...</p>;
-                    return (
-                      <>
-                        <p className="font-bold text-indigo-900 truncate">
-                          {target.name}
-                        </p>
-                        <p className="text-[11px] text-slate-500 font-mono truncate">
-                          {target.unit}
-                        </p>
-                        <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 font-bold text-[10px]">
-                          <span>Current: {target.memberCount} Troops</span>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* Target Group Selector */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  Select Destination Contact Group <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={transferTargetGroupId}
-                  onChange={(e) => setTransferTargetGroupId(e.target.value as Id<"contactGroups">)}
-                  disabled={isTransferring}
-                  className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-300 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent shadow-2xs"
-                >
-                  <option value="" disabled>-- Select Destination Group --</option>
-                  {groups
-                    .filter((g) => g._id !== transferSourceGroup._id)
-                    .map((g) => (
-                      <option key={g._id} value={g._id}>
-                        {g.name} ({g.unit}) — {g.memberCount} troops
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              {/* Target Company Selector (Optional) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  Company Assignment (Optional)
-                </label>
-                <select
-                  value={transferTargetCompany}
-                  onChange={(e) => setTransferTargetCompany(e.target.value)}
-                  disabled={isTransferring}
-                  className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-300 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent shadow-2xs"
-                >
-                  <option value="">Keep Existing Company Assignment</option>
-                  {PRESET_COMPANIES.map((co) => (
-                    <option key={co.code} value={co.code}>
-                      {co.code} — {co.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Assign all transferred troops to a specific company (e.g. HHC, Alpha, Bravo, Charlie, Delta), or leave as-is to preserve their current company.
-                </p>
-              </div>
-
-              {/* Security & OPSEC Advisory */}
-              <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">
-                <Shield className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
-                <span>
-                  Transferred troops will immediately receive SMS broadcasts sent to the new group. Their unit field will sync to the destination group&apos;s unit. An audit log will be recorded.
-                </span>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-5 sm:px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsTransferModalOpen(false);
-                  setTransferFeedback(null);
-                }}
-                disabled={isTransferring}
-                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExecuteTransfer}
-                disabled={isTransferring || !transferTargetGroupId}
-                className="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center gap-2 cursor-pointer"
-              >
-                {isTransferring ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Transferring...</span>
-                  </>
-                ) : (
-                  <>
+                  <button
+                    type="button"
+                    onClick={handleExecuteTransfer}
+                    disabled={!transferTargetGroupId}
+                    className="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center gap-2 cursor-pointer active:scale-95"
+                  >
                     <ArrowRightLeft className="w-4 h-4" />
                     <span>Confirm Transfer</span>
-                  </>
-                )}
-              </button>
-            </div>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

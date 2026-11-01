@@ -83,18 +83,19 @@ export const remove = mutation({
       allGroups.find((g) => g._id !== args.id);
 
     if (fallbackGroup) {
-      // Reassign personnel in this group to fallback group
-      const allPersonnel = await ctx.db.query("personnel").collect();
-      for (const p of allPersonnel) {
-        if (p.groupId === args.id || p.groupName === group.name) {
-          await ctx.db.patch(p._id, {
-            groupId: fallbackGroup._id,
-            groupName: fallbackGroup.name,
-            unit: fallbackGroup.unit || p.unit || "10RCDG",
-            updatedAt: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
-            updatedBy: "System (Group Deletion Reassignment)",
-          });
-        }
+      // Reassign personnel in this group to fallback group using by_groupName index
+      const targetPersonnel = await ctx.db
+        .query("personnel")
+        .withIndex("by_groupName", (q) => q.eq("groupName", group.name))
+        .collect();
+      for (const p of targetPersonnel) {
+        await ctx.db.patch(p._id, {
+          groupId: fallbackGroup._id,
+          groupName: fallbackGroup.name,
+          unit: fallbackGroup.unit || p.unit || "10RCDG",
+          updatedAt: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
+          updatedBy: "System (Group Deletion Reassignment)",
+        });
       }
 
       // Reassign enlistment submissions
@@ -198,16 +199,22 @@ export const transferEntireGroup = mutation({
     if (!targetGroup) throw new Error("Target contact group not found.");
 
     const cleanEmail = (args.officerEmail || "").toLowerCase().trim();
-    const allUsers = await ctx.db.query("authorizedUsers").collect();
-    const callerUser = allUsers.find((u: any) => u.email.toLowerCase().trim() === cleanEmail);
+    const callerUser =
+      (await ctx.db
+        .query("authorizedUsers")
+        .withIndex("by_email", (q: any) => q.eq("email", cleanEmail))
+        .first()) ||
+      (await ctx.db.query("authorizedUsers").collect()).find(
+        (u: any) => u.email.toLowerCase().trim() === cleanEmail
+      );
     const officerName = callerUser?.name || "Command Staff";
     const officerRole = callerUser?.role || "ADMIN";
     const timestamp = new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" });
 
-    const allPersonnel = await ctx.db.query("personnel").collect();
-    const sourcePersonnel = allPersonnel.filter(
-      (p) => p.groupId === sourceGroup._id || p.groupName === sourceGroup.name
-    );
+    const sourcePersonnel = await ctx.db
+      .query("personnel")
+      .withIndex("by_groupName", (q) => q.eq("groupName", sourceGroup.name))
+      .collect();
 
     for (const p of sourcePersonnel) {
       const updateData: Record<string, any> = {

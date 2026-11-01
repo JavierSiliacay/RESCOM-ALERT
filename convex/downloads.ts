@@ -146,11 +146,24 @@ export const record = mutation({
 });
 
 /**
+ * Ultra-lightweight counter query for the public download portal.
+ * Reads a small sample (capped at 50) instead of collecting full device telemetry.
+ */
+export const getPublicCounter = query({
+  handler: async (ctx) => {
+    const sample = await ctx.db.query("appDownloads").take(50);
+    return {
+      uniqueDevices: sample.length,
+    };
+  },
+});
+
+/**
  * Retrieves live download telemetry for the Commander dashboard.
  */
 export const getStats = query({
   handler: async (ctx) => {
-    const downloads = await ctx.db.query("appDownloads").collect();
+    const downloads = await ctx.db.query("appDownloads").take(100);
 
     const uniqueDevices = downloads.length;
     const totalDownloads = downloads.reduce((acc, curr) => acc + curr.downloadCount, 0);

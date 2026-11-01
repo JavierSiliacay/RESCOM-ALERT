@@ -406,12 +406,23 @@ export const verifyMobile = query({
       };
     }
 
-    // 1. Check Active Personnel Roster
-    const allPersonnel = await ctx.db.query("personnel").collect();
-    const matchedSoldier = allPersonnel.find((p) => {
-      const pCore = normalizePhMobile(p.mobileNumber);
-      return pCore === searchCore;
-    });
+    // 1. Check Active Personnel Roster using direct index
+    const canonicalPh = "+63" + searchCore;
+    const localPh = "0" + searchCore;
+
+    const matchedSoldier =
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", args.mobileNumber.trim()))
+        .first());
 
     if (matchedSoldier) {
       // OPSEC & Anti-Impersonation Guard:
@@ -466,12 +477,20 @@ export const verifyMobile = query({
       };
     }
 
-    // 2. Check Enlistment Submissions (Pending applicants)
-    const allSubmissions = await ctx.db.query("enlistmentSubmissions").collect();
-    const matchedSubmission = allSubmissions.find((s) => {
-      const sCore = normalizePhMobile(s.mobileNumber);
-      return sCore === searchCore;
-    });
+    // 2. Check Enlistment Submissions (Pending applicants) using direct index
+    const matchedSubmission =
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", args.mobileNumber.trim()))
+        .first());
 
     if (matchedSubmission) {
       const isApplicantDevice = Boolean(args.deviceId && matchedSubmission.deviceId === args.deviceId);

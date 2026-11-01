@@ -573,17 +573,20 @@ export const submitEnlistment = mutation({
   },
 });
 
-// 6. List Submissions for Command Review
+// 6. List Submissions for Command Review (Indexed & Capped for Scalability)
 export const listSubmissions = query({
   args: {
     campaignId: v.optional(v.id("enlistmentCampaigns")),
   },
   handler: async (ctx, args) => {
-    let submissions = await ctx.db.query("enlistmentSubmissions").order("desc").collect();
     if (args.campaignId) {
-      submissions = submissions.filter((s) => s.campaignId === args.campaignId);
+      return await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_campaignId", (q) => q.eq("campaignId", args.campaignId!))
+        .order("desc")
+        .collect();
     }
-    return submissions;
+    return await ctx.db.query("enlistmentSubmissions").order("desc").take(200);
   },
 });
 
@@ -615,10 +618,24 @@ export const approveSubmission = mutation({
       reviewedBy: approverName,
     });
 
-    // Check if soldier already exists in personnel roster
-    const allPersonnel = await ctx.db.query("personnel").collect();
+    // Check if soldier already exists in personnel roster using direct index
     const subCore = normalizePhMobile(sub.mobileNumber);
-    const existing = allPersonnel.find((p) => normalizePhMobile(p.mobileNumber) === subCore);
+    const canonicalPh = "+63" + subCore;
+    const localPh = "0" + subCore;
+
+    const existing =
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", sub.mobileNumber.trim()))
+        .first());
 
     if (existing) {
       // Update existing record

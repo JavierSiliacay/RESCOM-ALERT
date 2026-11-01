@@ -20,31 +20,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Message content is required" }, { status: 400 });
     }
 
-    // 1. Fetch live troops from Convex to obtain their current active FCM tokens
+    // 1. Fetch active push tokens using lightweight query (avoids reading full personnel profiles)
     const convex = new ConvexHttpClient(convexUrl);
-    const allTroops = await convex.query(api.personnel.list);
+    const activeTroops = await convex.query(api.personnel.getActivePushTokens, {
+      targetMobileNumbers: Array.isArray(recipients) && recipients.length > 0 ? recipients : undefined,
+    });
 
-    let pushTokens: string[] = [];
-
-    if (Array.isArray(recipients) && recipients.length > 0) {
-      const cleanSet = new Set(recipients.map((r: string) => r.replace(/\D/g, "").slice(-10)));
-      allTroops.forEach((t: any) => {
-        const digits = (t.mobileNumber || "").replace(/\D/g, "").slice(-10);
-        if (cleanSet.has(digits) && t.fcmToken) {
-          pushTokens.push(t.fcmToken);
-        }
-      });
-    } else {
-      // Broadcast to all troops with active tokens
-      allTroops.forEach((t: any) => {
-        if (t.fcmToken) {
-          pushTokens.push(t.fcmToken);
-        }
-      });
-    }
-
-    // Deduplicate
-    pushTokens = Array.from(new Set(pushTokens));
+    const pushTokens = Array.from(new Set(activeTroops.map((t: any) => t.fcmToken)));
 
     if (pushTokens.length === 0) {
       return NextResponse.json({
@@ -63,6 +45,15 @@ export async function POST(req: NextRequest) {
       sender: sender || "10RCDG Tactical HQ",
       siren: true,
     });
+
+    // Background auto-cleanup of dead tokens reported by Firebase
+    if (result.invalidTokens && result.invalidTokens.length > 0) {
+      convex
+        .mutation(api.personnel.pruneInvalidFcmTokens, {
+          invalidTokens: result.invalidTokens,
+        })
+        .catch((err) => console.error("Failed to prune invalid FCM tokens:", err));
+    }
 
     return NextResponse.json(result);
   } catch (err: any) {

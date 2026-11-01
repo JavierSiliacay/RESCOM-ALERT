@@ -69,20 +69,11 @@ export async function POST(req: NextRequest) {
     if (convexUrl) {
       try {
         const convex = new ConvexHttpClient(convexUrl);
-        const allTroops = await convex.query(api.personnel.list);
-        
-        // Match recipient phone numbers to any paired troops with active fcmTokens
-        const cleanRecipientSet = new Set(
-          recipients.map((r: string) => r.replace(/\D/g, "").slice(-10))
-        );
-
-        const pushTokens: string[] = [];
-        allTroops.forEach((t: any) => {
-          const tDigits = (t.mobileNumber || "").replace(/\D/g, "").slice(-10);
-          if (cleanRecipientSet.has(tDigits) && t.fcmToken && t.appDeviceId) {
-            pushTokens.push(t.fcmToken);
-          }
+        const activeTroops = await convex.query(api.personnel.getActivePushTokens, {
+          targetMobileNumbers: recipients,
         });
+
+        const pushTokens = Array.from(new Set(activeTroops.map((t: any) => t.fcmToken)));
 
         if (pushTokens.length > 0) {
           const { dispatchFcmAlert } = await import("@/lib/fcm");

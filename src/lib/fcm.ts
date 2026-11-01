@@ -78,10 +78,20 @@ export interface FcmDispatchResult {
   error?: string;
 }
 
+// Helper to chunk large arrays into batches (Firebase sendEachForMulticast has a 500-token maximum per call)
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 /**
  * Dispatches high-priority Layer 1 push alert to paired soldier Android devices.
  * Uses pure data-payload with android.priority: 'high' to ensure wake locks and
  * siren triggering even in Doze Mode and lock screens.
+ * Automatically chunks into 500-token batches to scale to thousands of soldiers.
  */
 export async function dispatchFcmAlert(options: FcmDispatchOptions): Promise<FcmDispatchResult> {
   const { tokens, title, body, alertId = `alert_${Date.now()}`, sender = "10RCDG HQ", siren = true } = options;
@@ -112,45 +122,71 @@ export async function dispatchFcmAlert(options: FcmDispatchOptions): Promise<Fcm
   }
 
   try {
-    const message: MulticastMessage = {
-      tokens: validTokens,
-      // CRITICAL: We include both data payload (for background native execution & siren)
-      // and android notification configuration (for head-up status bar display)
-      data: {
-        type: "EMERGENCY_MOBILIZATION",
-        alertId,
-        sender,
-        title,
-        message: body,
-        siren: siren ? "true" : "false",
-        timestamp: Date.now().toString(),
-      },
-      android: {
-        priority: "high",
-        ttl: 60 * 60 * 24, // 24 hours
-      },
+    const payloadData = {
+      type: "EMERGENCY_MOBILIZATION",
+      alertId,
+      sender,
+      title,
+      message: body,
+      siren: siren ? "true" : "false",
+      timestamp: Date.now().toString(),
     };
 
-    const response = await fb.messaging.sendEachForMulticast(message);
-
+    // Firebase multicast has a strict limit of 500 tokens per call.
+    // We chunk the tokens into batches of 500 and dispatch in parallel with Promise.all
+    const tokenBatches = chunkArray(validTokens, 500);
     const invalidTokens: string[] = [];
-    response.responses.forEach((resp, idx) => {
-      if (!resp.success) {
-        const errCode = resp.error?.code;
-        if (
-          errCode === "messaging/invalid-registration-token" ||
-          errCode === "messaging/registration-token-not-registered"
-        ) {
-          invalidTokens.push(validTokens[idx]);
-        }
+    let totalSuccessCount = 0;
+    let totalFailureCount = 0;
+
+    const batchPromises = tokenBatches.map(async (batch) => {
+      const message: MulticastMessage = {
+        tokens: batch,
+        data: payloadData,
+        android: {
+          priority: "high",
+          ttl: 60 * 60 * 24, // 24 hours
+        },
+      };
+
+      try {
+        const response = await fb.messaging.sendEachForMulticast(message);
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            const errCode = resp.error?.code;
+            if (
+              errCode === "messaging/invalid-registration-token" ||
+              errCode === "messaging/registration-token-not-registered"
+            ) {
+              invalidTokens.push(batch[idx]);
+            }
+          }
+        });
+
+        return {
+          successCount: response.successCount,
+          failureCount: response.failureCount,
+        };
+      } catch (batchErr) {
+        console.error("Multicast batch dispatch error:", batchErr);
+        return {
+          successCount: 0,
+          failureCount: batch.length,
+        };
       }
     });
 
+    const batchResults = await Promise.all(batchPromises);
+    batchResults.forEach((res) => {
+      totalSuccessCount += res.successCount;
+      totalFailureCount += res.failureCount;
+    });
+
     return {
-      success: response.successCount > 0 || validTokens.length === 0,
+      success: totalSuccessCount > 0 || validTokens.length === 0,
       totalTokens: validTokens.length,
-      successCount: response.successCount,
-      failureCount: response.failureCount,
+      successCount: totalSuccessCount,
+      failureCount: totalFailureCount,
       invalidTokens,
     };
   } catch (err: any) {

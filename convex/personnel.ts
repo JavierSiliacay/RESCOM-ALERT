@@ -1017,5 +1017,115 @@ export const reassignOrphanedPersonnelTo1001st = mutation({
   },
 });
 
+// =========================================================================
+// Mass Alert Scaling: High-Throughput Push Token Extraction & Pruning
+// =========================================================================
+
+/**
+ * Ultra-fast, lightweight query for Mass Alert Dispatching.
+ * Extracts ONLY active FCM tokens and mobile numbers for target units.
+ * Eliminates downloading full 40+ field soldier profiles when dispatching alerts.
+ */
+export const getActivePushTokens = query({
+  args: {
+    targetGroupNames: v.optional(v.array(v.string())),
+    targetMobileNumbers: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const isGlobal =
+      !args.targetGroupNames ||
+      args.targetGroupNames.length === 0 ||
+      args.targetGroupNames.includes("ALL") ||
+      args.targetGroupNames.includes("*") ||
+      args.targetGroupNames.some((g) => g.toLowerCase().includes("all 10rcdg"));
+
+    let troops: any[] = [];
+
+    if (isGlobal) {
+      troops = await ctx.db
+        .query("personnel")
+        .withIndex("by_status", (q) => q.eq("status", "ACTIVE"))
+        .collect();
+    } else {
+      for (const groupName of args.targetGroupNames!) {
+        const groupTroops = await ctx.db
+          .query("personnel")
+          .withIndex("by_groupName", (q) => q.eq("groupName", groupName))
+          .collect();
+        troops.push(...groupTroops);
+      }
+    }
+
+    const mobileFilterSet =
+      args.targetMobileNumbers && args.targetMobileNumbers.length > 0
+        ? new Set(args.targetMobileNumbers.map((m) => m.replace(/\D/g, "").slice(-10)))
+        : null;
+
+    const tokenList: {
+      soldierId: string;
+      fcmToken: string;
+      mobileNumber: string;
+      rank: string;
+      firstName: string;
+      lastName: string;
+      groupName: string;
+    }[] = [];
+
+    for (const t of troops) {
+      if (t.fcmToken && !t.fcmToken.startsWith("fcm_prov_")) {
+        if (mobileFilterSet) {
+          const core = (t.mobileNumber || "").replace(/\D/g, "").slice(-10);
+          if (!mobileFilterSet.has(core)) continue;
+        }
+        tokenList.push({
+          soldierId: t._id,
+          fcmToken: t.fcmToken,
+          mobileNumber: t.mobileNumber,
+          rank: t.rank,
+          firstName: t.firstName,
+          lastName: t.lastName,
+          groupName: t.groupName,
+        });
+      }
+    }
+
+    return tokenList;
+  },
+});
+
+/**
+ * Background auto-cleanup for invalid/unregistered FCM tokens reported by Firebase.
+ * Nullifies dead tokens so future broadcasts do not waste requests.
+ */
+export const pruneInvalidFcmTokens = mutation({
+  args: {
+    invalidTokens: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.invalidTokens || args.invalidTokens.length === 0) {
+      return { pruned: 0 };
+    }
+    const invalidSet = new Set(args.invalidTokens);
+    let prunedCount = 0;
+
+    const activeTroops = await ctx.db
+      .query("personnel")
+      .withIndex("by_status", (q) => q.eq("status", "ACTIVE"))
+      .collect();
+
+    for (const t of activeTroops) {
+      if (t.fcmToken && invalidSet.has(t.fcmToken)) {
+        await ctx.db.patch(t._id, {
+          fcmToken: undefined,
+          appInstalledAt: undefined,
+        });
+        prunedCount++;
+      }
+    }
+
+    return { pruned: prunedCount };
+  },
+});
+
 
 

@@ -96,8 +96,14 @@ export async function assertCallerAuthorized(
   const cleanEmail = officerEmail.toLowerCase().trim();
   if (cleanEmail === "siliacay.javier@gmail.com") return; // Master Developer unconditional bypass
 
-  const allUsers = await ctx.db.query("authorizedUsers").collect();
-  const user = allUsers.find((u: any) => u.email.toLowerCase().trim() === cleanEmail);
+  const user =
+    (await ctx.db
+      .query("authorizedUsers")
+      .withIndex("by_email", (q: any) => q.eq("email", cleanEmail))
+      .first()) ||
+    (await ctx.db.query("authorizedUsers").collect()).find(
+      (u: any) => u.email.toLowerCase().trim() === cleanEmail
+    );
 
   if (user && user.role === "VIEWER") {
     throw new Error(
@@ -117,8 +123,14 @@ export async function assertCallerAuthorizedGroup(
   const cleanEmail = officerEmail.toLowerCase().trim();
   if (cleanEmail === "siliacay.javier@gmail.com") return; // Master Developer unconditional bypass
 
-  const allUsers = await ctx.db.query("authorizedUsers").collect();
-  const user = allUsers.find((u: any) => u.email.toLowerCase().trim() === cleanEmail);
+  const user =
+    (await ctx.db
+      .query("authorizedUsers")
+      .withIndex("by_email", (q: any) => q.eq("email", cleanEmail))
+      .first()) ||
+    (await ctx.db.query("authorizedUsers").collect()).find(
+      (u: any) => u.email.toLowerCase().trim() === cleanEmail
+    );
   if (!user) return;
 
   if (user.role === "VIEWER") {
@@ -215,8 +227,14 @@ export const checkByEmail = query({
     }
 
     // 1. Strictly check in authorizedUsers table
-    const allUsers = await ctx.db.query("authorizedUsers").collect();
-    const authorized = allUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
+    const authorized =
+      (await ctx.db
+        .query("authorizedUsers")
+        .withIndex("by_email", (q) => q.eq("email", cleanEmail))
+        .first()) ||
+      (await ctx.db.query("authorizedUsers").collect()).find(
+        (u) => u.email.toLowerCase().trim() === cleanEmail
+      );
     if (authorized) {
       const now = Date.now();
       const isExpired =
@@ -543,8 +561,14 @@ export const heartbeat = mutation({
     const cleanEmail = args.email.toLowerCase().trim();
     const now = Date.now();
 
-    const allUsers = await ctx.db.query("authorizedUsers").collect();
-    const existing = allUsers.find((u) => u.email.toLowerCase().trim() === cleanEmail);
+    const existing =
+      (await ctx.db
+        .query("authorizedUsers")
+        .withIndex("by_email", (q) => q.eq("email", cleanEmail))
+        .first()) ||
+      (await ctx.db.query("authorizedUsers").collect()).find(
+        (u) => u.email.toLowerCase().trim() === cleanEmail
+      );
 
     if (existing) {
       const patchData: any = {

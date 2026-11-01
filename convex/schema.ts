@@ -30,6 +30,14 @@ export default defineSchema({
     locationAccuracy: v.optional(v.number()), // Accuracy radius in meters
     locationUpdatedAt: v.optional(v.string()), // Timestamp when phone reported coordinates
     isGpsEnabled: v.optional(v.boolean()),
+    // Military Background & Reservist Details (Requested by Command)
+    school: v.optional(v.string()), // Previous school or where they took Basic ROTC
+    yearGraduated: v.optional(v.string()), // Year graduated (for GHQ Special Orders / Serial Number lookup)
+    trainingCategory: v.optional(v.string()), // "BCMT" | "BASIC ROTC" | "ADVANCE ROTC" | "POTC GRADUATE" | "COMMISSION UNDER RA2334"
+    skills: v.optional(v.string()), // Special skills for standby reserve deployment (e.g. Medical, Comms, Driving, IT)
+    currentAddress: v.optional(v.string()), // Barangay, City/Municipality, Province
+    age: v.optional(v.number()), // Age in years
+    currentJob: v.optional(v.string()), // Civilian occupation / employer
     createdAt: v.string(),
     createdBy: v.optional(v.string()), // Officer name who registered the personnel
     updatedAt: v.optional(v.string()), // Timestamp of last edit
@@ -38,7 +46,8 @@ export default defineSchema({
     .index("by_mobileNumber", ["mobileNumber"])
     .index("by_groupName", ["groupName"])
     .index("by_company", ["company"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_lastName", ["lastName"]),
 
   // Contact Groups / Units
   contactGroups: defineTable({
@@ -187,6 +196,14 @@ export default defineSchema({
     groupName: v.string(),
     email: v.optional(v.string()),
     serialNumber: v.optional(v.string()),
+    // Military Background & Reservist Details (Requested by Command)
+    school: v.optional(v.string()),
+    yearGraduated: v.optional(v.string()),
+    trainingCategory: v.optional(v.string()), // "BCMT" | "BASIC ROTC" | "ADVANCE ROTC" | "POTC GRADUATE" | "COMMISSION UNDER RA2334"
+    skills: v.optional(v.string()),
+    currentAddress: v.optional(v.string()),
+    age: v.optional(v.number()),
+    currentJob: v.optional(v.string()),
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     deviceId: v.optional(v.string()), // Hardware client UUID captured at enlistment
     deviceModel: v.optional(v.string()), // e.g. "Samsung Galaxy (SM-A546E)"
@@ -199,7 +216,8 @@ export default defineSchema({
     .index("by_campaignId", ["campaignId"])
     .index("by_campaignCode", ["campaignCode"])
     .index("by_mobileNumber", ["mobileNumber"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_lastName", ["lastName"]),
 
   // Mobile App Download Telemetry (Unique Device Tracking)
   appDownloads: defineTable({

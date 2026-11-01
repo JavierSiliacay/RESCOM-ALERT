@@ -2,6 +2,14 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { assertCallerAuthorized } from "./access";
 
+// Fast, lightweight query for dropdown selects & filters (avoids scanning the personnel table)
+export const listOptions = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("contactGroups").collect();
+  },
+});
+
 // List all contact groups with dynamic member counts
 export const list = query({
   args: {},

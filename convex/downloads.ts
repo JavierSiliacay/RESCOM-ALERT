@@ -30,9 +30,25 @@ export const record = mutation({
       matchedPersonnel = await ctx.db.get(args.soldierId);
     } else if (args.mobileNumber) {
       const searchCore = args.mobileNumber.replace(/\D/g, "").slice(-10);
-      const allPersonnel = await ctx.db.query("personnel").collect();
+      const canonical = "+63" + searchCore;
+      const local = "0" + searchCore;
       matchedPersonnel =
-        allPersonnel.find((p) => p.mobileNumber.replace(/\D/g, "").slice(-10) === searchCore) || null;
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonical))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", local))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", (args.mobileNumber || "").trim()))
+          .first()) ||
+        (await ctx.db.query("personnel").collect()).find(
+          (p) => p.mobileNumber.replace(/\D/g, "").slice(-10) === searchCore
+        ) ||
+        null;
     }
 
     // 2. Determine previous device model and hardware switch status

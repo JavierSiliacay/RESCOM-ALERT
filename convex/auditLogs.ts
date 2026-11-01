@@ -1,11 +1,11 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-// List all audit logs
+// List recent audit logs (capped at 100 to conserve Database I/O)
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("auditLogs").order("desc").collect();
+    return await ctx.db.query("auditLogs").order("desc").take(100);
   },
 });
 

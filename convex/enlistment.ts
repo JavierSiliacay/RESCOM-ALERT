@@ -16,6 +16,64 @@ function normalizePhMobile(raw: string): string {
   return digits;
 }
 
+export const VALID_TRAINING_CATEGORIES = [
+  "BCMT",
+  "BASIC ROTC",
+  "ADVANCE ROTC",
+  "POTC GRADUATE",
+  "COMMISSION UNDER RA2334",
+];
+
+export function validateReservistFields(args: {
+  age?: number;
+  yearGraduated?: string;
+  trainingCategory?: string;
+  school?: string;
+  currentAddress?: string;
+  skills?: string;
+  currentJob?: string;
+}) {
+  if (args.age !== undefined && (!Number.isInteger(args.age) || args.age < 16 || args.age > 85)) {
+    throw new ConvexError("Invalid age. Must be a whole number between 16 and 85 years.");
+  }
+
+  if (args.yearGraduated) {
+    const cleanYear = args.yearGraduated.trim();
+    const currentYear = new Date().getFullYear();
+    const yearNum = Number(cleanYear);
+    if (!/^\d{4}$/.test(cleanYear) || isNaN(yearNum) || yearNum < 1950 || yearNum > currentYear + 1) {
+      throw new ConvexError(
+        `Invalid Year Graduated in ROTC (${cleanYear}). Must be a 4-digit calendar year between 1950 and ${currentYear + 1}.`
+      );
+    }
+  }
+
+  if (args.trainingCategory) {
+    const catUpper = args.trainingCategory.trim().toUpperCase();
+    if (!VALID_TRAINING_CATEGORIES.includes(catUpper)) {
+      throw new ConvexError(
+        `Invalid Training Category. Must be one of: ${VALID_TRAINING_CATEGORIES.join(", ")}`
+      );
+    }
+  }
+
+  if (args.school && args.school.trim().length > 150) {
+    throw new ConvexError("School name must not exceed 150 characters.");
+  }
+
+  if (args.currentAddress && args.currentAddress.trim().length > 250) {
+    throw new ConvexError("Current address must not exceed 250 characters.");
+  }
+
+  if (args.skills && args.skills.trim().length > 300) {
+    throw new ConvexError("Skills field must not exceed 300 characters.");
+  }
+
+  if (args.currentJob && args.currentJob.trim().length > 150) {
+    throw new ConvexError("Current occupation must not exceed 150 characters.");
+  }
+}
+
 // Helper to generate a clean, readable campaign slug code (e.g. "1001-muster-8N2K")
 function generateCampaignCode(title: string): string {
   const cleanTitle = title
@@ -113,8 +171,14 @@ export const getCampaignPublic = query({
   args: { campaignCode: v.string() },
   handler: async (ctx, args) => {
     const cleanCode = args.campaignCode.toLowerCase().trim();
-    const allCampaigns = await ctx.db.query("enlistmentCampaigns").collect();
-    const campaign = allCampaigns.find((c) => c.campaignCode.toLowerCase() === cleanCode);
+    const campaign =
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
+        .first()) ||
+      (await ctx.db.query("enlistmentCampaigns").collect()).find(
+        (c) => c.campaignCode.toLowerCase() === cleanCode
+      );
 
     if (!campaign) {
       return null;
@@ -148,8 +212,14 @@ export const verifyPasscode = query({
   },
   handler: async (ctx, args) => {
     const cleanCode = args.campaignCode.toLowerCase().trim();
-    const allCampaigns = await ctx.db.query("enlistmentCampaigns").collect();
-    const campaign = allCampaigns.find((c) => c.campaignCode.toLowerCase() === cleanCode);
+    const campaign =
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
+        .first()) ||
+      (await ctx.db.query("enlistmentCampaigns").collect()).find(
+        (c) => c.campaignCode.toLowerCase() === cleanCode
+      );
 
     if (!campaign) {
       return { valid: false, message: "Enlistment campaign not found." };
@@ -175,8 +245,14 @@ export const validatePasscode = mutation({
   },
   handler: async (ctx, args) => {
     const cleanCode = args.campaignCode.toLowerCase().trim();
-    const allCampaigns = await ctx.db.query("enlistmentCampaigns").collect();
-    const campaign = allCampaigns.find((c) => c.campaignCode.toLowerCase() === cleanCode);
+    const campaign =
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
+        .first()) ||
+      (await ctx.db.query("enlistmentCampaigns").collect()).find(
+        (c) => c.campaignCode.toLowerCase() === cleanCode
+      );
 
     if (!campaign) {
       return { valid: false, message: "Enlistment campaign not found." };
@@ -194,44 +270,15 @@ export const validatePasscode = mutation({
   },
 });
 
-// 5. Submit Official Enlistment (From Public Portal)
-export const submitEnlistment = mutation({
+// 4c. Check Step 1 Duplicate (Prevents proceeding to Step 2 if soldier or number is already registered/pending)
+export const checkStep1Duplicate = mutation({
   args: {
-    campaignCode: v.string(),
-    passcode: v.string(),
+    mobileNumber: v.string(),
     firstName: v.string(),
     lastName: v.string(),
-    rank: v.string(),
-    mobileNumber: v.string(),
-    unit: v.string(),
-    company: v.optional(v.string()),
-    groupId: v.optional(v.string()),
-    groupName: v.string(),
-    email: v.optional(v.string()),
-    serialNumber: v.optional(v.string()),
-    deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
-    deviceId: v.optional(v.string()),
-    deviceModel: v.optional(v.string()),
-    userAgent: v.optional(v.string()),
+    campaignCode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const cleanCode = args.campaignCode.toLowerCase().trim();
-    const allCampaigns = await ctx.db.query("enlistmentCampaigns").collect();
-    const campaign = allCampaigns.find((c) => c.campaignCode.toLowerCase() === cleanCode);
-
-    if (!campaign) {
-      throw new ConvexError("Invalid or non-existent enlistment campaign.");
-    }
-
-    if (Date.now() >= campaign.expiresAt || campaign.status === "CLOSED") {
-      throw new ConvexError("This enlistment registration window has closed.");
-    }
-
-    if (campaign.passcode.trim().toUpperCase() !== args.passcode.trim().toUpperCase()) {
-      throw new ConvexError("Invalid unit passcode. Entry denied.");
-    }
-
-    // Standardize to canonical +639XXXXXXXXX
     const rawDigits = args.mobileNumber.replace(/\D/g, "");
     let cleanMobile = "";
     if (rawDigits.startsWith("639") && rawDigits.length === 12) {
@@ -252,22 +299,240 @@ export const submitEnlistment = mutation({
       return "+" + digits;
     };
 
-    // 1. Check if number already exists in active personnel directory
-    const allPersonnel = await ctx.db.query("personnel").collect();
-    const existingPersonnel = allPersonnel.find((p) => normalizePh(p.mobileNumber) === cleanMobile);
+    const cleanFirst = args.firstName.trim().replace(/\s+/g, " ").toLowerCase();
+    const cleanLast = args.lastName.trim().replace(/\s+/g, " ").toLowerCase();
+
+    // Strict First Name + Last Name matching helper (Prevents blocking different soldiers with same family name)
+    const isFullNameMatch = (first?: string, last?: string) => {
+      const f = (first || "").trim().replace(/\s+/g, " ").toLowerCase();
+      const l = (last || "").trim().replace(/\s+/g, " ").toLowerCase();
+      return f === cleanFirst && l === cleanLast;
+    };
+
+    // 1. Check active personnel roster
+    // Check by Mobile Number in active personnel using index (1 document read)
+    const existingTroopByPhone =
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", "0" + cleanMobile.slice(3)))
+        .first());
+
+    if (existingTroopByPhone) {
+      const isSameName = isFullNameMatch(existingTroopByPhone.firstName, existingTroopByPhone.lastName);
+
+      if (isSameName) {
+        return {
+          isDuplicate: true,
+          status: "ALREADY_REGISTERED",
+          message: `Soldier ${existingTroopByPhone.rank} ${existingTroopByPhone.firstName} ${existingTroopByPhone.lastName} is already registered in the official 10RCDG personnel roster (${existingTroopByPhone.groupName}). You can proceed directly to download the official mobile app.`,
+          canDownload: true,
+        };
+      } else {
+        return {
+          isDuplicate: true,
+          status: "PHONE_REGISTERED",
+          message: `This mobile number (${args.mobileNumber}) is already registered to ${existingTroopByPhone.rank} ${existingTroopByPhone.firstName} ${existingTroopByPhone.lastName} (${existingTroopByPhone.groupName}). Duplicate numbers are not allowed. Please enter your personal mobile number.`,
+          canDownload: false,
+        };
+      }
+    }
+
+    // Check by First Name + Last Name in active personnel using surname index
+    const surnameTroops = await ctx.db
+      .query("personnel")
+      .withIndex("by_lastName", (q) => q.eq("lastName", args.lastName.trim()))
+      .collect();
+
+    const existingTroopByName =
+      surnameTroops.find((p) => isFullNameMatch(p.firstName, p.lastName)) ||
+      (surnameTroops.length === 0
+        ? (await ctx.db.query("personnel").collect()).find((p) =>
+            isFullNameMatch(p.firstName, p.lastName)
+          )
+        : null);
+
+    if (existingTroopByName) {
+      return {
+        isDuplicate: true,
+        status: "NAME_REGISTERED",
+        message: `A soldier named ${existingTroopByName.rank} ${existingTroopByName.firstName} ${existingTroopByName.lastName} is already registered in the active 10RCDG personnel roster (${existingTroopByName.groupName}). If you need to update your registered phone number, please report to your system administrators.`,
+        canDownload: true,
+      };
+    }
+
+    // 2. Check pending / approved enlistment submissions using index
+    const existingSubmissionByPhone =
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", "0" + cleanMobile.slice(3)))
+        .first());
+
+    if (existingSubmissionByPhone && existingSubmissionByPhone.status !== "REJECTED") {
+      const isSameName = isFullNameMatch(existingSubmissionByPhone.firstName, existingSubmissionByPhone.lastName);
+
+      if (isSameName) {
+        return {
+          isDuplicate: true,
+          status: "SUBMISSION_PENDING",
+          message: `You have already submitted an enlistment application for ${existingSubmissionByPhone.rank} ${existingSubmissionByPhone.firstName} ${existingSubmissionByPhone.lastName} under batch ${existingSubmissionByPhone.campaignCode}. Your application is currently awaiting Command approval.`,
+          canDownload: false,
+        };
+      } else {
+        return {
+          isDuplicate: true,
+          status: "SUBMISSION_PHONE_PENDING",
+          message: `This mobile number is already used in an existing enlistment submission for ${existingSubmissionByPhone.rank} ${existingSubmissionByPhone.firstName} ${existingSubmissionByPhone.lastName}. Please verify your phone number.`,
+          canDownload: false,
+        };
+      }
+    }
+
+    // Check by Name in pending submissions using surname index
+    const surnameSubmissions = await ctx.db
+      .query("enlistmentSubmissions")
+      .withIndex("by_lastName", (q) => q.eq("lastName", args.lastName.trim()))
+      .collect();
+
+    const existingSubmissionByName =
+      surnameSubmissions.find(
+        (s) => s.status !== "REJECTED" && isFullNameMatch(s.firstName, s.lastName)
+      ) ||
+      (surnameSubmissions.length === 0
+        ? (await ctx.db.query("enlistmentSubmissions").collect()).find(
+            (s) => s.status !== "REJECTED" && isFullNameMatch(s.firstName, s.lastName)
+          )
+        : null);
+
+
+    if (existingSubmissionByName) {
+      return {
+        isDuplicate: true,
+        status: "SUBMISSION_NAME_PENDING",
+        message: `An enlistment application for ${existingSubmissionByName.rank} ${existingSubmissionByName.firstName} ${existingSubmissionByName.lastName} (Batch Code: ${existingSubmissionByName.campaignCode}) has already been submitted and is awaiting administrator approval.`,
+        canDownload: false,
+      };
+    }
+
+    return {
+      isDuplicate: false,
+      status: "OK",
+      message: "Validation successful.",
+      canDownload: false,
+    };
+  },
+});
+
+// 5. Submit Official Enlistment (From Public Portal)
+export const submitEnlistment = mutation({
+  args: {
+    campaignCode: v.string(),
+    passcode: v.string(),
+    firstName: v.string(),
+    lastName: v.string(),
+    rank: v.string(),
+    mobileNumber: v.string(),
+    unit: v.string(),
+    company: v.optional(v.string()),
+    groupId: v.optional(v.string()),
+    groupName: v.string(),
+    email: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),
+    school: v.optional(v.string()),
+    yearGraduated: v.optional(v.string()),
+    trainingCategory: v.optional(v.string()),
+    skills: v.optional(v.string()),
+    currentAddress: v.optional(v.string()),
+    age: v.optional(v.number()),
+    currentJob: v.optional(v.string()),
+    deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
+    deviceId: v.optional(v.string()),
+    deviceModel: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const cleanCode = args.campaignCode.toLowerCase().trim();
+    const campaign =
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
+        .first()) ||
+      (await ctx.db.query("enlistmentCampaigns").collect()).find(
+        (c) => c.campaignCode.toLowerCase() === cleanCode
+      );
+
+    if (!campaign) {
+      throw new ConvexError("Invalid or non-existent enlistment campaign.");
+    }
+
+    if (Date.now() >= campaign.expiresAt || campaign.status === "CLOSED") {
+      throw new ConvexError("This enlistment registration window has closed.");
+    }
+
+    if (campaign.passcode.trim().toUpperCase() !== args.passcode.trim().toUpperCase()) {
+      throw new ConvexError("Invalid unit passcode. Entry denied.");
+    }
+
+    // Validate Military & Reservist Background fields
+    validateReservistFields({
+      age: args.age,
+      yearGraduated: args.yearGraduated,
+      trainingCategory: args.trainingCategory,
+      school: args.school,
+      currentAddress: args.currentAddress,
+      skills: args.skills,
+      currentJob: args.currentJob,
+    });
+
+    // Standardize to canonical +639XXXXXXXXX
+    const rawDigits = args.mobileNumber.replace(/\D/g, "");
+    let cleanMobile = "";
+    if (rawDigits.startsWith("639") && rawDigits.length === 12) {
+      cleanMobile = "+63" + rawDigits.slice(2);
+    } else if (rawDigits.startsWith("09") && rawDigits.length === 11) {
+      cleanMobile = "+63" + rawDigits.slice(1);
+    } else if (rawDigits.startsWith("9") && rawDigits.length === 10) {
+      cleanMobile = "+63" + rawDigits;
+    } else {
+      cleanMobile = "+63" + rawDigits;
+    }
+
+    // 1. Check if number already exists in active personnel directory using index
+    const existingPersonnel =
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", "0" + cleanMobile.slice(3)))
+        .first());
+
     if (existingPersonnel) {
       throw new ConvexError(
         `This mobile number (${cleanMobile}) is already registered in the official 10RCDG personnel roster. You can download the app directly at the official download portal (/download).`
       );
     }
 
-    // 2. Check if number already exists across enlistment submissions (pending or approved)
-    const allSubmissions = await ctx.db.query("enlistmentSubmissions").collect();
-    const existingSubmission = allSubmissions.find(
-      (s) => s.status !== "REJECTED" && normalizePh(s.mobileNumber) === cleanMobile
-    );
+    // 2. Check if number already exists across enlistment submissions (pending or approved) using index
+    const existingSubmission =
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", "0" + cleanMobile.slice(3)))
+        .first());
 
-    if (existingSubmission) {
+    if (existingSubmission && existingSubmission.status !== "REJECTED") {
       throw new ConvexError(
         `You have already submitted an enlistment request for this mobile number (${cleanMobile}). Please wait for administrator approval so you can download the app at the official download portal (/download).`
       );
@@ -289,6 +554,13 @@ export const submitEnlistment = mutation({
           : (args.groupName?.trim() || campaign.groupName || "All 10RCDG Personnel"),
       email: args.email?.trim() || undefined,
       serialNumber: args.serialNumber?.trim() || undefined,
+      school: args.school?.trim() || undefined,
+      yearGraduated: args.yearGraduated?.trim() || undefined,
+      trainingCategory: args.trainingCategory?.trim() || undefined,
+      skills: args.skills?.trim() || undefined,
+      currentAddress: args.currentAddress?.trim() || undefined,
+      age: typeof args.age === "number" && !isNaN(args.age) ? args.age : undefined,
+      currentJob: args.currentJob?.trim() || undefined,
       deviceType: args.deviceType || "ANDROID",
       deviceId: args.deviceId?.trim() || undefined,
       deviceModel: args.deviceModel?.trim() || undefined,
@@ -363,6 +635,13 @@ export const approveSubmission = mutation({
         email: sub.email || existing.email,
         deviceModel: sub.deviceModel || existing.deviceModel,
         lastDownloadedDeviceModel: sub.deviceModel || existing.lastDownloadedDeviceModel,
+        school: sub.school || existing.school,
+        yearGraduated: sub.yearGraduated || existing.yearGraduated,
+        trainingCategory: sub.trainingCategory || existing.trainingCategory,
+        skills: sub.skills || existing.skills,
+        currentAddress: sub.currentAddress || existing.currentAddress,
+        age: sub.age !== undefined ? sub.age : existing.age,
+        currentJob: sub.currentJob || existing.currentJob,
         updatedBy: approverName,
         updatedAt: updateTimestamp,
       });
@@ -380,6 +659,13 @@ export const approveSubmission = mutation({
         deviceType: sub.deviceType || "ANDROID",
         deviceModel: sub.deviceModel,
         lastDownloadedDeviceModel: sub.deviceModel,
+        school: sub.school,
+        yearGraduated: sub.yearGraduated,
+        trainingCategory: sub.trainingCategory,
+        skills: sub.skills,
+        currentAddress: sub.currentAddress,
+        age: sub.age,
+        currentJob: sub.currentJob,
         status: "ACTIVE",
         email: sub.email,
         createdAt: new Date().toISOString().split("T")[0],
@@ -450,6 +736,13 @@ export const bulkApproveSubmissions = mutation({
           boundDeviceId: sub.deviceId || existing.boundDeviceId,
           deviceModel: sub.deviceModel || existing.deviceModel,
           lastDownloadedDeviceModel: sub.deviceModel || existing.lastDownloadedDeviceModel,
+          school: sub.school || existing.school,
+          yearGraduated: sub.yearGraduated || existing.yearGraduated,
+          trainingCategory: sub.trainingCategory || existing.trainingCategory,
+          skills: sub.skills || existing.skills,
+          currentAddress: sub.currentAddress || existing.currentAddress,
+          age: sub.age !== undefined ? sub.age : existing.age,
+          currentJob: sub.currentJob || existing.currentJob,
           updatedBy: approverName,
           updatedAt: updateTimestamp,
         });
@@ -467,6 +760,13 @@ export const bulkApproveSubmissions = mutation({
           boundDeviceId: sub.deviceId,
           deviceModel: sub.deviceModel,
           lastDownloadedDeviceModel: sub.deviceModel,
+          school: sub.school,
+          yearGraduated: sub.yearGraduated,
+          trainingCategory: sub.trainingCategory,
+          skills: sub.skills,
+          currentAddress: sub.currentAddress,
+          age: sub.age,
+          currentJob: sub.currentJob,
           status: "ACTIVE",
           email: sub.email,
           createdAt: nowStr.split("T")[0],

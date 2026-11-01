@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { assertCallerAuthorized, assertCallerAuthorizedGroup } from "./access";
+import { validateReservistFields } from "./enlistment";
 
 // Helper: Normalize Philippine mobile number core 10 digits (e.g. 9XXXXXXXXX)
 function normalizePhMobile(raw: string): string {
@@ -36,6 +37,13 @@ export const create = mutation({
     unit: v.string(),
     company: v.optional(v.string()),
     email: v.optional(v.string()),
+    school: v.optional(v.string()),
+    yearGraduated: v.optional(v.string()),
+    trainingCategory: v.optional(v.string()),
+    skills: v.optional(v.string()),
+    currentAddress: v.optional(v.string()),
+    age: v.optional(v.number()),
+    currentJob: v.optional(v.string()),
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     createdBy: v.optional(v.string()),
     createdByEmail: v.optional(v.string()),
@@ -44,11 +52,36 @@ export const create = mutation({
     await assertCallerAuthorized(ctx, args.createdByEmail, "create personnel");
     await assertCallerAuthorizedGroup(ctx, args.createdByEmail, [args.groupName], "create personnel");
 
+    // Validate Military & Reservist Background fields
+    validateReservistFields({
+      age: args.age,
+      yearGraduated: args.yearGraduated,
+      trainingCategory: args.trainingCategory,
+      school: args.school,
+      currentAddress: args.currentAddress,
+      skills: args.skills,
+      currentJob: args.currentJob,
+    });
+
     // Duplicate Phone Number Validation
     const incomingCore = normalizePhMobile(args.mobileNumber);
     if (incomingCore.length >= 10) {
-      const allPersonnel = await ctx.db.query("personnel").collect();
-      const duplicate = allPersonnel.find((p) => normalizePhMobile(p.mobileNumber) === incomingCore);
+      const canonical = "+63" + incomingCore;
+      const local = "0" + incomingCore;
+      const duplicate =
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonical))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", local))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", args.mobileNumber.trim()))
+          .first());
+
       if (duplicate) {
         throw new Error(
           `Mobile number (${args.mobileNumber}) is already registered to ${duplicate.rank} ${duplicate.firstName} ${duplicate.lastName} (${duplicate.groupName}). Duplicate numbers are not allowed.`
@@ -68,6 +101,13 @@ export const create = mutation({
       unit: args.unit,
       company: args.company?.trim() || undefined,
       email: args.email,
+      school: args.school?.trim() || undefined,
+      yearGraduated: args.yearGraduated?.trim() || undefined,
+      trainingCategory: args.trainingCategory?.trim() || undefined,
+      skills: args.skills?.trim() || undefined,
+      currentAddress: args.currentAddress?.trim() || undefined,
+      age: typeof args.age === "number" && !isNaN(args.age) ? args.age : undefined,
+      currentJob: args.currentJob?.trim() || undefined,
       deviceType: args.deviceType || "ANDROID",
       status: "ACTIVE",
       createdAt: new Date().toISOString().split("T")[0],
@@ -102,6 +142,13 @@ export const update = mutation({
     unit: v.string(),
     company: v.optional(v.string()),
     email: v.optional(v.string()),
+    school: v.optional(v.string()),
+    yearGraduated: v.optional(v.string()),
+    trainingCategory: v.optional(v.string()),
+    skills: v.optional(v.string()),
+    currentAddress: v.optional(v.string()),
+    age: v.optional(v.number()),
+    currentJob: v.optional(v.string()),
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     updatedBy: v.optional(v.string()),
     updatedByEmail: v.optional(v.string()),
@@ -121,14 +168,37 @@ export const update = mutation({
     }
     await assertCallerAuthorizedGroup(ctx, args.updatedByEmail, groupsToCheck, "update personnel");
 
+    // Validate Military & Reservist Background fields
+    validateReservistFields({
+      age: data.age,
+      yearGraduated: data.yearGraduated,
+      trainingCategory: data.trainingCategory,
+      school: data.school,
+      currentAddress: data.currentAddress,
+      skills: data.skills,
+      currentJob: data.currentJob,
+    });
+
     // Duplicate Phone Number Validation (Exclude self)
     const incomingCore = normalizePhMobile(data.mobileNumber);
     if (incomingCore.length >= 10) {
-      const allPersonnel = await ctx.db.query("personnel").collect();
-      const duplicate = allPersonnel.find(
-        (p) => p._id !== id && normalizePhMobile(p.mobileNumber) === incomingCore
-      );
-      if (duplicate) {
+      const canonical = "+63" + incomingCore;
+      const local = "0" + incomingCore;
+      const duplicate =
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonical))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", local))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", data.mobileNumber.trim()))
+          .first());
+
+      if (duplicate && duplicate._id !== id) {
         throw new Error(
           `Mobile number (${data.mobileNumber}) is already registered to ${duplicate.rank} ${duplicate.firstName} ${duplicate.lastName} (${duplicate.groupName}). Duplicate numbers are not allowed.`
         );
@@ -154,6 +224,13 @@ export const update = mutation({
       unit: data.unit,
       company: data.company !== undefined ? (data.company.trim() || undefined) : existing.company,
       email: data.email || "",
+      school: data.school !== undefined ? (data.school.trim() || undefined) : existing.school,
+      yearGraduated: data.yearGraduated !== undefined ? (data.yearGraduated.trim() || undefined) : existing.yearGraduated,
+      trainingCategory: data.trainingCategory !== undefined ? (data.trainingCategory.trim() || undefined) : existing.trainingCategory,
+      skills: data.skills !== undefined ? (data.skills.trim() || undefined) : existing.skills,
+      currentAddress: data.currentAddress !== undefined ? (data.currentAddress.trim() || undefined) : existing.currentAddress,
+      age: data.age !== undefined ? (typeof data.age === "number" && !isNaN(data.age) ? data.age : undefined) : existing.age,
+      currentJob: data.currentJob !== undefined ? (data.currentJob.trim() || undefined) : existing.currentJob,
       deviceType: data.deviceType || existing.deviceType || "ANDROID",
       updatedBy: editorName,
       updatedAt: updateTimestamp,

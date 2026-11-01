@@ -28,6 +28,9 @@ import {
   MapPin,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  Lock,
+  LogIn,
 } from "lucide-react";
 import { useCurrentOfficer } from "@/components/officer-context";
 
@@ -55,6 +58,7 @@ export function DashboardNav({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -155,30 +159,61 @@ export function DashboardNav({
   useEffect(() => {
     const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
     let timeoutId: NodeJS.Timeout;
+    let lastActivity = Date.now();
 
-    const resetTimer = () => {
+    const triggerExpiry = async () => {
+      setIsSessionExpired(true);
+      try {
+        await signOut({ redirect: false });
+      } catch (err) {
+        console.error("SignOut error during inactivity lock:", err);
+      }
+    };
+
+    const handleUserActivity = () => {
+      if (isSessionExpired) return;
+
+      const now = Date.now();
+      // If 15 minutes have passed while the device/tab was suspended or idle
+      if (now - lastActivity >= INACTIVITY_LIMIT_MS) {
+        triggerExpiry();
+        return;
+      }
+
+      lastActivity = now;
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        signOut({ callbackUrl: "/sign-in" });
-      }, INACTIVITY_LIMIT_MS);
+      timeoutId = setTimeout(triggerExpiry, INACTIVITY_LIMIT_MS);
+    };
+
+    const checkOnFocusOrVisibility = () => {
+      if (isSessionExpired) return;
+      const now = Date.now();
+      if (now - lastActivity >= INACTIVITY_LIMIT_MS) {
+        triggerExpiry();
+      }
     };
 
     // User activity trigger events
     const activityEvents = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "click"];
     activityEvents.forEach((event) => {
-      window.addEventListener(event, resetTimer, { passive: true });
+      window.addEventListener(event, handleUserActivity, { passive: true });
     });
 
+    window.addEventListener("focus", checkOnFocusOrVisibility);
+    document.addEventListener("visibilitychange", checkOnFocusOrVisibility);
+
     // Start initial timer
-    resetTimer();
+    timeoutId = setTimeout(triggerExpiry, INACTIVITY_LIMIT_MS);
 
     return () => {
       clearTimeout(timeoutId);
       activityEvents.forEach((event) => {
-        window.removeEventListener(event, resetTimer);
+        window.removeEventListener(event, handleUserActivity);
       });
+      window.removeEventListener("focus", checkOnFocusOrVisibility);
+      document.removeEventListener("visibilitychange", checkOnFocusOrVisibility);
     };
-  }, []);
+  }, [isSessionExpired]);
 
   const handleConfirmSignOut = async () => {
     setIsSigningOut(true);
@@ -591,6 +626,89 @@ export function DashboardNav({
                     Confirm Sign Out
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 15-Minute Session Inactivity Security Lock Modal */}
+      {isSessionExpired && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="session-expired-title"
+          className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-left animate-in zoom-in-95 duration-150">
+            {/* Header banner */}
+            <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 bg-amber-50/60">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 shadow-xs">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <div className="min-w-0">
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-200/70 text-amber-900 text-[10px] font-bold font-mono uppercase tracking-wider mb-1">
+                    <Shield className="w-3 h-3" />
+                    OPSEC Security Lock
+                  </div>
+                  <h3
+                    id="session-expired-title"
+                    className="text-base sm:text-lg font-bold text-slate-900 leading-snug"
+                  >
+                    Session Expired
+                  </h3>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 space-y-4">
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Your administrative session has timed out after <strong>15 minutes of inactivity</strong>. The console was automatically locked to prevent unauthorized physical or terminal access.
+              </p>
+
+              {/* Officer Credential Card */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-300">
+                    {effectiveName ? effectiveName.slice(0, 2).toUpperCase() : "OF"}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {effectiveRank ? `${effectiveRank} ` : ""}{effectiveName}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate">
+                      {userEmail}
+                    </p>
+                  </div>
+                </div>
+                <span className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-bold uppercase tracking-wider">
+                  <Lock className="w-3 h-3" />
+                  Locked
+                </span>
+              </div>
+
+              {/* Security Advisory Notice */}
+              <div className="p-3 rounded-xl bg-slate-100/80 border border-slate-200/80 text-[11px] text-slate-600 leading-relaxed flex items-start gap-2">
+                <Shield className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+                <span>
+                  Authentication tokens have been cleared from this browser. Sign in again with your authorized Google credentials to resume duty.
+                </span>
+              </div>
+            </div>
+
+            {/* Action Footer */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = "/sign-in?reason=session_expired";
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-800 hover:bg-emerald-900 active:scale-[0.99] text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all inline-flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <LogIn className="w-4 h-4" />
+                Sign In Again
               </button>
             </div>
           </div>

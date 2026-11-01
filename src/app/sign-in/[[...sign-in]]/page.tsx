@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { Shield, Radio, Lock, Activity, CheckCircle2, ExternalLink, AlertCircle } from "lucide-react";
+import { Shield, Radio, Lock, Activity, CheckCircle2, ExternalLink, AlertCircle, Clock } from "lucide-react";
 import { signIn, auth } from "@/auth";
 import { SuspensionCountdown } from "@/components/suspension-countdown";
 
@@ -43,6 +43,12 @@ export default async function SignInPage({
     (params?.error === "AccessDenied" ||
       params?.error === "OAuthAccountNotLinked" ||
       params?.error === "Configuration");
+
+  const isExpired =
+    !isSuspended &&
+    !isRevoked &&
+    !isDenied &&
+    params?.reason === "session_expired";
 
   const suspendedReason =
     params?.reason
@@ -287,6 +293,21 @@ export default async function SignInPage({
                     </p>
                     <p className="text-[11px] text-red-700 leading-relaxed mt-0.5">
                       Your Google account is not on the approved 10RCDG personnel roster. Please contact the Group Commander for access authorization.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Session Expired (15-Minute Inactivity) Security Banner */}
+              {isExpired && (
+                <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <Clock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-amber-950">
+                      Session Expired (15-Minute Inactivity)
+                    </p>
+                    <p className="text-[11px] text-amber-800 leading-relaxed mt-0.5">
+                      Your administrative console was locked after 15 minutes of inactivity for OPSEC compliance. Please sign in again with your authorized Google account.
                     </p>
                   </div>
                 </div>

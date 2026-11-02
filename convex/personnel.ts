@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { assertCallerAuthorized, assertCallerAuthorizedGroup } from "./access";
 import { validateReservistFields } from "./enlistment";
 import { adjustGroupMemberCount } from "./groups";
@@ -549,6 +550,7 @@ export const linkDevice = mutation({
     deviceModel: v.optional(v.string()),
     officerEmail: v.optional(v.string()),
     appDeviceId: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     if (args.officerEmail) {
@@ -621,6 +623,23 @@ export const linkDevice = mutation({
       });
     }
 
+    // Dual-Database Sync Bridge: Asynchronously mirror pairing to partner Convex deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "personnel:linkDevice",
+        args: {
+          soldierId: args.soldierId,
+          fcmToken: args.fcmToken,
+          deviceModel: args.deviceModel,
+          officerEmail: args.officerEmail,
+          appDeviceId: args.appDeviceId,
+          isMirrored: true,
+        },
+      });
+    }
+
     return {
       success: true,
       soldierId: args.soldierId,
@@ -672,6 +691,7 @@ export const unlinkDevice = mutation({
     reason: v.optional(v.string()),
     officerName: v.optional(v.string()),
     officerEmail: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     if (args.officerEmail) {
@@ -709,6 +729,22 @@ export const unlinkDevice = mutation({
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
 
+    // Dual-Database Sync Bridge: Asynchronously mirror unlinking to partner Convex deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "personnel:unlinkDevice",
+        args: {
+          soldierId: args.soldierId,
+          reason: args.reason,
+          officerName: args.officerName,
+          officerEmail: args.officerEmail,
+          isMirrored: true,
+        },
+      });
+    }
+
     return {
       success: true,
       previousDevice: prevDevice,
@@ -724,6 +760,7 @@ export const batchUnlinkDevices = mutation({
     reason: v.optional(v.string()),
     officerName: v.optional(v.string()),
     officerEmail: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     if (args.officerEmail) {
@@ -749,6 +786,22 @@ export const batchUnlinkDevices = mutation({
         });
         unlinkedCount++;
       }
+    }
+
+    // Dual-Database Sync Bridge: Asynchronously mirror batch unlinking to partner Convex deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "personnel:batchUnlinkDevices",
+        args: {
+          soldierIds: args.soldierIds,
+          reason: args.reason,
+          officerName: args.officerName,
+          officerEmail: args.officerEmail,
+          isMirrored: true,
+        },
+      });
     }
 
     // Record audit log
@@ -840,6 +893,7 @@ export const updateLocation = mutation({
     latitude: v.number(),
     longitude: v.number(),
     accuracy: v.optional(v.number()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const soldier = await ctx.db.get(args.soldierId);
@@ -872,6 +926,23 @@ export const updateLocation = mutation({
       isGpsEnabled: true,
       lastActiveAt: nowIso,
     });
+
+    // Dual-Database Sync Bridge: Asynchronously mirror GPS update to partner Convex deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "personnel:updateLocation",
+        args: {
+          soldierId: args.soldierId,
+          latitude: args.latitude,
+          longitude: args.longitude,
+          accuracy: args.accuracy,
+          isMirrored: true,
+        },
+      });
+    }
+
     return { success: true, timestamp: nowIso };
   },
 });

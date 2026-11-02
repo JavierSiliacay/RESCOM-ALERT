@@ -10,6 +10,7 @@
 
 import type * as access from "../access.js";
 import type * as auditLogs from "../auditLogs.js";
+import type * as bridge from "../bridge.js";
 import type * as broadcasts from "../broadcasts.js";
 import type * as downloads from "../downloads.js";
 import type * as enlistment from "../enlistment.js";
@@ -27,6 +28,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   access: typeof access;
   auditLogs: typeof auditLogs;
+  bridge: typeof bridge;
   broadcasts: typeof broadcasts;
   downloads: typeof downloads;
   enlistment: typeof enlistment;

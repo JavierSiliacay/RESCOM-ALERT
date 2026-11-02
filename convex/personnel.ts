@@ -170,6 +170,7 @@ export const update = mutation({
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     updatedBy: v.optional(v.string()),
     updatedByEmail: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.updatedByEmail, "update personnel");
@@ -270,6 +271,19 @@ export const update = mutation({
       ipAddress: "127.0.0.1",
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
+
+    // Dual-Database Sync Bridge: Asynchronously mirror update to partner Convex deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "personnel:update",
+        args: {
+          ...args,
+          isMirrored: true,
+        },
+      });
+    }
   },
 });
 
@@ -360,6 +374,7 @@ export const remove = mutation({
   args: {
     id: v.id("personnel"),
     officerEmail: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.officerEmail, "remove personnel");
@@ -378,6 +393,20 @@ export const remove = mutation({
       });
     }
     await ctx.db.delete(args.id);
+
+    // Dual-Database Sync Bridge: Asynchronously mirror deletion to partner Convex deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "personnel:remove",
+        args: {
+          id: args.id,
+          officerEmail: args.officerEmail,
+          isMirrored: true,
+        },
+      });
+    }
   },
 });
 

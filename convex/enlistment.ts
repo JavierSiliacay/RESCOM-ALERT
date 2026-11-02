@@ -652,9 +652,26 @@ export const listSubmissions = query({
         .query("enlistmentSubmissions")
         .withIndex("by_campaignId", (q) => q.eq("campaignId", args.campaignId!))
         .order("desc")
-        .collect();
+        .take(60);
     }
-    return await ctx.db.query("enlistmentSubmissions").order("desc").take(200);
+    const pending = await ctx.db
+      .query("enlistmentSubmissions")
+      .withIndex("by_status", (q) => q.eq("status", "PENDING"))
+      .order("desc")
+      .take(50);
+    const recent = await ctx.db
+      .query("enlistmentSubmissions")
+      .order("desc")
+      .take(50);
+    const seen = new Set();
+    const combined: any[] = [];
+    for (const item of [...pending, ...recent]) {
+      if (!seen.has(item._id)) {
+        seen.add(item._id);
+        combined.push(item);
+      }
+    }
+    return combined;
   },
 });
 

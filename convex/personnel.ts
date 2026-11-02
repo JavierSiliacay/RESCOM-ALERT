@@ -26,6 +26,19 @@ export const list = query({
   },
 });
 
+// Lightweight KPI summary for Overview page (reads 13 group counter docs instead of 378 full personnel profiles)
+export const getRosterSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    const groups = await ctx.db.query("contactGroups").collect();
+    const total = groups.reduce((acc, g) => acc + (g.memberCount ?? 0), 0);
+    return {
+      totalPersonnel: total,
+      activePersonnel: total,
+    };
+  },
+});
+
 // Add new personnel
 export const create = mutation({
   args: {
@@ -805,7 +818,22 @@ export const heartbeat = mutation({
   },
 });
 
-// Mobile Device Mutation: Update GPS Location (v1.2.0)
+// Helper to calculate distance in meters between two coordinates (Haversine formula)
+function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3; // Earth radius in meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Mobile Device Mutation: Update GPS Location (Throttled to eliminate idle re-renders)
 export const updateLocation = mutation({
   args: {
     soldierId: v.id("personnel"),
@@ -818,6 +846,23 @@ export const updateLocation = mutation({
     if (!soldier) {
       return { success: false, reason: "NOT_FOUND" };
     }
+
+    const now = Date.now();
+    const lastUpdateMs = soldier.locationUpdatedAt ? Date.parse(soldier.locationUpdatedAt) : 0;
+    const elapsedMs = now - lastUpdateMs;
+    const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+
+    // Calculate movement distance if previous coordinates exist
+    let distanceMoved = 999999;
+    if (typeof soldier.latitude === "number" && typeof soldier.longitude === "number") {
+      distanceMoved = getDistanceMeters(soldier.latitude, soldier.longitude, args.latitude, args.longitude);
+    }
+
+    // Skip database write if soldier has not moved >= 150m and last update was within 15 minutes
+    if (distanceMoved < 150 && elapsedMs < FIFTEEN_MINUTES_MS && soldier.isGpsEnabled) {
+      return { success: true, throttled: true, timestamp: soldier.locationUpdatedAt };
+    }
+
     const nowIso = new Date().toISOString();
     await ctx.db.patch(args.soldierId, {
       latitude: args.latitude,

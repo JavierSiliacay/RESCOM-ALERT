@@ -2,11 +2,11 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { assertCallerAuthorized, assertCallerAuthorizedGroup } from "./access";
 
-// List recent broadcast transmissions (capped at 100 to conserve Database I/O)
+// List recent broadcast transmissions (capped at 30 to conserve Database I/O)
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("broadcasts").order("desc").take(100);
+    return await ctx.db.query("broadcasts").order("desc").take(30);
   },
 });
 

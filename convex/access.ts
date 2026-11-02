@@ -561,16 +561,18 @@ export const heartbeat = mutation({
     const cleanEmail = args.email.toLowerCase().trim();
     const now = Date.now();
 
-    const existing =
-      (await ctx.db
-        .query("authorizedUsers")
-        .withIndex("by_email", (q) => q.eq("email", cleanEmail))
-        .first()) ||
-      (await ctx.db.query("authorizedUsers").collect()).find(
-        (u) => u.email.toLowerCase().trim() === cleanEmail
-      );
+    const existing = await ctx.db
+      .query("authorizedUsers")
+      .withIndex("by_email", (q) => q.eq("email", cleanEmail))
+      .first();
 
     if (existing) {
+      // Throttle: If pinged within the last 2 minutes and not suspended, skip database write!
+      const isSuspended = existing.status === "SUSPENDED";
+      if (existing.lastSeenAt && now - existing.lastSeenAt < 120_000 && !isSuspended) {
+        return existing._id;
+      }
+
       const patchData: any = {
         lastSeenAt: now,
         lastLogin: "Active Now",

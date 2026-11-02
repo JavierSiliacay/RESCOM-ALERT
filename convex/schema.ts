@@ -55,6 +55,7 @@ export default defineSchema({
     description: v.string(),
     color: v.string(),
     unit: v.string(),
+    memberCount: v.optional(v.number()),
     createdAt: v.string(),
   }).index("by_name", ["name"]),
 
@@ -176,6 +177,9 @@ export default defineSchema({
     expiresAt: v.number(), // Unix timestamp in ms
     duration: v.string(), // e.g. "24 Hours", "3 Days"
     status: v.union(v.literal("ACTIVE"), v.literal("CLOSED")),
+    totalSubmissions: v.optional(v.number()),
+    pendingCount: v.optional(v.number()),
+    approvedCount: v.optional(v.number()),
     createdBy: v.string(),
     createdAt: v.string(),
   })
@@ -253,6 +257,7 @@ export default defineSchema({
     passcodeExpiresAt: v.optional(v.number()), // Timestamp when the download window/passcode expires
     sessionId: v.optional(v.string()), // Unique window session token; increments to wipe all locked-out devices on new window creation
     windowTitle: v.optional(v.string()), // Optional mobilization window title (e.g. "10RCDG Troop Mobilization")
+    totalDeviceDownloads: v.optional(v.number()), // Cached total device count to eliminate queries on public download portal
     sessionUnlockCount: v.optional(v.number()), // Number of unique soldiers who unlocked the gate this session
     sessionUnlockDevices: v.optional(v.array(v.string())), // Device IDs for deduplication in current session
     updatedBy: v.optional(v.string()),

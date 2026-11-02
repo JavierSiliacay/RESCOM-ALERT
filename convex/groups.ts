@@ -2,6 +2,37 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { assertCallerAuthorized } from "./access";
 
+// Helper to adjust memberCount of a contactGroup by delta (+1 or -1)
+export async function adjustGroupMemberCount(
+  ctx: any,
+  groupId: string | undefined,
+  groupName: string | undefined,
+  delta: number
+) {
+  if (groupId) {
+    try {
+      const group = await ctx.db.get(groupId);
+      if (group) {
+        const current = group.memberCount ?? 0;
+        await ctx.db.patch(group._id, { memberCount: Math.max(0, current + delta) });
+        return;
+      }
+    } catch {
+      // Invalid ID, fall back to groupName lookup below
+    }
+  }
+  if (groupName) {
+    const group = await ctx.db
+      .query("contactGroups")
+      .withIndex("by_name", (q: any) => q.eq("name", groupName))
+      .first();
+    if (group) {
+      const current = group.memberCount ?? 0;
+      await ctx.db.patch(group._id, { memberCount: Math.max(0, current + delta) });
+    }
+  }
+}
+
 // Fast, lightweight query for dropdown selects & filters (avoids scanning the personnel table)
 export const listOptions = query({
   args: {},
@@ -10,22 +41,34 @@ export const listOptions = query({
   },
 });
 
-// List all contact groups with dynamic member counts
+// List all contact groups with precomputed member counts (zero personnel table scans)
 export const list = query({
+  args: {},
+  handler: async (ctx) => {
+    const groups = await ctx.db.query("contactGroups").collect();
+    return groups.map((g) => ({
+      ...g,
+      memberCount: g.memberCount ?? 0,
+    }));
+  },
+});
+
+// One-time / repair synchronization to compute and store member counts on contactGroups
+export const syncMemberCounts = mutation({
   args: {},
   handler: async (ctx) => {
     const groups = await ctx.db.query("contactGroups").collect();
     const allPersonnel = await ctx.db.query("personnel").collect();
 
-    return groups.map((g) => {
+    let updated = 0;
+    for (const g of groups) {
       const memberCount = allPersonnel.filter(
         (p) => p.groupId === g._id || p.groupName === g.name
       ).length;
-      return {
-        ...g,
-        memberCount,
-      };
-    });
+      await ctx.db.patch(g._id, { memberCount });
+      updated++;
+    }
+    return { success: true, updated };
   },
 });
 
@@ -43,6 +86,7 @@ export const create = mutation({
     const { officerEmail, ...data } = args;
     return await ctx.db.insert("contactGroups", {
       ...data,
+      memberCount: 0,
       createdAt: new Date().toISOString().split("T")[0],
     });
   },
@@ -97,6 +141,10 @@ export const remove = mutation({
           updatedBy: "System (Group Deletion Reassignment)",
         });
       }
+
+      await ctx.db.patch(fallbackGroup._id, {
+        memberCount: (fallbackGroup.memberCount ?? 0) + targetPersonnel.length,
+      });
 
       // Reassign enlistment submissions
       const allSubmissions = await ctx.db.query("enlistmentSubmissions").collect();
@@ -156,10 +204,17 @@ export const bulkReassignGroup = mutation({
       }
 
       await ctx.db.patch(pId, updateData);
+      // Adjust source group count down
+      await adjustGroupMemberCount(ctx, person.groupId, person.groupName, -1);
       transferredCount++;
       if (sampleTroopNames.length < 5) {
         sampleTroopNames.push(`${person.rank} ${person.lastName}`);
       }
+    }
+
+    // Adjust target group count up
+    if (transferredCount > 0) {
+      await adjustGroupMemberCount(ctx, targetGroup._id, targetGroup.name, transferredCount);
     }
 
     // Insert Audit Log
@@ -231,6 +286,12 @@ export const transferEntireGroup = mutation({
 
       await ctx.db.patch(p._id, updateData);
     }
+
+    // Update cached group counts
+    await ctx.db.patch(sourceGroup._id, { memberCount: 0 });
+    await ctx.db.patch(targetGroup._id, {
+      memberCount: (targetGroup.memberCount ?? 0) + sourcePersonnel.length,
+    });
 
     // Also update any enlistment submissions referencing the source group
     const allSubmissions = await ctx.db.query("enlistmentSubmissions").collect();

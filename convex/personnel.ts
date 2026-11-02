@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { assertCallerAuthorized, assertCallerAuthorizedGroup } from "./access";
 import { validateReservistFields } from "./enlistment";
+import { adjustGroupMemberCount } from "./groups";
 
 // Helper: Normalize Philippine mobile number core 10 digits (e.g. 9XXXXXXXXX)
 function normalizePhMobile(raw: string): string {
@@ -113,6 +114,9 @@ export const create = mutation({
       createdAt: new Date().toISOString().split("T")[0],
       createdBy: creatorName,
     });
+
+    // Update group cached member count
+    await adjustGroupMemberCount(ctx, args.groupId, args.groupName, 1);
 
     // Record audit log
     await ctx.db.insert("auditLogs", {
@@ -236,6 +240,12 @@ export const update = mutation({
       updatedAt: updateTimestamp,
     });
 
+    // Update group counts if group changed
+    if (existing.groupName !== data.groupName || existing.groupId !== data.groupId) {
+      await adjustGroupMemberCount(ctx, existing.groupId, existing.groupName, -1);
+      await adjustGroupMemberCount(ctx, data.groupId, data.groupName, 1);
+    }
+
     // Record audit log
     await ctx.db.insert("auditLogs", {
       userName: editorName,
@@ -342,6 +352,7 @@ export const remove = mutation({
     const person = await ctx.db.get(args.id);
     if (person) {
       await assertCallerAuthorizedGroup(ctx, args.officerEmail, [person.groupName], "remove personnel");
+      await adjustGroupMemberCount(ctx, person.groupId, person.groupName, -1);
       await ctx.db.insert("auditLogs", {
         userName: "Authorized Officer",
         userRole: "ADMIN",

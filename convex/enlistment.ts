@@ -1,6 +1,37 @@
 import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { calculateSuspensionExpiry, assertCallerAuthorized } from "./access";
+import { adjustGroupMemberCount } from "./groups";
+
+// Helper to atomically adjust cached counts on enlistmentCampaigns
+export async function adjustCampaignCounts(
+  ctx: any,
+  campaignId: any,
+  delta: { total?: number; pending?: number; approved?: number }
+) {
+  if (!campaignId) return;
+  try {
+    const campaign = await ctx.db.get(campaignId);
+    if (!campaign) return;
+
+    const patch: Record<string, number> = {};
+    if (delta.total !== undefined) {
+      patch.totalSubmissions = Math.max(0, (campaign.totalSubmissions ?? 0) + delta.total);
+    }
+    if (delta.pending !== undefined) {
+      patch.pendingCount = Math.max(0, (campaign.pendingCount ?? 0) + delta.pending);
+    }
+    if (delta.approved !== undefined) {
+      patch.approvedCount = Math.max(0, (campaign.approvedCount ?? 0) + delta.approved);
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(campaign._id, patch);
+    }
+  } catch (err) {
+    console.error("Failed to adjust campaign counts:", err);
+  }
+}
 
 // Helper: Normalize Philippine mobile number core 10 digits (e.g. 9XXXXXXXXX)
 function normalizePhMobile(raw: string): string {
@@ -129,6 +160,9 @@ export const createCampaign = mutation({
       expiresAt,
       duration: args.durationStr.trim(),
       status: "ACTIVE",
+      totalSubmissions: 0,
+      pendingCount: 0,
+      approvedCount: 0,
       createdBy: args.createdBy,
       createdAt: new Date().toISOString(),
     });
@@ -141,25 +175,45 @@ export const createCampaign = mutation({
   },
 });
 
-// 2. List all Campaigns (For Commander / S3 Dashboard)
+// One-time / repair synchronization to compute and store submission counts on enlistmentCampaigns
+export const syncCampaignCounts = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const campaigns = await ctx.db.query("enlistmentCampaigns").collect();
+    const submissions = await ctx.db.query("enlistmentSubmissions").collect();
+
+    let updated = 0;
+    for (const c of campaigns) {
+      const campSubs = submissions.filter((s) => s.campaignId === c._id);
+      const pendingCount = campSubs.filter((s) => s.status === "PENDING").length;
+      const approvedCount = campSubs.filter((s) => s.status === "APPROVED").length;
+
+      await ctx.db.patch(c._id, {
+        totalSubmissions: campSubs.length,
+        pendingCount,
+        approvedCount,
+      });
+      updated++;
+    }
+    return { success: true, updated };
+  },
+});
+
+// 2. List all Campaigns (For Commander / S3 Dashboard - zero submission table scans)
 export const listCampaigns = query({
   args: {},
   handler: async (ctx) => {
     const campaigns = await ctx.db.query("enlistmentCampaigns").order("desc").collect();
-    const submissions = await ctx.db.query("enlistmentSubmissions").collect();
     const now = Date.now();
 
     return campaigns.map((c) => {
-      const campSubs = submissions.filter((s) => s.campaignId === c._id);
-      const pendingCount = campSubs.filter((s) => s.status === "PENDING").length;
-      const approvedCount = campSubs.filter((s) => s.status === "APPROVED").length;
       const isExpired = now >= c.expiresAt || c.status === "CLOSED";
 
       return {
         ...c,
-        totalSubmissions: campSubs.length,
-        pendingCount,
-        approvedCount,
+        totalSubmissions: c.totalSubmissions ?? 0,
+        pendingCount: c.pendingCount ?? 0,
+        approvedCount: c.approvedCount ?? 0,
         isExpired,
       };
     });
@@ -176,9 +230,10 @@ export const getCampaignPublic = query({
         .query("enlistmentCampaigns")
         .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
         .first()) ||
-      (await ctx.db.query("enlistmentCampaigns").collect()).find(
-        (c) => c.campaignCode.toLowerCase() === cleanCode
-      );
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", args.campaignCode.trim()))
+        .first());
 
     if (!campaign) {
       return null;
@@ -217,9 +272,10 @@ export const verifyPasscode = query({
         .query("enlistmentCampaigns")
         .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
         .first()) ||
-      (await ctx.db.query("enlistmentCampaigns").collect()).find(
-        (c) => c.campaignCode.toLowerCase() === cleanCode
-      );
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", args.campaignCode.trim()))
+        .first());
 
     if (!campaign) {
       return { valid: false, message: "Enlistment campaign not found." };
@@ -250,9 +306,10 @@ export const validatePasscode = mutation({
         .query("enlistmentCampaigns")
         .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
         .first()) ||
-      (await ctx.db.query("enlistmentCampaigns").collect()).find(
-        (c) => c.campaignCode.toLowerCase() === cleanCode
-      );
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", args.campaignCode.trim()))
+        .first());
 
     if (!campaign) {
       return { valid: false, message: "Enlistment campaign not found." };
@@ -342,18 +399,26 @@ export const checkStep1Duplicate = mutation({
     }
 
     // Check by First Name + Last Name in active personnel using surname index
-    const surnameTroops = await ctx.db
-      .query("personnel")
-      .withIndex("by_lastName", (q) => q.eq("lastName", args.lastName.trim()))
-      .collect();
+    const trimmedLast = args.lastName.trim();
+    const lastNameVariations = Array.from(
+      new Set([
+        trimmedLast,
+        trimmedLast.toUpperCase(),
+        trimmedLast.charAt(0).toUpperCase() + trimmedLast.slice(1).toLowerCase(),
+      ])
+    );
+
+    let surnameTroops: any[] = [];
+    for (const variant of lastNameVariations) {
+      const troops = await ctx.db
+        .query("personnel")
+        .withIndex("by_lastName", (q) => q.eq("lastName", variant))
+        .collect();
+      surnameTroops.push(...troops);
+    }
 
     const existingTroopByName =
-      surnameTroops.find((p) => isFullNameMatch(p.firstName, p.lastName)) ||
-      (surnameTroops.length === 0
-        ? (await ctx.db.query("personnel").collect()).find((p) =>
-            isFullNameMatch(p.firstName, p.lastName)
-          )
-        : null);
+      surnameTroops.find((p) => isFullNameMatch(p.firstName, p.lastName)) || null;
 
     if (existingTroopByName) {
       return {
@@ -396,20 +461,19 @@ export const checkStep1Duplicate = mutation({
     }
 
     // Check by Name in pending submissions using surname index
-    const surnameSubmissions = await ctx.db
-      .query("enlistmentSubmissions")
-      .withIndex("by_lastName", (q) => q.eq("lastName", args.lastName.trim()))
-      .collect();
+    let surnameSubmissions: any[] = [];
+    for (const variant of lastNameVariations) {
+      const subs = await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_lastName", (q) => q.eq("lastName", variant))
+        .collect();
+      surnameSubmissions.push(...subs);
+    }
 
     const existingSubmissionByName =
       surnameSubmissions.find(
         (s) => s.status !== "REJECTED" && isFullNameMatch(s.firstName, s.lastName)
-      ) ||
-      (surnameSubmissions.length === 0
-        ? (await ctx.db.query("enlistmentSubmissions").collect()).find(
-            (s) => s.status !== "REJECTED" && isFullNameMatch(s.firstName, s.lastName)
-          )
-        : null);
+      ) || null;
 
 
     if (existingSubmissionByName) {
@@ -464,9 +528,10 @@ export const submitEnlistment = mutation({
         .query("enlistmentCampaigns")
         .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
         .first()) ||
-      (await ctx.db.query("enlistmentCampaigns").collect()).find(
-        (c) => c.campaignCode.toLowerCase() === cleanCode
-      );
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", args.campaignCode.trim()))
+        .first());
 
     if (!campaign) {
       throw new ConvexError("Invalid or non-existent enlistment campaign.");
@@ -569,6 +634,9 @@ export const submitEnlistment = mutation({
       submittedAt: new Date().toISOString(),
     });
 
+    // Update campaign cached counter
+    await adjustCampaignCounts(ctx, campaign._id, { total: 1, pending: 1 });
+
     return { success: true, submissionId };
   },
 });
@@ -617,6 +685,11 @@ export const approveSubmission = mutation({
       reviewedAt: new Date().toISOString(),
       reviewedBy: approverName,
     });
+
+    // Update campaign counters if moving from PENDING
+    if (sub.status === "PENDING" && sub.campaignId) {
+      await adjustCampaignCounts(ctx, sub.campaignId, { pending: -1, approved: 1 });
+    }
 
     // Check if soldier already exists in personnel roster using direct index
     const subCore = normalizePhMobile(sub.mobileNumber);
@@ -688,6 +761,9 @@ export const approveSubmission = mutation({
         createdAt: new Date().toISOString().split("T")[0],
         createdBy: approverName,
       });
+
+      // Increment group member count
+      await adjustGroupMemberCount(ctx, sub.groupId, sub.groupName, 1);
     }
 
     // Record audit log
@@ -722,7 +798,6 @@ export const bulkApproveSubmissions = mutation({
       hour: "2-digit",
       minute: "2-digit",
     });
-    const allPersonnel = await ctx.db.query("personnel").collect();
     const nowStr = new Date().toISOString();
     let approvedCount = 0;
 
@@ -736,8 +811,28 @@ export const bulkApproveSubmissions = mutation({
         reviewedBy: approverName,
       });
 
+      // Update campaign counters if moving from PENDING
+      if (sub.status === "PENDING" && sub.campaignId) {
+        await adjustCampaignCounts(ctx, sub.campaignId, { pending: -1, approved: 1 });
+      }
+
       const subCore = normalizePhMobile(sub.mobileNumber);
-      const existing = allPersonnel.find((p) => normalizePhMobile(p.mobileNumber) === subCore);
+      const canonicalPh = "+63" + subCore;
+      const localPh = "0" + subCore;
+
+      const existing =
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", sub.mobileNumber.trim()))
+          .first());
       if (existing) {
         await ctx.db.patch(existing._id, {
           firstName: sub.firstName,
@@ -789,6 +884,9 @@ export const bulkApproveSubmissions = mutation({
           createdAt: nowStr.split("T")[0],
           createdBy: approverName,
         });
+
+        // Increment group member count
+        await adjustGroupMemberCount(ctx, sub.groupId, sub.groupName, 1);
       }
       approvedCount++;
     }
@@ -818,12 +916,20 @@ export const rejectSubmission = mutation({
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.reviewerEmail, "reject enlistment submission");
+    const sub = await ctx.db.get(args.submissionId);
+    if (!sub) return { success: false };
+
     const reviewer = args.reviewerName || args.reviewerEmail || "Authorized Officer";
     await ctx.db.patch(args.submissionId, {
       status: "REJECTED",
       reviewedAt: new Date().toISOString(),
       reviewedBy: reviewer,
     });
+
+    if (sub.status === "PENDING" && sub.campaignId) {
+      await adjustCampaignCounts(ctx, sub.campaignId, { pending: -1 });
+    }
+
     return { success: true };
   },
 });

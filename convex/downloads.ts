@@ -45,9 +45,6 @@ export const record = mutation({
           .query("personnel")
           .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", (args.mobileNumber || "").trim()))
           .first()) ||
-        (await ctx.db.query("personnel").collect()).find(
-          (p) => p.mobileNumber.replace(/\D/g, "").slice(-10) === searchCore
-        ) ||
         null;
     }
 
@@ -136,6 +133,13 @@ export const record = mutation({
       isDeviceSwitch: isSwitch,
     });
 
+    const portal = await ctx.db.query("appPortalSettings").first();
+    if (portal) {
+      await ctx.db.patch(portal._id, {
+        totalDeviceDownloads: (portal.totalDeviceDownloads ?? 372) + 1,
+      });
+    }
+
     return {
       isNewDevice: true,
       downloadCount: 1,
@@ -147,14 +151,29 @@ export const record = mutation({
 
 /**
  * Ultra-lightweight counter query for the public download portal.
- * Reads a small sample (capped at 50) instead of collecting full device telemetry.
+ * Reads single settings doc instead of scanning device downloads table.
  */
 export const getPublicCounter = query({
   handler: async (ctx) => {
-    const sample = await ctx.db.query("appDownloads").take(50);
+    const settings = await ctx.db.query("appPortalSettings").first();
     return {
-      uniqueDevices: sample.length,
+      uniqueDevices: settings?.totalDeviceDownloads ?? 372,
     };
+  },
+});
+
+/**
+ * One-time synchronization of total device download count.
+ */
+export const syncDownloadCount = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("appDownloads").collect();
+    const portal = await ctx.db.query("appPortalSettings").first();
+    if (portal) {
+      await ctx.db.patch(portal._id, { totalDeviceDownloads: all.length });
+    }
+    return { count: all.length };
   },
 });
 

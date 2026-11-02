@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   FolderKanban,
@@ -122,12 +122,21 @@ function getPhCoreDigits(str: string) {
 
 const COLOR_PRESETS = [
   { label: "Military Green", value: "#15803d" },
-  { label: "Command Gold", value: "#b45309" },
-  { label: "Emergency Red", value: "#dc2626" },
   { label: "Tactical Blue", value: "#2563eb" },
   { label: "Air Defense Cyan", value: "#0891b2" },
+  { label: "Emergency Red", value: "#dc2626" },
+  { label: "Command Gold", value: "#b45309" },
   { label: "Special Ops Purple", value: "#7c3aed" },
 ];
+
+const COLOR_PRIORITY_ORDER: Record<string, number> = {
+  "#15803d": 1, // Military Green (1001st / Core)
+  "#2563eb": 2, // Tactical Blue (1002nd)
+  "#0891b2": 3, // Air Defense Cyan (1003rd)
+  "#dc2626": 4, // Emergency Red (1004th / Emergency)
+  "#b45309": 5, // Command Gold
+  "#7c3aed": 6, // Special Ops Purple
+};
 
 export default function GroupsPage() {
   const currentOfficer = useCurrentOfficer();
@@ -219,6 +228,21 @@ export default function GroupsPage() {
       matchesAllTokens
     );
   });
+
+  // Cluster groups with the same color tag together, secondary sort by group name
+  const sortedFilteredGroups: typeof groups = useMemo(() => {
+    return [...filteredGroups].sort((a, b) => {
+      const colorA = (a.color || "").toLowerCase();
+      const colorB = (b.color || "").toLowerCase();
+      if (colorA !== colorB) {
+        const priorityA = COLOR_PRIORITY_ORDER[colorA] ?? 99;
+        const priorityB = COLOR_PRIORITY_ORDER[colorB] ?? 99;
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        return colorA.localeCompare(colorB);
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredGroups]);
 
   const handleOpenAdd = () => {
     if (isScopedAdmin) {
@@ -514,7 +538,7 @@ export default function GroupsPage() {
 
           <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500 font-medium px-1 sm:px-0 shrink-0">
             <span>
-              Showing <strong className="text-slate-800">{filteredGroups.length}</strong> of{" "}
+              Showing <strong className="text-slate-800">{sortedFilteredGroups.length}</strong> of{" "}
               <strong className="text-slate-800">{groups.length}</strong> {groups.length === 1 ? "group" : "groups"}
             </span>
             {searchQuery && (
@@ -545,7 +569,7 @@ export default function GroupsPage() {
             <p className="text-sm font-semibold text-slate-700">No contact groups created yet</p>
             <p className="text-xs text-slate-400 mt-1">Click "Create New Group" to organize your roster.</p>
           </div>
-        ) : filteredGroups.length === 0 ? (
+        ) : sortedFilteredGroups.length === 0 ? (
           <div className="col-span-2 p-12 bg-white rounded-2xl border border-slate-200 text-center text-slate-400">
             <FolderKanban className="w-8 h-8 mx-auto mb-2 opacity-40" />
             <p className="text-sm font-semibold text-slate-700">No contact groups match &quot;{searchQuery}&quot;</p>
@@ -560,7 +584,7 @@ export default function GroupsPage() {
             </button>
           </div>
         ) : (
-          filteredGroups.map((group) => (
+          sortedFilteredGroups.map((group) => (
           <div
             key={group._id}
             className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"

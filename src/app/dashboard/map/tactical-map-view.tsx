@@ -58,8 +58,30 @@ const TILE_LAYERS = {
 
 export default function TacticalMapView() {
   const personnel = useQuery(api.personnel.list) || [];
-  const contactGroups = useQuery(api.groups.list) || [];
+  const contactGroups = useQuery(api.groups.listOptions) || [];
   const currentOfficer = useCurrentOfficer();
+
+  // Create a fast group color map from contactGroups
+  const groupColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    contactGroups.forEach((g) => {
+      if (g._id && g.color) map.set(String(g._id), g.color);
+      if (g.name && g.color) map.set(g.name.toLowerCase().trim(), g.color);
+    });
+    return map;
+  }, [contactGroups]);
+
+  // Cluster contact groups by color so identical colors sit together in sidebar
+  const sortedContactGroups = useMemo(() => {
+    return [...contactGroups].sort((a, b) => {
+      const colorA = (a.color || "").toLowerCase();
+      const colorB = (b.color || "").toLowerCase();
+      if (colorA !== colorB) {
+        return colorA.localeCompare(colorB);
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [contactGroups]);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -212,25 +234,34 @@ export default function TacticalMapView() {
       const rank = soldier.rank || "PVT";
       const isInactive = soldier.status === "INACTIVE";
 
-      // Tactical pin styling: Active (Emerald), Selected (Amber), Inactive (Muted Slate / Gray)
-      let pinBgClass = "bg-emerald-800 border-emerald-400/80 shadow-emerald-950/60";
-      let arrowBgClass = "bg-emerald-400";
+      // Resolve soldier's contact group color
+      const soldierGroupColor =
+        (soldier.groupId && groupColorMap.get(String(soldier.groupId))) ||
+        (soldier.groupName && groupColorMap.get(soldier.groupName.toLowerCase().trim())) ||
+        "#15803d"; // Default military green
+
+      // Tactical pin styling: Active (Unit Color), Selected (Amber Glow), Inactive (Muted Slate / Gray)
+      let pinInlineStyle = `background-color: ${soldierGroupColor}; border-color: rgba(255, 255, 255, 0.85); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);`;
+      let arrowInlineStyle = `background-color: ${soldierGroupColor};`;
+      let pinExtraClasses = "";
 
       if (isSelected) {
-        pinBgClass = "bg-amber-500 border-white ring-4 ring-amber-400/50 shadow-amber-950/60";
-        arrowBgClass = "bg-white";
+        pinInlineStyle = `background-color: #f59e0b; border-color: #ffffff; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.55), 0 8px 16px rgba(0, 0, 0, 0.6);`;
+        arrowInlineStyle = `background-color: #ffffff;`;
+        pinExtraClasses = "scale-125 z-50 ring-2 ring-white";
       } else if (isInactive) {
-        pinBgClass = "bg-slate-600 border-slate-400/80 opacity-75 shadow-slate-900/40";
-        arrowBgClass = "bg-slate-400";
+        pinInlineStyle = `background-color: #475569; border-color: rgba(148, 163, 184, 0.8); opacity: 0.75;`;
+        arrowInlineStyle = `background-color: #64748b;`;
+        pinExtraClasses = "filter grayscale-[60%]";
       }
 
-      // Custom Clean Military Tactical Pin HTML
+      // Custom Clean Military Tactical Pin HTML with dynamic unit color
       const pinHtml = `
-        <div class="relative cursor-pointer transition-transform duration-200 ${isSelected ? "scale-125 z-50" : "hover:scale-110"} ${isInactive ? "filter grayscale-[60%]" : ""}">
-          <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[10px] text-white shadow-lg border-2 ${pinBgClass}">
+        <div class="relative cursor-pointer transition-transform duration-200 ${isSelected ? "scale-125 z-50" : "hover:scale-110"} ${pinExtraClasses}">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[10px] text-white shadow-lg border-2" style="${pinInlineStyle}">
             ${rank.slice(0, 3)}
           </div>
-          <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 ${arrowBgClass}"></div>
+          <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45" style="${arrowInlineStyle}"></div>
         </div>
       `;
 
@@ -249,7 +280,7 @@ export default function TacticalMapView() {
 
       marker.addTo(layer);
     });
-  }, [filteredSoldiers, selectedSoldierId]);
+  }, [filteredSoldiers, selectedSoldierId, groupColorMap]);
 
   // 4. Render Geo-fence Circle
   useEffect(() => {
@@ -507,7 +538,7 @@ export default function TacticalMapView() {
               {selectedUnit === "ALL" && <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
             </button>
 
-            {contactGroups.map((g) => {
+            {sortedContactGroups.map((g) => {
               const isSelected = selectedUnit === g._id || selectedUnit === g.name;
               return (
                 <button

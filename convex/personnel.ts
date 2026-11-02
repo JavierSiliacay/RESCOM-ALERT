@@ -62,6 +62,7 @@ export const create = mutation({
     deviceType: v.optional(v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS"))),
     createdBy: v.optional(v.string()),
     createdByEmail: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.createdByEmail, "create personnel");
@@ -142,6 +143,39 @@ export const create = mutation({
       ipAddress: "127.0.0.1",
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
+
+    // Dual-Database Sync Bridge: Asynchronously mirror personnel creation to partner Convex deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncPersonnel",
+        args: {
+          firstName: args.firstName.trim(),
+          lastName: args.lastName.trim(),
+          rank: args.rank.trim(),
+          mobileNumber: args.mobileNumber.trim(),
+          unit: args.unit.trim(),
+          company: args.company?.trim(),
+          groupId: args.groupId,
+          groupName: args.groupName,
+          deviceType: args.deviceType || "ANDROID",
+          school: args.school?.trim(),
+          yearGraduated: args.yearGraduated?.trim(),
+          trainingCategory: args.trainingCategory?.trim(),
+          skills: args.skills?.trim(),
+          currentAddress: args.currentAddress?.trim(),
+          age: typeof args.age === "number" && !isNaN(args.age) ? args.age : undefined,
+          currentJob: args.currentJob?.trim(),
+          status: "ACTIVE",
+          email: args.email?.trim(),
+          createdAt: new Date().toISOString().split("T")[0],
+          createdBy: creatorName,
+          updatedBy: creatorName,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    }
 
     return id;
   },

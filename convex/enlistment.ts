@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
 import { calculateSuspensionExpiry, assertCallerAuthorized } from "./access";
 import { adjustGroupMemberCount } from "./groups";
 
@@ -520,6 +521,7 @@ export const submitEnlistment = mutation({
     deviceId: v.optional(v.string()),
     deviceModel: v.optional(v.string()),
     userAgent: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const cleanCode = args.campaignCode.toLowerCase().trim();
@@ -637,6 +639,43 @@ export const submitEnlistment = mutation({
     // Update campaign cached counter
     await adjustCampaignCounts(ctx, campaign._id, { total: 1, pending: 1 });
 
+    // Dual-Database Sync Bridge: Asynchronously mirror submission to partner Convex deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncSubmission",
+        args: {
+          campaignCode: campaign.campaignCode,
+          firstName: args.firstName.trim(),
+          lastName: args.lastName.trim(),
+          rank: args.rank.trim(),
+          mobileNumber: cleanMobile,
+          unit: args.unit.trim() || campaign.targetUnit,
+          company: args.company?.trim() || undefined,
+          groupId: campaign.groupId || args.groupId,
+          groupName:
+            campaign.groupName && campaign.groupName !== "All 10RCDG Personnel"
+              ? campaign.groupName
+              : (args.groupName?.trim() || campaign.groupName || "All 10RCDG Personnel"),
+          email: args.email?.trim() || undefined,
+          serialNumber: args.serialNumber?.trim() || undefined,
+          school: args.school?.trim() || undefined,
+          yearGraduated: args.yearGraduated?.trim() || undefined,
+          trainingCategory: args.trainingCategory?.trim() || undefined,
+          skills: args.skills?.trim() || undefined,
+          currentAddress: args.currentAddress?.trim() || undefined,
+          age: typeof args.age === "number" && !isNaN(args.age) ? args.age : undefined,
+          currentJob: args.currentJob?.trim() || undefined,
+          deviceType: args.deviceType || "ANDROID",
+          deviceModel: args.deviceModel?.trim() || undefined,
+          userAgent: args.userAgent?.trim() || undefined,
+          status: "PENDING",
+          submittedAt: new Date().toISOString(),
+        },
+      });
+    }
+
     return { success: true, submissionId };
   },
 });
@@ -681,6 +720,7 @@ export const approveSubmission = mutation({
     submissionId: v.id("enlistmentSubmissions"),
     reviewerEmail: v.string(),
     reviewerName: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.reviewerEmail, "approve enlistment submission");
@@ -794,6 +834,41 @@ export const approveSubmission = mutation({
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
 
+    // Dual-Database Sync Bridge: Asynchronously mirror approved personnel to partner Convex deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncPersonnel",
+        args: {
+          firstName: sub.firstName,
+          lastName: sub.lastName,
+          rank: sub.rank,
+          mobileNumber: sub.mobileNumber,
+          unit: sub.unit,
+          company: sub.company,
+          groupId: sub.groupId,
+          groupName: sub.groupName,
+          deviceType: sub.deviceType || "ANDROID",
+          deviceModel: sub.deviceModel,
+          lastDownloadedDeviceModel: sub.deviceModel,
+          school: sub.school,
+          yearGraduated: sub.yearGraduated,
+          trainingCategory: sub.trainingCategory,
+          skills: sub.skills,
+          currentAddress: sub.currentAddress,
+          age: sub.age,
+          currentJob: sub.currentJob,
+          status: "ACTIVE",
+          email: sub.email,
+          createdAt: new Date().toISOString().split("T")[0],
+          createdBy: approverName,
+          updatedBy: approverName,
+          updatedAt: updateTimestamp,
+        },
+      });
+    }
+
     return { success: true };
   },
 });
@@ -804,6 +879,7 @@ export const bulkApproveSubmissions = mutation({
     submissionIds: v.array(v.id("enlistmentSubmissions")),
     reviewerEmail: v.string(),
     reviewerName: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.reviewerEmail, "bulk approve enlistment submissions");
@@ -906,6 +982,41 @@ export const bulkApproveSubmissions = mutation({
         await adjustGroupMemberCount(ctx, sub.groupId, sub.groupName, 1);
       }
       approvedCount++;
+
+      // Dual-Database Sync Bridge: Asynchronously mirror approved personnel to partner Convex deployment
+      const partnerUrl = process.env.PARTNER_CONVEX_URL;
+      if (partnerUrl && !args.isMirrored) {
+        await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+          targetCloudUrl: partnerUrl,
+          path: "bridge:syncPersonnel",
+          args: {
+            firstName: sub.firstName,
+            lastName: sub.lastName,
+            rank: sub.rank,
+            mobileNumber: sub.mobileNumber,
+            unit: sub.unit,
+            company: sub.company,
+            groupId: sub.groupId,
+            groupName: sub.groupName,
+            deviceType: sub.deviceType || "ANDROID",
+            deviceModel: sub.deviceModel,
+            lastDownloadedDeviceModel: sub.deviceModel,
+            school: sub.school,
+            yearGraduated: sub.yearGraduated,
+            trainingCategory: sub.trainingCategory,
+            skills: sub.skills,
+            currentAddress: sub.currentAddress,
+            age: sub.age,
+            currentJob: sub.currentJob,
+            status: "ACTIVE",
+            email: sub.email,
+            createdAt: nowStr.split("T")[0],
+            createdBy: approverName,
+            updatedBy: approverName,
+            updatedAt: updateTimestamp,
+          },
+        });
+      }
     }
 
     if (approvedCount > 0) {

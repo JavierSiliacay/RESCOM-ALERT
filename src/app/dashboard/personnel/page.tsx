@@ -31,6 +31,7 @@ import {
   Smartphone,
   Download,
   ArrowRight,
+  ArrowLeft,
   Lock,
   ShieldAlert,
   Bell,
@@ -452,6 +453,7 @@ export default function PersonnelPage() {
 
   // Campaign Generator Modal State
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
+  const [campaignModalStep, setCampaignModalStep] = useState<1 | 2>(1);
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [campaignFormData, setCampaignFormData] = useState({
     title: "",
@@ -1507,6 +1509,7 @@ export default function PersonnelPage() {
           <button
             onClick={() => {
               guardAction("generate enlistment link", () => {
+                setCampaignModalStep(1);
                 setCampaignFormData({
                   title: "10RCDG Mobilization Roster",
                   instructions: "Please submit your active mobile number for official mobilization alerts.",
@@ -2987,15 +2990,31 @@ export default function PersonnelPage() {
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[92dvh]">
             <div className="p-4 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center font-bold">
-                  <Link2 className="w-4 h-4 text-amber-700" />
+                <div
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${
+                    campaignModalStep === 2 && campaignFormData.campaignType === "IOS_UPDATE"
+                      ? "bg-blue-100 text-blue-900"
+                      : "bg-amber-100 text-amber-900"
+                  }`}
+                >
+                  {campaignModalStep === 2 && campaignFormData.campaignType === "IOS_UPDATE" ? (
+                    <AppleIcon className="w-4 h-4 text-blue-800" />
+                  ) : (
+                    <Link2 className="w-4 h-4 text-amber-700" />
+                  )}
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-bold text-slate-900">
-                    Generate Enlistment Link & QR
+                    {campaignModalStep === 1
+                      ? "Generate Enlistment Link & QR"
+                      : campaignFormData.campaignType === "IOS_UPDATE"
+                      ? "Configure Apple iOS Update Link"
+                      : "Configure New Enlistment Link"}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Create a customized time-limited self-registration portal.
+                    {campaignModalStep === 1
+                      ? "Step 1 of 2 • Select link purpose to continue"
+                      : "Step 2 of 2 • Set security passcode, window duration & unit"}
                   </p>
                 </div>
               </div>
@@ -3007,94 +3026,165 @@ export default function PersonnelPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateCampaign} className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs text-slate-700">
-              {/* Campaign Type / Purpose Selector */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Select Link Purpose <span className="text-red-500 font-bold ml-0.5">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <label
-                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
-                      campaignFormData.campaignType === "NEW_ENLISTMENT"
-                        ? "bg-amber-50/70 border-amber-600 ring-1 ring-amber-600 text-slate-900 shadow-2xs"
-                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 font-bold text-xs">
-                        <input
-                          type="radio"
-                          name="campaignType"
-                          value="NEW_ENLISTMENT"
-                          checked={campaignFormData.campaignType === "NEW_ENLISTMENT"}
-                          onChange={() =>
-                            setCampaignFormData((prev) => ({
-                              ...prev,
-                              campaignType: "NEW_ENLISTMENT",
-                              title: prev.title === "10RCDG Apple iOS Device & Email Update Drive" ? "" : prev.title,
-                              instructions: "",
-                            }))
-                          }
-                          className="text-amber-700 focus:ring-amber-600"
-                        />
-                        <span className="flex items-center gap-1.5">
-                          <UserCheck className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                          <span>Option 1: New Enlistment</span>
-                        </span>
-                      </div>
-                      <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-200/80 text-amber-950 font-mono">
-                        RECRUITS
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
-                      Standard 3-step registration form for onboarding new cadets, ROTC batches, and recruits.
-                    </p>
-                  </label>
+            {campaignModalStep === 1 ? (
+              /* ========================================================= */
+              /* SCREEN 1: ONLY TWO OPTIONS APPEAR                         */
+              /* ========================================================= */
+              <div className="p-5 sm:p-6 space-y-4 overflow-y-auto">
+                <div className="text-center space-y-1 pb-1">
+                  <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 uppercase tracking-wider">
+                    Select Campaign Purpose
+                  </span>
+                  <h4 className="text-base font-extrabold text-slate-900">
+                    What type of enlistment link do you need?
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    Click an option below to proceed directly to the designated form fields.
+                  </p>
+                </div>
 
-                  <label
-                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
-                      campaignFormData.campaignType === "IOS_UPDATE"
-                        ? "bg-blue-50/70 border-blue-600 ring-1 ring-blue-600 text-slate-900 shadow-2xs"
-                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                    }`}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                  {/* Option 1: New Reservist Enlistment */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCampaignFormData((prev) => ({
+                        ...prev,
+                        campaignType: "NEW_ENLISTMENT",
+                        title:
+                          prev.title === "10RCDG Apple iOS Alert Activation"
+                            ? "10RCDG Mobilization Roster"
+                            : prev.title || "10RCDG Mobilization Roster",
+                        instructions: "Please submit your active mobile number for official mobilization alerts.",
+                      }));
+                      setCampaignModalStep(2);
+                    }}
+                    className="group relative p-4 rounded-2xl border-2 border-slate-200 hover:border-amber-500 hover:bg-amber-50/40 text-left transition-all duration-150 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-md hover:-translate-y-0.5"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 font-bold text-xs">
-                        <input
-                          type="radio"
-                          name="campaignType"
-                          value="IOS_UPDATE"
-                          checked={campaignFormData.campaignType === "IOS_UPDATE"}
-                          onChange={() =>
-                            setCampaignFormData((prev) => ({
-                              ...prev,
-                              campaignType: "IOS_UPDATE",
-                              title: prev.title || "10RCDG Apple iOS Device & Email Update Drive",
-                              instructions:
-                                prev.instructions ||
-                                "Attention all 10RCDG Reservists using an Apple iPhone: Please input your registered mobile number and email address to receive emergency mobilization alerts.",
-                            }))
-                          }
-                          className="text-blue-700 focus:ring-blue-600"
-                        />
-                        <span className="flex items-center gap-1.5">
-                          <AppleIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                          <span>Option 2: iOS Update</span>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 group-hover:bg-amber-500 text-amber-800 group-hover:text-white flex items-center justify-center transition-colors shadow-2xs">
+                          <UserCheck className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200 uppercase">
+                          Recruits & Cadets
                         </span>
                       </div>
-                      <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 font-mono">
-                        IPHONE & EMAIL
-                      </span>
+
+                      <div>
+                        <h5 className="text-sm font-extrabold text-slate-900 group-hover:text-amber-950">
+                          Option 1: New Enlistment
+                        </h5>
+                        <p className="text-[11.5px] text-slate-500 mt-1.5 leading-relaxed">
+                          Standard 3-step registration form for onboarding new cadets, ROTC batches, and incoming recruits into the 10RCDG directory.
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
-                      Dedicated form for existing soldiers to switch their phone to Apple iOS and register their email.
-                    </p>
-                  </label>
+
+                    <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-amber-700 group-hover:text-amber-800">
+                      <span>Proceed to Form</span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </button>
+
+                  {/* Option 2: iOS Device & Email Update */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCampaignFormData((prev) => ({
+                        ...prev,
+                        campaignType: "IOS_UPDATE",
+                        title:
+                          prev.title === "10RCDG Mobilization Roster"
+                            ? "10RCDG Apple iOS Alert Activation"
+                            : prev.title || "10RCDG Apple iOS Alert Activation",
+                        instructions:
+                          "Attention all 10RCDG Reservists using an Apple iPhone: Please input your registered mobile number and email address to receive emergency mobilization alerts.",
+                      }));
+                      setCampaignModalStep(2);
+                    }}
+                    className="group relative p-4 rounded-2xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 text-left transition-all duration-150 cursor-pointer flex flex-col justify-between shadow-2xs hover:shadow-md hover:-translate-y-0.5"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="w-10 h-10 rounded-xl bg-blue-100 group-hover:bg-blue-600 text-blue-800 group-hover:text-white flex items-center justify-center transition-colors shadow-2xs">
+                          <AppleIcon className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-200 uppercase">
+                          Apple iPhone
+                        </span>
+                      </div>
+
+                      <div>
+                        <h5 className="text-sm font-extrabold text-slate-900 group-hover:text-blue-950">
+                          Option 2: iOS & Email Update
+                        </h5>
+                        <p className="text-[11.5px] text-slate-500 mt-1.5 leading-relaxed">
+                          Dedicated self-service form for existing 10RCDG soldiers to switch their phone profile to Apple iOS and link their emergency email.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-blue-700 group-hover:text-blue-800">
+                      <span>Proceed to Form</span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </button>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsCampaignModalOpen(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
+            ) : (
+              /* ========================================================= */
+              /* SCREEN 2: DESIGNATED FORM FIELDS ONLY                     */
+              /* ========================================================= */
+              <form onSubmit={handleCreateCampaign} className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs text-slate-700">
+                {/* Active Mode Banner with "Change Option" */}
+                <div
+                  className={`p-3 rounded-xl border flex items-center justify-between ${
+                    campaignFormData.campaignType === "IOS_UPDATE"
+                      ? "bg-blue-50/80 border-blue-200 text-blue-950"
+                      : "bg-amber-50/80 border-amber-200 text-amber-950"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {campaignFormData.campaignType === "IOS_UPDATE" ? (
+                      <AppleIcon className="w-4 h-4 text-blue-800 shrink-0" />
+                    ) : (
+                      <UserCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                    )}
+                    <div>
+                      <span className="font-extrabold text-xs block">
+                        {campaignFormData.campaignType === "IOS_UPDATE"
+                          ? "Option 2: Apple iOS Device & Email Update"
+                          : "Option 1: New Reservist Enlistment"}
+                      </span>
+                      <span className="text-[10.5px] opacity-80">
+                        {campaignFormData.campaignType === "IOS_UPDATE"
+                          ? "Configuring self-service email & iPhone activation portal."
+                          : "Configuring 3-step recruitment & enlistment portal."}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCampaignModalStep(1)}
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-colors shadow-2xs shrink-0 cursor-pointer flex items-center gap-1"
+                  >
+                    <ArrowLeft className="w-3 h-3" />
+                    <span>Change</span>
+                  </button>
+                </div>
 
-              {/* Custom Campaign Title */}
+                {/* Custom Campaign Title */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Custom Campaign Title <span className="text-red-500 font-bold ml-0.5">*</span>
@@ -3332,25 +3422,41 @@ export default function PersonnelPage() {
                 })()}
               </div>
 
-              <div className="p-3 sm:px-6 sm:py-3.5 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 border-t border-slate-100 bg-slate-50/80 flex items-center justify-end gap-2.5 mt-4">
+              <div className="p-3 sm:px-6 sm:py-3.5 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between gap-2.5 mt-4">
                 <button
                   type="button"
-                  onClick={() => setIsCampaignModalOpen(false)}
+                  onClick={() => setCampaignModalStep(1)}
                   disabled={isCreatingCampaign}
-                  className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                  className="px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
                 >
-                  Cancel
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back</span>
                 </button>
-                <button
-                  type="submit"
-                  disabled={isCreatingCampaign}
-                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Link2 className="w-4 h-4" />
-                  <span>{isCreatingCampaign ? "Generating..." : "Create Link & QR"}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsCampaignModalOpen(false)}
+                    disabled={isCreatingCampaign}
+                    className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingCampaign}
+                    className={`px-5 py-2 disabled:bg-slate-400 font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer ${
+                      campaignFormData.campaignType === "IOS_UPDATE"
+                        ? "bg-blue-700 hover:bg-blue-800 text-white"
+                        : "bg-amber-600 hover:bg-amber-500 text-slate-950"
+                    }`}
+                  >
+                    <Link2 className="w-4 h-4" />
+                    <span>{isCreatingCampaign ? "Generating..." : "Create Link & QR"}</span>
+                  </button>
+                </div>
               </div>
             </form>
+          )}
           </div>
         </div>
       )}

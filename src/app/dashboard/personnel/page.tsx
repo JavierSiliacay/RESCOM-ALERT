@@ -1206,6 +1206,16 @@ export default function PersonnelPage() {
       return;
     }
 
+    if (formData.deviceType === "IOS") {
+      const cleanEmail = (formData.email || "").trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+        alert("Please enter a valid email address for Apple (iOS) device capability (e.g. soldier@gmail.com).");
+        setAddModalTab("CIVILIAN");
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       const selectedGrp = groupsList.find((g) => g._id === formData.groupId);
@@ -4034,6 +4044,75 @@ export default function PersonnelPage() {
                       Android receives in-app siren alerts; iOS receives direct email alerts via Resend; Keypad receives cellular SMS.
                     </p>
                   </div>
+
+                  {/* Email Field - Prominent & Required for Apple (iOS), Optional for others */}
+                  {formData.deviceType === "IOS" ? (
+                    <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-200 space-y-2 animate-in fade-in duration-150">
+                      <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5 text-blue-700" />
+                          <span>Emergency Alert Email <span className="text-red-500 font-bold">*</span></span>
+                        </span>
+                        <span className="text-[10px] font-mono text-blue-700 font-bold bg-blue-100/90 px-2 py-0.5 rounded border border-blue-300">
+                          Required for Apple iOS
+                        </span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          required
+                          placeholder="e.g. soldier@gmail.com"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className="w-full pl-8 pr-3.5 py-2 bg-white border border-blue-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono shadow-2xs"
+                        />
+                        <Mail className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      </div>
+
+                      {/* Quick-Tap Domain Buttons */}
+                      <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                        <span className="text-[10px] text-slate-400 uppercase font-mono mr-1">Quick:</span>
+                        {["@gmail.com", "@icloud.com", "@yahoo.com", "@outlook.com"].map((dom) => (
+                          <button
+                            key={dom}
+                            type="button"
+                            onClick={() => {
+                              const prefix = formData.email.includes("@")
+                                ? formData.email.split("@")[0]
+                                : formData.email;
+                              setFormData({
+                                ...formData,
+                                email: prefix ? `${prefix}${dom}` : dom,
+                              });
+                            }}
+                            className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white hover:bg-blue-100/60 text-slate-600 hover:text-blue-800 border border-slate-200 transition-colors cursor-pointer"
+                          >
+                            +{dom}
+                          </button>
+                        ))}
+                      </div>
+
+                      <p className="text-[10.5px] text-blue-800 leading-relaxed">
+                        💡 <strong>Apple iOS Alert Layer:</strong> Because iPhones cannot install Android APKs, mobilization orders and emergency alerts will be dispatched directly to this email via Resend.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                        <span>Email Address <span className="text-slate-400 font-normal lowercase">(optional)</span></span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          placeholder="e.g. soldier@gmail.com (optional)"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className="w-full pl-8 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 focus:bg-white font-mono"
+                        />
+                        <Mail className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

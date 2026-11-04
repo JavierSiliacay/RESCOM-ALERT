@@ -187,21 +187,16 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
         }
       }
 
-      // 3. Dispatch iOS / Registered Email Emergency Dispatches (Layer 3 via Resend)
-      const allTargetNumbers =
-        dispatchChannel === "IOS_EMAIL"
-          ? iosTroops.map((p) => p.mobileNumber)
-          : Array.from(
-              new Set([...smsNumbers, ...pushNumbers, ...iosTroops.map((p) => p.mobileNumber)])
-            );
+      // 3. Dispatch iOS Emergency Dispatches (Layer 3 via Resend - strictly for iOS troops only to protect Resend quota)
+      const iosTargetNumbers = iosTroops.map((p) => p.mobileNumber);
 
-      if (allTargetNumbers.length > 0 && dispatchChannel !== "KEYPAD_SMS") {
+      if (iosTargetNumbers.length > 0 && (dispatchChannel === "HYBRID" || dispatchChannel === "IOS_EMAIL")) {
         try {
           fetch("/api/email/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              recipients: allTargetNumbers,
+              recipients: iosTargetNumbers,
               message: message,
               title: broadcastTitle,
               sender: currentOfficer.displayName || "10RCDG Tactical HQ",

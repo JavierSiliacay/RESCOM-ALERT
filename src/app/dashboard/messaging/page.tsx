@@ -543,20 +543,15 @@ function MessagingContent() {
         isOk = res.ok && data.success;
       }
 
-      // 3. Dispatch iOS / Registered Email Emergency Dispatches (Layer 3 via Resend)
-      const allTargetNumbers =
-        dispatchChannel === "IOS_EMAIL"
-          ? categorizedRecipients.iosTroops.map((p) => p.mobileNumber)
-          : Array.from(
-              new Set([...smsNumbers, ...pushNumbers, ...categorizedRecipients.iosTroops.map((p) => p.mobileNumber)])
-            );
-      if (allTargetNumbers.length > 0 && dispatchChannel !== "KEYPAD_SMS") {
+      // 3. Dispatch iOS Emergency Dispatches (Layer 3 via Resend - strictly for iOS troops only to protect Resend quota)
+      const iosTargetNumbers = categorizedRecipients.iosTroops.map((p) => p.mobileNumber);
+      if (iosTargetNumbers.length > 0 && (dispatchChannel === "HYBRID" || dispatchChannel === "IOS_EMAIL")) {
         try {
           fetch("/api/email/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              recipients: allTargetNumbers,
+              recipients: iosTargetNumbers,
               message: messageContent,
               title: finalBroadcastTitle,
               sender: currentOfficer.displayName || "10RCDG Tactical HQ",

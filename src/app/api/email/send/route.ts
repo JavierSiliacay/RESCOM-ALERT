@@ -45,11 +45,11 @@ export async function POST(req: NextRequest) {
         }
       }
     } else {
-      // If no specific recipients passed, target all active personnel with registered emails (or iOS users)
+      // If no specific recipients passed, target active iOS personnel with registered emails to protect Resend usage
       const convex = new ConvexHttpClient(convexUrl);
       const allPersonnel = await convex.query(api.personnel.list, {});
       targetEmails = allPersonnel
-        .filter((p: any) => p.email && p.email.trim().includes("@") && p.status === "ACTIVE")
+        .filter((p: any) => p.email && p.email.trim().includes("@") && p.status === "ACTIVE" && p.deviceType === "IOS")
         .map((p: any) => p.email.trim());
     }
 

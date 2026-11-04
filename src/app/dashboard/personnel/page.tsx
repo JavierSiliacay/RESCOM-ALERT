@@ -42,6 +42,7 @@ import {
   Calendar,
   Navigation,
   Loader2,
+  Mail,
 } from "lucide-react";
 import { COMMON_10RCDG_LOCATIONS, requestDeviceLocation } from "@/lib/geo";
 import { QRCodeSVG } from "qrcode.react";
@@ -617,6 +618,7 @@ export default function PersonnelPage() {
       const trainingCat = ((person as any).trainingCategory || "").toLowerCase();
       const currentJob = ((person as any).currentJob || "").toLowerCase();
       const currentAddress = ((person as any).currentAddress || "").toLowerCase();
+      const email = ((person as any).email || "").toLowerCase();
       const ageStr = (person as any).age ? String((person as any).age).toLowerCase() : "";
 
       // Multi-word tokens: "cruz juan", "juan bgen", "ustp 2018", or "medic carmen"
@@ -634,6 +636,7 @@ export default function PersonnelPage() {
           company.includes(w) ||
           cleanCompany.includes(wClean) ||
           groupName.includes(w) ||
+          email.includes(w) ||
           school.includes(w) ||
           yearGraduated.includes(w) ||
           skills.includes(w) ||
@@ -655,6 +658,7 @@ export default function PersonnelPage() {
       const matchesName =
         fullName.includes(trimmedQuery) ||
         cleanFullName.includes(qClean) ||
+        email.includes(trimmedQuery) ||
         matchesAllTokens;
 
       const matchesRank =
@@ -777,6 +781,7 @@ export default function PersonnelPage() {
       const skills = ((sub as any).skills || "").toLowerCase();
       const currentAddress = ((sub as any).currentAddress || "").toLowerCase();
       const currentJob = ((sub as any).currentJob || "").toLowerCase();
+      const email = ((sub as any).email || "").toLowerCase();
       const ageStr = (sub as any).age ? String((sub as any).age).toLowerCase() : "";
 
       return words.every((w) => {
@@ -790,6 +795,7 @@ export default function PersonnelPage() {
           unit.includes(w) ||
           company.includes(w) ||
           groupName.includes(w) ||
+          email.includes(w) ||
           school.includes(w) ||
           yearGraduated.includes(w) ||
           trainingCategory.includes(w) ||
@@ -1728,6 +1734,15 @@ export default function PersonnelPage() {
                                             query={searchQuery}
                                           />
                                         </span>
+                                        {(person as any).email && (
+                                          <>
+                                            <span>•</span>
+                                            <span className="flex items-center gap-0.5 text-blue-700 font-sans truncate max-w-[160px]" title={(person as any).email}>
+                                              <Mail className="w-2.5 h-2.5 text-blue-500 shrink-0" />
+                                              <HighlightMatch text={(person as any).email} query={searchQuery} />
+                                            </span>
+                                          </>
+                                        )}
                                         <span>•</span>
                                         <span>
                                           <HighlightMatch text={person.unit} query={searchQuery} />
@@ -2096,7 +2111,7 @@ export default function PersonnelPage() {
                         />
                       </th>
                       <th className="py-3.5 px-3 sm:px-4">Name & Rank</th>
-                      <th className="py-3.5 px-3">Mobile Number</th>
+                      <th className="py-3.5 px-3">Mobile & Email</th>
                       <th className="py-3.5 px-3">Device / App Status</th>
                       <th className="py-3.5 px-3">Unit / CDC</th>
                       <th className="py-3.5 px-3">Company</th>
@@ -2198,8 +2213,23 @@ export default function PersonnelPage() {
                           </div>
                         </td>
 
-                        <td className="py-3.5 px-3 font-mono font-bold text-slate-800">
-                          <HighlightMatch text={formatPhMobileDisplay(person.mobileNumber)} query={searchQuery} />
+                        <td className="py-3.5 px-3">
+                          <div className="font-mono font-bold text-slate-800 text-xs">
+                            <HighlightMatch text={formatPhMobileDisplay(person.mobileNumber)} query={searchQuery} />
+                          </div>
+                          {(person as any).email ? (
+                            <div
+                              className="flex items-center gap-1.5 text-[11px] text-slate-600 font-sans mt-0.5 max-w-[210px] truncate"
+                              title={`Registered Email: ${(person as any).email}`}
+                            >
+                              <Mail className="w-3 h-3 text-blue-600 shrink-0" />
+                              <span className="truncate font-medium text-slate-700">
+                                <HighlightMatch text={(person as any).email} query={searchQuery} />
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">No email</div>
+                          )}
                         </td>
 
                         {/* Device & App Pairing Status */}
@@ -2694,7 +2724,7 @@ export default function PersonnelPage() {
                           />
                         </th>
                         <th className="py-3 px-4">Soldier & Rank</th>
-                        <th className="py-3 px-4">Mobile Number</th>
+                        <th className="py-3 px-4">Mobile & Email</th>
                         <th className="py-3 px-4">Background & Skills</th>
                         <th className="py-3 px-4">Device</th>
                         <th className="py-3 px-4">Assigned Unit</th>
@@ -2762,8 +2792,21 @@ export default function PersonnelPage() {
                               </div>
                             </td>
 
-                            <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                              <HighlightMatch text={formatPhMobileDisplay(sub.mobileNumber)} query={submissionSearchQuery} />
+                            <td className="py-3 px-4">
+                              <div className="font-mono font-bold text-slate-800 text-xs">
+                                <HighlightMatch text={formatPhMobileDisplay(sub.mobileNumber)} query={submissionSearchQuery} />
+                              </div>
+                              {(sub as any).email ? (
+                                <div
+                                  className="flex items-center gap-1.5 text-[11px] text-slate-600 font-sans mt-0.5 max-w-[210px] truncate"
+                                  title={`Enlistment Email: ${(sub as any).email}`}
+                                >
+                                  <Mail className="w-3 h-3 text-blue-600 shrink-0" />
+                                  <span className="truncate font-medium text-slate-700">
+                                    <HighlightMatch text={(sub as any).email} query={submissionSearchQuery} />
+                                  </span>
+                                </div>
+                              ) : null}
                             </td>
 
                             {/* Military Background, ROTC School & Skills */}

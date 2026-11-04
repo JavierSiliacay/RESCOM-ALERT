@@ -3217,79 +3217,96 @@ export default function PersonnelPage() {
                 />
               </div>
 
-              {/* Pre-assigned Unit & Company */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Pre-assigned Unit / CDC <span className="text-red-500 font-bold ml-0.5">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 10RCDG"
-                    value={campaignFormData.targetUnit}
-                    onChange={(e) =>
-                      setCampaignFormData((prev) => ({ ...prev, targetUnit: e.target.value }))
-                    }
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium shadow-2xs"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Soldiers will be locked to this unit upon registration.
-                  </p>
-                </div>
+              {/* Pre-assigned Unit, Company & Group (Only for Option 1: New Enlistment) */}
+              {campaignFormData.campaignType === "NEW_ENLISTMENT" ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Pre-assigned Unit / CDC <span className="text-red-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 10RCDG"
+                        value={campaignFormData.targetUnit}
+                        onChange={(e) =>
+                          setCampaignFormData((prev) => ({ ...prev, targetUnit: e.target.value }))
+                        }
+                        className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium shadow-2xs"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Soldiers will be locked to this unit upon registration.
+                      </p>
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Pre-assigned Company <span className="text-red-500 font-bold ml-0.5">*</span>
-                  </label>
-                  <select
-                    value={campaignFormData.targetCompany}
-                    onChange={(e) =>
-                      setCampaignFormData((prev) => ({ ...prev, targetCompany: e.target.value }))
-                    }
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer shadow-2xs"
-                  >
-                    <option value="HHC">HHC (Headquarters & HQ Company)</option>
-                    <option value="Alpha">Alpha Company (A Coy)</option>
-                    <option value="Bravo">Bravo Company (B Coy)</option>
-                    <option value="Charlie">Charlie Company (C Coy)</option>
-                    <option value="Delta">Delta Company (D Coy)</option>
-                    <option value="ALL">Allow Soldier to Choose Company</option>
-                  </select>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Locks soldiers to this company so they cannot change it.
-                  </p>
-                </div>
-              </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Pre-assigned Company <span className="text-red-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <select
+                        value={campaignFormData.targetCompany}
+                        onChange={(e) =>
+                          setCampaignFormData((prev) => ({ ...prev, targetCompany: e.target.value }))
+                        }
+                        className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer shadow-2xs"
+                      >
+                        <option value="HHC">HHC (Headquarters & HQ Company)</option>
+                        <option value="Alpha">Alpha Company (A Coy)</option>
+                        <option value="Bravo">Bravo Company (B Coy)</option>
+                        <option value="Charlie">Charlie Company (C Coy)</option>
+                        <option value="Delta">Delta Company (D Coy)</option>
+                        <option value="ALL">Allow Soldier to Choose Company</option>
+                      </select>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Locks soldiers to this company so they cannot change it.
+                      </p>
+                    </div>
+                  </div>
 
-              {/* Assign to SMS Group */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Assign to SMS Group
-                </label>
-                <select
-                  value={campaignFormData.groupId}
-                  onChange={(e) => {
-                    const selectedVal = e.target.value;
-                    const grp = groupsList.find((g) => g._id === selectedVal);
-                    setCampaignFormData((prev) => ({
-                      ...prev,
-                      groupId: selectedVal,
-                      groupName: grp ? grp.name : "All 10RCDG Personnel",
-                    }));
-                  }}
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer shadow-2xs"
-                >
-                  <option value="">
-                    {isScopedAdmin ? "Select an Assigned Group..." : "All 10RCDG Personnel (General Roster)"}
-                  </option>
-                  {groupsList.map((g) => (
-                    <option key={g._id} value={g._id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {/* Assign to SMS Group */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Assign to SMS Group
+                    </label>
+                    <select
+                      value={campaignFormData.groupId}
+                      onChange={(e) => {
+                        const selectedVal = e.target.value;
+                        const grp = groupsList.find((g) => g._id === selectedVal);
+                        setCampaignFormData((prev) => ({
+                          ...prev,
+                          groupId: selectedVal,
+                          groupName: grp ? grp.name : "All 10RCDG Personnel",
+                        }));
+                      }}
+                      className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-medium cursor-pointer shadow-2xs"
+                    >
+                      <option value="">
+                        {isScopedAdmin ? "Select an Assigned Group..." : "All 10RCDG Personnel (General Roster)"}
+                      </option>
+                      {groupsList.map((g) => (
+                        <option key={g._id} value={g._id}>
+                          {g.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              ) : (
+                /* Notice Callout for Option 2: iOS Update */
+                <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-xs text-blue-950 flex items-start gap-2.5">
+                  <AppleIcon className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <span className="font-extrabold text-[11px] text-blue-950 block">
+                      Unit, Company & Group Preserved Automatically
+                    </span>
+                    <p className="text-[10.5px] text-blue-800 leading-relaxed">
+                      Because this portal is for existing registered reservists, their current CDC station, company assignment, and SMS contact group are preserved intact from their 10RCDG personnel record.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Unit Security Passcode */}
               <div>

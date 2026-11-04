@@ -306,15 +306,33 @@ export const update = mutation({
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
 
-    // Dual-Database Sync Bridge: Asynchronously mirror update to partner Convex deployment
+    // Dual-Database Sync Bridge: Asynchronously mirror update to partner Convex deployment using mobileNumber
     const partnerUrl = process.env.PARTNER_CONVEX_URL;
     if (partnerUrl && !args.isMirrored) {
       await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
         targetCloudUrl: partnerUrl,
-        path: "personnel:update",
+        path: "bridge:syncPersonnel",
         args: {
-          ...args,
-          isMirrored: true,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          rank: data.rank,
+          mobileNumber: data.mobileNumber,
+          unit: data.unit,
+          company: data.company !== undefined ? (data.company.trim() || undefined) : existing.company,
+          groupId: data.groupId || "",
+          groupName: data.groupName,
+          deviceType: data.deviceType || existing.deviceType || "ANDROID",
+          email: data.email || "",
+          school: data.school !== undefined ? (data.school.trim() || undefined) : existing.school,
+          yearGraduated: data.yearGraduated !== undefined ? (data.yearGraduated.trim() || undefined) : existing.yearGraduated,
+          trainingCategory: data.trainingCategory !== undefined ? (data.trainingCategory.trim() || undefined) : existing.trainingCategory,
+          skills: data.skills !== undefined ? (data.skills.trim() || undefined) : existing.skills,
+          currentAddress: data.currentAddress !== undefined ? (data.currentAddress.trim() || undefined) : existing.currentAddress,
+          age: data.age !== undefined ? (typeof data.age === "number" && !isNaN(data.age) ? data.age : undefined) : existing.age,
+          currentJob: data.currentJob !== undefined ? (data.currentJob.trim() || undefined) : existing.currentJob,
+          status: "ACTIVE",
+          updatedBy: editorName,
+          updatedAt: updateTimestamp,
         },
       });
     }
@@ -428,16 +446,15 @@ export const remove = mutation({
     }
     await ctx.db.delete(args.id);
 
-    // Dual-Database Sync Bridge: Asynchronously mirror deletion to partner Convex deployment
+    // Dual-Database Sync Bridge: Asynchronously mirror deletion to partner Convex deployment using mobileNumber
     const partnerUrl = process.env.PARTNER_CONVEX_URL;
-    if (partnerUrl && !args.isMirrored) {
+    if (partnerUrl && !args.isMirrored && person) {
       await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
         targetCloudUrl: partnerUrl,
-        path: "personnel:remove",
+        path: "bridge:syncRemovePersonnel",
         args: {
-          id: args.id,
+          mobileNumber: person.mobileNumber,
           officerEmail: args.officerEmail,
-          isMirrored: true,
         },
       });
     }
@@ -686,19 +703,20 @@ export const linkDevice = mutation({
       });
     }
 
-    // Dual-Database Sync Bridge: Asynchronously mirror pairing to partner Convex deployment
+    // Dual-Database Sync Bridge: Asynchronously mirror pairing to partner Convex deployment using mobileNumber
     const partnerUrl = process.env.PARTNER_CONVEX_URL;
     if (partnerUrl && !args.isMirrored) {
       await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
         targetCloudUrl: partnerUrl,
-        path: "personnel:linkDevice",
+        path: "bridge:syncDeviceLink",
         args: {
-          soldierId: args.soldierId,
-          fcmToken: args.fcmToken,
-          deviceModel: args.deviceModel,
-          officerEmail: args.officerEmail,
+          mobileNumber: soldier.mobileNumber,
+          fcmToken: token,
+          deviceModel: newModel,
           appDeviceId: args.appDeviceId,
-          isMirrored: true,
+          boundDeviceId: soldier.boundDeviceId || args.appDeviceId,
+          lastActiveAt: nowIso,
+          appInstalledAt: soldier.appInstalledAt || nowIso,
         },
       });
     }
@@ -792,18 +810,15 @@ export const unlinkDevice = mutation({
       timestamp: new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }),
     });
 
-    // Dual-Database Sync Bridge: Asynchronously mirror unlinking to partner Convex deployment
+    // Dual-Database Sync Bridge: Asynchronously mirror unlinking to partner Convex deployment using mobileNumber
     const partnerUrl = process.env.PARTNER_CONVEX_URL;
     if (partnerUrl && !args.isMirrored) {
       await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
         targetCloudUrl: partnerUrl,
-        path: "personnel:unlinkDevice",
+        path: "bridge:syncDeviceUnlink",
         args: {
-          soldierId: args.soldierId,
-          reason: args.reason,
-          officerName: args.officerName,
+          mobileNumber: soldier.mobileNumber,
           officerEmail: args.officerEmail,
-          isMirrored: true,
         },
       });
     }
@@ -830,6 +845,7 @@ export const batchUnlinkDevices = mutation({
       await assertCallerAuthorized(ctx, args.officerEmail, "batch unlink devices");
     }
     let unlinkedCount = 0;
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
 
     for (const id of args.soldierIds) {
       const soldier = await ctx.db.get(id);
@@ -848,23 +864,19 @@ export const batchUnlinkDevices = mutation({
           lastDownloadedDeviceModel: undefined,
         });
         unlinkedCount++;
-      }
-    }
 
-    // Dual-Database Sync Bridge: Asynchronously mirror batch unlinking to partner Convex deployment
-    const partnerUrl = process.env.PARTNER_CONVEX_URL;
-    if (partnerUrl && !args.isMirrored) {
-      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
-        targetCloudUrl: partnerUrl,
-        path: "personnel:batchUnlinkDevices",
-        args: {
-          soldierIds: args.soldierIds,
-          reason: args.reason,
-          officerName: args.officerName,
-          officerEmail: args.officerEmail,
-          isMirrored: true,
-        },
-      });
+        // Dual-Database Sync Bridge: Asynchronously mirror unlinking to partner deployment
+        if (partnerUrl && !args.isMirrored) {
+          await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+            targetCloudUrl: partnerUrl,
+            path: "bridge:syncDeviceUnlink",
+            args: {
+              mobileNumber: soldier.mobileNumber,
+              officerEmail: args.officerEmail,
+            },
+          });
+        }
+      }
     }
 
     // Record audit log
@@ -990,18 +1002,20 @@ export const updateLocation = mutation({
       lastActiveAt: nowIso,
     });
 
-    // Dual-Database Sync Bridge: Asynchronously mirror GPS update to partner Convex deployment
+    // Dual-Database Sync Bridge: Asynchronously mirror GPS update to partner Convex deployment using mobileNumber
     const partnerUrl = process.env.PARTNER_CONVEX_URL;
     if (partnerUrl && !args.isMirrored) {
       await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
         targetCloudUrl: partnerUrl,
-        path: "personnel:updateLocation",
+        path: "bridge:syncLocation",
         args: {
-          soldierId: args.soldierId,
+          mobileNumber: soldier.mobileNumber,
           latitude: args.latitude,
           longitude: args.longitude,
-          accuracy: args.accuracy,
-          isMirrored: true,
+          locationAccuracy: args.accuracy,
+          isGpsEnabled: true,
+          locationUpdatedAt: nowIso,
+          lastActiveAt: nowIso,
         },
       });
     }

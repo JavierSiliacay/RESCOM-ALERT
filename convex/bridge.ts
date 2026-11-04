@@ -31,6 +31,36 @@ export const mirrorMutation = internalAction({
   },
 });
 
+// Helper: Find personnel across all standard Philippine mobile formatting variants
+async function findPersonnelByMobile(ctx: any, rawMobile: string) {
+  if (!rawMobile) return null;
+  const digits = rawMobile.replace(/\D/g, "");
+  let searchCore = digits;
+  if (digits.startsWith("6309")) searchCore = digits.slice(3);
+  else if (digits.startsWith("639")) searchCore = digits.slice(2);
+  else if (digits.startsWith("09")) searchCore = digits.slice(1);
+  else if (digits.startsWith("9") && digits.length === 10) searchCore = digits;
+  else if (digits.length >= 10 && digits.slice(-10).startsWith("9")) searchCore = digits.slice(-10);
+
+  const canonicalPh = "+63" + searchCore;
+  const localPh = "0" + searchCore;
+
+  return (
+    (await ctx.db
+      .query("personnel")
+      .withIndex("by_mobileNumber", (q: any) => q.eq("mobileNumber", canonicalPh))
+      .first()) ||
+    (await ctx.db
+      .query("personnel")
+      .withIndex("by_mobileNumber", (q: any) => q.eq("mobileNumber", localPh))
+      .first()) ||
+    (await ctx.db
+      .query("personnel")
+      .withIndex("by_mobileNumber", (q: any) => q.eq("mobileNumber", rawMobile.trim()))
+      .first())
+  );
+}
+
 /**
  * Sync / Upsert Personnel record from Partner Deployment
  */
@@ -258,5 +288,142 @@ export const syncSubmission = mutation({
       return { success: true, inserted: true, id };
     }
     return { success: false, reason: "Campaign not found" };
+  },
+});
+
+/**
+ * Sync Device Linking / Pairing from Partner Deployment using Mobile Number
+ */
+export const syncDeviceLink = mutation({
+  args: {
+    mobileNumber: v.string(),
+    fcmToken: v.optional(v.string()),
+    deviceModel: v.optional(v.string()),
+    appDeviceId: v.optional(v.string()),
+    boundDeviceId: v.optional(v.string()),
+    lastActiveAt: v.optional(v.string()),
+    appInstalledAt: v.optional(v.string()),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    isGpsEnabled: v.optional(v.boolean()),
+    locationAccuracy: v.optional(v.number()),
+    locationUpdatedAt: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const soldier = await findPersonnelByMobile(ctx, args.mobileNumber);
+    if (!soldier) {
+      console.warn(`[Bridge] Soldier with mobile ${args.mobileNumber} not found for syncDeviceLink.`);
+      return { success: false, reason: "Soldier not found" };
+    }
+
+    const nowIso = new Date().toISOString();
+    await ctx.db.patch(soldier._id, {
+      ...(args.fcmToken !== undefined ? { fcmToken: args.fcmToken } : {}),
+      ...(args.deviceModel !== undefined
+        ? {
+            deviceModel: args.deviceModel,
+            lastDownloadedDeviceModel: args.deviceModel,
+            deviceType: "ANDROID" as const,
+          }
+        : {}),
+      ...(args.appDeviceId !== undefined
+        ? {
+            appDeviceId: args.appDeviceId,
+            boundDeviceId: soldier.boundDeviceId || args.boundDeviceId || args.appDeviceId,
+          }
+        : {}),
+      lastActiveAt: args.lastActiveAt || nowIso,
+      appInstalledAt: soldier.appInstalledAt || args.appInstalledAt || nowIso,
+      ...(args.latitude !== undefined && args.longitude !== undefined
+        ? {
+            latitude: args.latitude,
+            longitude: args.longitude,
+            locationAccuracy: args.locationAccuracy,
+            locationUpdatedAt: args.locationUpdatedAt || nowIso,
+            isGpsEnabled: args.isGpsEnabled ?? true,
+          }
+        : {}),
+    });
+
+    return { success: true, soldierId: soldier._id };
+  },
+});
+
+/**
+ * Sync Device Unlinking from Partner Deployment using Mobile Number
+ */
+export const syncDeviceUnlink = mutation({
+  args: {
+    mobileNumber: v.string(),
+    officerEmail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const soldier = await findPersonnelByMobile(ctx, args.mobileNumber);
+    if (!soldier) {
+      return { success: false, reason: "Soldier not found" };
+    }
+
+    await ctx.db.patch(soldier._id, {
+      fcmToken: undefined,
+      deviceModel: undefined,
+      appDeviceId: undefined,
+      boundDeviceId: undefined,
+      latitude: undefined,
+      longitude: undefined,
+      locationAccuracy: undefined,
+      locationUpdatedAt: undefined,
+      isGpsEnabled: undefined,
+    });
+
+    return { success: true, soldierId: soldier._id };
+  },
+});
+
+/**
+ * Sync Live GPS Location from Partner Deployment using Mobile Number
+ */
+export const syncLocation = mutation({
+  args: {
+    mobileNumber: v.string(),
+    latitude: v.number(),
+    longitude: v.number(),
+    locationAccuracy: v.optional(v.number()),
+    isGpsEnabled: v.optional(v.boolean()),
+    locationUpdatedAt: v.string(),
+    lastActiveAt: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const soldier = await findPersonnelByMobile(ctx, args.mobileNumber);
+    if (!soldier) {
+      return { success: false, reason: "Soldier not found" };
+    }
+
+    await ctx.db.patch(soldier._id, {
+      latitude: args.latitude,
+      longitude: args.longitude,
+      locationAccuracy: args.locationAccuracy,
+      isGpsEnabled: args.isGpsEnabled ?? true,
+      locationUpdatedAt: args.locationUpdatedAt,
+      lastActiveAt: args.lastActiveAt,
+    });
+
+    return { success: true, soldierId: soldier._id };
+  },
+});
+
+/**
+ * Sync Personnel Removal from Partner Deployment using Mobile Number
+ */
+export const syncRemovePersonnel = mutation({
+  args: {
+    mobileNumber: v.string(),
+    officerEmail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const soldier = await findPersonnelByMobile(ctx, args.mobileNumber);
+    if (soldier) {
+      await ctx.db.delete(soldier._id);
+    }
+    return { success: true };
   },
 });

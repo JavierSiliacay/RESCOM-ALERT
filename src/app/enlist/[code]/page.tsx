@@ -34,6 +34,7 @@ import {
   Loader2,
   Navigation,
   X,
+  Mail,
 } from "lucide-react";
 import { RankSearchSelect } from "@/components/rank-search-select";
 import { sanitizePhMobileInput, isValidPhMobileNumber, formatPhMobileDisplay } from "@/lib/sms";
@@ -92,6 +93,7 @@ export default function PublicEnlistmentPage() {
   const submitEnlistment = useMutation(api.enlistment.submitEnlistment);
   const validatePasscode = useMutation(api.enlistment.validatePasscode);
   const checkStep1Duplicate = useMutation(api.enlistment.checkStep1Duplicate);
+  const updateSoldierToIos = useMutation(api.enlistment.updateSoldierToIos);
 
   // Flow State
   const [passcode, setPasscode] = useState("");
@@ -103,6 +105,33 @@ export default function PublicEnlistmentPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [enlistStep, setEnlistStep] = useState<1 | 2 | 3>(1);
+
+  // iOS Self-Service Update State
+  const [iosMobileNumber, setIosMobileNumber] = useState("09");
+  const [iosEmail, setIosEmail] = useState("");
+  const [isUpdatingIos, setIsUpdatingIos] = useState(false);
+  const [iosUpdateError, setIosUpdateError] = useState<string | null>(null);
+  const [iosSuccessReceipt, setIosSuccessReceipt] = useState<{
+    soldierName: string;
+    unit: string;
+    email: string;
+    mobileNumber: string;
+  } | null>(null);
+
+  // Live Query to verify soldier when mobile number is valid 11 digits
+  const verifiedSoldier = useQuery(
+    api.enlistment.verifySoldierForIosUpdate,
+    campaign?.campaignType === "IOS_UPDATE" && isValidPhMobileNumber(iosMobileNumber)
+      ? { campaignCode, mobileNumber: iosMobileNumber }
+      : "skip"
+  );
+
+  // Auto-fill existing email if soldier already has one
+  useEffect(() => {
+    if (verifiedSoldier && verifiedSoldier.found && verifiedSoldier.currentEmail && !iosEmail) {
+      setIosEmail(verifiedSoldier.currentEmail);
+    }
+  }, [verifiedSoldier]);
 
   // Rate Limiting & Lockout State (5 failed attempts -> 3 minutes lockout)
   const [failedAttempts, setFailedAttempts] = useState(0);
@@ -346,6 +375,52 @@ export default function PublicEnlistmentPage() {
     }
   };
 
+  const handleIosMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const sanitized = sanitizePhMobileInput(raw);
+    setIosMobileNumber(sanitized);
+    if (iosUpdateError) {
+      setIosUpdateError(null);
+    }
+  };
+
+  const handleIosUpdateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIosUpdateError(null);
+
+    if (!isValidPhMobileNumber(iosMobileNumber)) {
+      setIosUpdateError("Please enter a valid 11-digit Philippine mobile number (09XXXXXXXXX).");
+      return;
+    }
+
+    if (!verifiedSoldier || !verifiedSoldier.found) {
+      setIosUpdateError("Mobile number is not recognized in the 10RCDG personnel roster.");
+      return;
+    }
+
+    const cleanEmail = iosEmail.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      setIosUpdateError("Please enter a valid email address (e.g. soldier@gmail.com).");
+      return;
+    }
+
+    setIsUpdatingIos(true);
+    try {
+      const res = await updateSoldierToIos({
+        campaignCode,
+        mobileNumber: iosMobileNumber,
+        email: cleanEmail,
+      });
+
+      setIosSuccessReceipt(res);
+    } catch (err: any) {
+      setIosUpdateError(extractCleanErrorMessage(err));
+    } finally {
+      setIsUpdatingIos(false);
+    }
+  };
+
   const validateStep1 = () => {
     setSubmissionError(null);
     const f = formData.firstName.trim();
@@ -576,7 +651,7 @@ export default function PublicEnlistmentPage() {
           </span>
           <span className="hidden xs:inline text-slate-300">|</span>
           <span className="text-[11px] sm:text-xs text-amber-800 font-semibold bg-amber-50 px-2 sm:px-2.5 py-0.5 rounded-md border border-amber-200">
-            Troop Registration
+            {campaign.campaignType === "IOS_UPDATE" ? "🍎 iOS Update" : "Troop Registration"}
           </span>
         </div>
       </header>
@@ -594,7 +669,9 @@ export default function PublicEnlistmentPage() {
                 Registration Window Closed
               </h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                The official enlistment window for <strong>{campaign.title}</strong> has concluded. Submissions are no longer accepted online.
+                {campaign.campaignType === "IOS_UPDATE"
+                  ? `The official Apple iOS update window for ${campaign.title} has concluded. Submissions are no longer accepted online.`
+                  : `The official enlistment window for ${campaign.title} has concluded. Submissions are no longer accepted online.`}
               </p>
             </div>
 
@@ -612,6 +689,81 @@ export default function PublicEnlistmentPage() {
             <p className="text-[11px] text-slate-400 italic">
               Please report directly to your CDC Unit Administrator for manual roster inclusion.
             </p>
+          </div>
+        ) : iosSuccessReceipt ? (
+          /* Apple iOS Alert Activation Success Receipt */
+          <div className="relative corner-bracket-light bg-white border border-blue-300 rounded-2xl p-6 sm:p-8 text-center space-y-5 shadow-xl animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-full bg-blue-50 border-2 border-blue-500 text-blue-700 flex items-center justify-center mx-auto shadow-sm">
+              <AppleIcon className="w-8 h-8 text-blue-800" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 text-[10px] font-mono font-bold uppercase tracking-wider">
+                Apple iOS Alert Layer Activated
+              </span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight pt-1">
+                iOS Profile Registered
+              </h2>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Your soldier profile has been updated in the 10RCDG Emergency Broadcast Directory.
+              </p>
+            </div>
+
+            {/* Soldier Receipt Summary */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-2 text-xs font-mono">
+              <div className="flex justify-between pb-1.5 border-b border-slate-200">
+                <span className="text-slate-500">Personnel:</span>
+                <span className="font-bold text-slate-900">{iosSuccessReceipt.soldierName}</span>
+              </div>
+              <div className="flex justify-between pb-1.5 border-b border-slate-200">
+                <span className="text-slate-500">Mobile Number:</span>
+                <span className="font-bold text-emerald-700">{formatPhMobileDisplay(iosSuccessReceipt.mobileNumber)}</span>
+              </div>
+              <div className="flex justify-between pb-1.5 border-b border-slate-200">
+                <span className="text-slate-500">Alert Email:</span>
+                <span className="font-bold text-blue-700">{iosSuccessReceipt.email}</span>
+              </div>
+              <div className="flex justify-between pb-1.5 border-b border-slate-200">
+                <span className="text-slate-500">Assigned Unit:</span>
+                <span className="font-bold text-slate-800">{iosSuccessReceipt.unit}</span>
+              </div>
+              <div className="flex justify-between items-center pb-1.5 border-b border-slate-200">
+                <span className="text-slate-500">Device Type:</span>
+                <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                  <AppleIcon className="w-3.5 h-3.5 text-slate-800 shrink-0" />
+                  <span>Apple iPhone (iOS Broadcast Layer)</span>
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Status:</span>
+                <span className="text-emerald-700 font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Active in Emergency Broadcast</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Dispatch Guidance */}
+            <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-left text-xs space-y-1.5">
+              <div className="font-bold flex items-center gap-1.5 text-blue-950">
+                <Mail className="w-4 h-4 text-blue-700 shrink-0" />
+                <span>Emergency Email Broadcasts Enabled</span>
+              </div>
+              <p className="text-[11px] text-blue-800 leading-relaxed">
+                High-priority mobilization orders, DRRO disaster alerts, and official 10RCDG bulletins will now be sent directly to <strong>{iosSuccessReceipt.email}</strong> via Resend.
+              </p>
+              <p className="text-[10.5px] text-blue-700 italic">
+                💡 Tip: Ensure notifications for your Mail app are turned ON on your iPhone so you never miss an urgent muster dispatch.
+              </p>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+              <span className="flex items-center gap-1 text-emerald-700 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                10RCDG Command Verified
+              </span>
+              <span className="font-mono">Self-Service Portal</span>
+            </div>
           </div>
         ) : isSubmitted ? (
           /* Submission Success Receipt */
@@ -783,12 +935,28 @@ export default function PublicEnlistmentPage() {
           <div className="relative corner-bracket-light bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xl space-y-5 animate-in fade-in duration-200">
             {/* Header Lockup */}
             <div className="text-center space-y-2">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 mb-1 shadow-xs">
-                <KeyRound className="w-6 h-6" />
+              <div
+                className={`inline-flex items-center justify-center w-12 h-12 rounded-full mb-1 shadow-xs border ${
+                  campaign.campaignType === "IOS_UPDATE"
+                    ? "bg-blue-50 border-blue-200 text-blue-700"
+                    : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                }`}
+              >
+                {campaign.campaignType === "IOS_UPDATE" ? (
+                  <AppleIcon className="w-6 h-6 text-slate-800" />
+                ) : (
+                  <KeyRound className="w-6 h-6" />
+                )}
               </div>
               <div>
-                <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-mono font-bold">
-                  {campaign.groupName}
+                <span
+                  className={`px-2.5 py-0.5 rounded-full border text-[10px] font-mono font-bold ${
+                    campaign.campaignType === "IOS_UPDATE"
+                      ? "bg-blue-50 text-blue-800 border-blue-200"
+                      : "bg-slate-100 text-slate-700 border-slate-200"
+                  }`}
+                >
+                  {campaign.campaignType === "IOS_UPDATE" ? "Apple iOS Alert Gateway" : campaign.groupName}
                 </span>
                 <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight mt-1.5">
                   {campaign.title}
@@ -895,6 +1063,8 @@ export default function PublicEnlistmentPage() {
                 className={`w-full py-3 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 uppercase tracking-wider ${
                   isLockedOut
                     ? "bg-slate-400 cursor-not-allowed shadow-none"
+                    : campaign.campaignType === "IOS_UPDATE"
+                    ? "bg-blue-700 hover:bg-blue-800 active:scale-[0.99] cursor-pointer"
                     : "bg-emerald-800 hover:bg-emerald-700 active:scale-[0.99] cursor-pointer"
                 }`}
               >
@@ -913,7 +1083,11 @@ export default function PublicEnlistmentPage() {
                   </>
                 ) : (
                   <>
-                    <span>Unlock Enlistment Form</span>
+                    <span>
+                      {campaign.campaignType === "IOS_UPDATE"
+                        ? "Unlock iOS Update Portal"
+                        : "Unlock Enlistment Form"}
+                    </span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -926,6 +1100,204 @@ export default function PublicEnlistmentPage() {
                 Official 10RCDG Portal
               </span>
               <span className="font-mono">Authorized Troops Only</span>
+            </div>
+          </div>
+        ) : campaign?.campaignType === "IOS_UPDATE" ? (
+          /* Step 2 (Dedicated): Apple iOS Alert Activation Form */
+          <div className="relative corner-bracket-light bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xl space-y-5 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shadow-2xs">
+                  <AppleIcon className="w-5 h-5 text-slate-800" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono text-blue-700 font-bold uppercase tracking-wider">
+                    Apple iOS Alert Gateway
+                  </span>
+                  <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                    {campaign.title}
+                  </h2>
+                </div>
+              </div>
+              <div className="text-right font-mono">
+                <span className="text-[9px] text-slate-400 block uppercase">Time Remaining</span>
+                <span className="text-xs font-bold text-amber-700">
+                  {timeLeft.days > 0 ? `${timeLeft.days}d ` : ""}{String(timeLeft.hours).padStart(2, "0")}:{String(timeLeft.minutes).padStart(2, "0")}:{String(timeLeft.seconds).padStart(2, "0")}
+                </span>
+              </div>
+            </div>
+
+            {campaign.instructions && (
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
+                {campaign.instructions}
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleIosUpdateSubmit} className="space-y-4">
+              {/* Mobile Number Verification */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                  <span>Registered Mobile Number <span className="text-red-500 font-bold">*</span></span>
+                  <span className="text-[10px] font-mono text-slate-400 font-normal">PH (+63) format</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    required
+                    placeholder="0917 123 4567"
+                    value={formatPhMobileDisplay(iosMobileNumber)}
+                    onChange={handleIosMobileChange}
+                    maxLength={13}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono font-bold text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                  />
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                </div>
+
+                {/* Real-time Soldier Identification Status Card */}
+                {iosMobileNumber.replace(/\D/g, "").length < 11 ? (
+                  <p className="text-[11px] text-slate-500 flex items-center gap-1 font-mono">
+                    <span>ℹ Enter your 11-digit registered mobile number to verify your record.</span>
+                  </p>
+                ) : verifiedSoldier === undefined ? (
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-blue-600 border-t-transparent animate-spin shrink-0" />
+                    <span>Searching 10RCDG personnel records...</span>
+                  </div>
+                ) : verifiedSoldier.found ? (
+                  <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-300 text-emerald-950 space-y-1 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        Verified 10RCDG Soldier
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300">
+                        Found in Roster
+                      </span>
+                    </div>
+                    <div className="text-sm font-extrabold text-slate-900">
+                      {verifiedSoldier.name}
+                    </div>
+                    <div className="text-xs text-slate-600 flex items-center gap-2 pt-0.5">
+                      <span>{verifiedSoldier.rank || "Troop"}</span>
+                      <span>•</span>
+                      <span>{verifiedSoldier.unit || "10RCDG"}</span>
+                      <span>({verifiedSoldier.company || "HHC"})</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 space-y-1 animate-in fade-in duration-150">
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-amber-950">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Mobile Number Not Recognized</span>
+                    </div>
+                    <p className="text-[11px] text-amber-900 leading-relaxed">
+                      We could not find <strong>{iosMobileNumber}</strong> in the 10RCDG active personnel directory. Please verify that this is the exact mobile number you registered with, or contact your CDC unit administrator.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Email Address Field */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                  <span>
+                    Emergency Alert Email <span className="text-red-500 font-bold">*</span>
+                  </span>
+                  <span className="text-[10px] text-blue-600 font-bold flex items-center gap-1">
+                    <AppleIcon className="w-3 h-3" /> Required for iOS
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    required
+                    placeholder="soldier@gmail.com"
+                    value={iosEmail}
+                    onChange={(e) => {
+                      setIosEmail(e.target.value);
+                      if (iosUpdateError) setIosUpdateError(null);
+                    }}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 bg-white placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all font-mono"
+                  />
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                </div>
+
+                {/* Quick Email Domain Chips */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] text-slate-400 uppercase font-mono mr-1">Quick:</span>
+                  {["@gmail.com", "@icloud.com", "@yahoo.com", "@outlook.com"].map((dom) => (
+                    <button
+                      key={dom}
+                      type="button"
+                      onClick={() => {
+                        const prefix = iosEmail.includes("@") ? iosEmail.split("@")[0] : iosEmail;
+                        if (prefix) {
+                          setIosEmail(`${prefix}${dom}`);
+                        } else {
+                          setIosEmail(dom);
+                        }
+                      }}
+                      className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 transition-colors text-slate-600 cursor-pointer"
+                    >
+                      +{dom}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Why Email Box */}
+                <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-blue-950 text-[11px]">
+                    <AppleIcon className="w-3.5 h-3.5 text-blue-800" />
+                    <span>Why is Email Required for iPhone Users?</span>
+                  </div>
+                  <p className="text-[10.5px] text-blue-800 leading-relaxed">
+                    Because Apple iOS does not allow downloading Android APK files, 10RCDG Command dispatches mobilization orders and emergency bulletins directly to this email address via Resend.
+                  </p>
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {iosUpdateError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2 animate-in fade-in duration-150">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                  <span>{iosUpdateError}</span>
+                </div>
+              )}
+
+              {/* Submit Action Button */}
+              <button
+                type="submit"
+                disabled={
+                  isUpdatingIos ||
+                  !isValidPhMobileNumber(iosMobileNumber) ||
+                  !verifiedSoldier ||
+                  !verifiedSoldier.found ||
+                  !iosEmail.trim()
+                }
+                className="w-full py-3 bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider active:scale-[0.99]"
+              >
+                {isUpdatingIos ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    <span>Activating iOS Emergency Alerts...</span>
+                  </>
+                ) : (
+                  <>
+                    <AppleIcon className="w-4 h-4 text-white" />
+                    <span>Activate Apple iOS Emergency Alerts</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+              <span className="flex items-center gap-1 text-emerald-700 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                Official 10RCDG Defense Portal
+              </span>
+              <span className="font-mono">Self-Service Update</span>
             </div>
           </div>
         ) : (

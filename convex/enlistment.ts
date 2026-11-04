@@ -162,6 +162,7 @@ export const createCampaign = mutation({
     groupId: v.optional(v.string()),
     groupName: v.string(),
     durationStr: v.string(),
+    campaignType: v.optional(v.union(v.literal("NEW_ENLISTMENT"), v.literal("IOS_UPDATE"))),
     createdBy: v.string(),
     createdByEmail: v.optional(v.string()),
   },
@@ -182,6 +183,7 @@ export const createCampaign = mutation({
 
     const campaignCode = generateCampaignCode(args.title);
     const targetUnit = args.targetUnit?.trim() || "10RCDG";
+    const campaignType = args.campaignType || "NEW_ENLISTMENT";
 
     const campaignId = await ctx.db.insert("enlistmentCampaigns", {
       campaignCode,
@@ -195,6 +197,8 @@ export const createCampaign = mutation({
       expiresAt,
       duration: args.durationStr.trim(),
       status: "ACTIVE",
+      campaignType,
+      updatedCount: 0,
       totalSubmissions: 0,
       pendingCount: 0,
       approvedCount: 0,
@@ -220,6 +224,8 @@ export const createCampaign = mutation({
           duration: args.durationStr.trim(),
           expiresAt,
           status: "ACTIVE" as const,
+          campaignType,
+          updatedCount: 0,
           createdBy: args.createdBy,
           createdAt: new Date().toISOString(),
         },
@@ -270,6 +276,8 @@ export const listCampaigns = query({
 
       return {
         ...c,
+        campaignType: c.campaignType || "NEW_ENLISTMENT",
+        updatedCount: c.updatedCount ?? 0,
         totalSubmissions: c.totalSubmissions ?? 0,
         pendingCount: c.pendingCount ?? 0,
         approvedCount: c.approvedCount ?? 0,
@@ -313,6 +321,8 @@ export const getCampaignPublic = query({
       expiresAt: campaign.expiresAt,
       duration: campaign.duration,
       status: campaign.status,
+      campaignType: campaign.campaignType || "NEW_ENLISTMENT",
+      updatedCount: campaign.updatedCount ?? 0,
       isExpired,
     };
   },
@@ -1346,5 +1356,188 @@ export const removeCampaign = mutation({
     }
 
     return { success: true };
+  },
+});
+
+// 12. Verify Soldier Identity for iOS Device Update Portal
+export const verifySoldierForIosUpdate = query({
+  args: {
+    campaignCode: v.string(),
+    mobileNumber: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const cleanCode = args.campaignCode.toLowerCase().trim();
+    const campaign =
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", args.campaignCode.trim()))
+        .first());
+
+    if (!campaign) {
+      throw new ConvexError("Enlistment campaign not found.");
+    }
+
+    const now = Date.now();
+    if (now >= campaign.expiresAt || campaign.status === "CLOSED") {
+      throw new ConvexError("This update campaign has expired or been closed by command.");
+    }
+
+    const rawDigits = args.mobileNumber.replace(/\D/g, "");
+    let cleanMobile = "";
+    if (rawDigits.startsWith("639") && rawDigits.length === 12) {
+      cleanMobile = "+63" + rawDigits.slice(2);
+    } else if (rawDigits.startsWith("09") && rawDigits.length === 11) {
+      cleanMobile = "+63" + rawDigits.slice(1);
+    } else if (rawDigits.length === 10 && rawDigits.startsWith("9")) {
+      cleanMobile = "+63" + rawDigits;
+    } else {
+      cleanMobile = args.mobileNumber.trim();
+    }
+
+    const localPh = cleanMobile.startsWith("+63") ? "0" + cleanMobile.slice(3) : cleanMobile;
+    const spacedPh = cleanMobile.startsWith("+63")
+      ? `+63 ${cleanMobile.slice(3, 6)} ${cleanMobile.slice(6, 9)} ${cleanMobile.slice(9)}`
+      : cleanMobile;
+
+    const existingTroop =
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", spacedPh))
+        .first());
+
+    if (!existingTroop) {
+      return { found: false, message: "No registered personnel found with this mobile number." };
+    }
+
+    return {
+      found: true,
+      soldierId: existingTroop._id,
+      name: `${existingTroop.rank || ""} ${existingTroop.firstName} ${existingTroop.lastName}`.trim(),
+      rank: existingTroop.rank || "",
+      unit: existingTroop.unit || existingTroop.groupName || "10RCDG",
+      company: existingTroop.company || "HHC",
+      currentDevice: existingTroop.deviceType || "ANDROID",
+      currentEmail: existingTroop.email || "",
+    };
+  },
+});
+
+// 13. Update Soldier to Apple iOS & Register Email (Self-Service)
+export const updateSoldierToIos = mutation({
+  args: {
+    campaignCode: v.string(),
+    mobileNumber: v.string(),
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const cleanEmail = args.email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@") || !cleanEmail.includes(".")) {
+      throw new ConvexError("Please provide a valid email address (e.g. name@gmail.com).");
+    }
+
+    const cleanCode = args.campaignCode.toLowerCase().trim();
+    const campaign =
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", cleanCode))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentCampaigns")
+        .withIndex("by_campaignCode", (q) => q.eq("campaignCode", args.campaignCode.trim()))
+        .first());
+
+    if (!campaign) {
+      throw new ConvexError("Enlistment campaign not found.");
+    }
+
+    const now = Date.now();
+    if (now >= campaign.expiresAt || campaign.status === "CLOSED") {
+      throw new ConvexError("This update campaign has expired or been closed by command.");
+    }
+
+    const rawDigits = args.mobileNumber.replace(/\D/g, "");
+    let cleanMobile = "";
+    if (rawDigits.startsWith("639") && rawDigits.length === 12) {
+      cleanMobile = "+63" + rawDigits.slice(2);
+    } else if (rawDigits.startsWith("09") && rawDigits.length === 11) {
+      cleanMobile = "+63" + rawDigits.slice(1);
+    } else if (rawDigits.length === 10 && rawDigits.startsWith("9")) {
+      cleanMobile = "+63" + rawDigits;
+    } else {
+      cleanMobile = args.mobileNumber.trim();
+    }
+
+    const localPh = cleanMobile.startsWith("+63") ? "0" + cleanMobile.slice(3) : cleanMobile;
+    const spacedPh = cleanMobile.startsWith("+63")
+      ? `+63 ${cleanMobile.slice(3, 6)} ${cleanMobile.slice(6, 9)} ${cleanMobile.slice(9)}`
+      : cleanMobile;
+
+    const existingTroop =
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", spacedPh))
+        .first());
+
+    if (!existingTroop) {
+      throw new ConvexError(
+        `Mobile number (${args.mobileNumber}) is not found in the official 10RCDG personnel roster. Please make sure you enter the exact number you originally enlisted with.`
+      );
+    }
+
+    // Update personnel record to IOS with their email
+    await ctx.db.patch(existingTroop._id, {
+      deviceType: "IOS",
+      email: cleanEmail,
+      updatedAt: new Date().toISOString(),
+      updatedBy: `Self-Service iOS Portal (${campaign.title})`,
+    });
+
+    // Increment updatedCount on campaign
+    await ctx.db.patch(campaign._id, {
+      updatedCount: (campaign.updatedCount ?? 0) + 1,
+    });
+
+    // Mirror to partner database via bridge
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncPersonnelDeviceType",
+        args: {
+          mobileNumber: cleanMobile,
+          deviceType: "IOS",
+          email: cleanEmail,
+        },
+      });
+    }
+
+    const soldierName = `${existingTroop.rank || ""} ${existingTroop.firstName} ${existingTroop.lastName}`.trim();
+    return {
+      success: true,
+      soldierName,
+      unit: existingTroop.unit || existingTroop.groupName || "10RCDG",
+      email: cleanEmail,
+      mobileNumber: cleanMobile,
+    };
   },
 });

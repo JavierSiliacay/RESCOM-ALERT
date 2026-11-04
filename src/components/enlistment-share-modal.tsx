@@ -27,6 +27,7 @@ interface EnlistmentShareModalProps {
     targetCompany?: string;
     duration: string;
     expiresAt: number;
+    campaignType?: "NEW_ENLISTMENT" | "IOS_UPDATE";
   } | null;
 }
 
@@ -72,7 +73,22 @@ export function EnlistmentShareModal({
     setTimeout(() => setCopiedPasscode(false), 2000);
   };
 
-  const viberTemplate = `🇵🇭 10RCDG OFFICIAL ENLISTMENT REGISTRATION
+  const isIosUpdate = (campaign as any).campaignType === "IOS_UPDATE";
+
+  const viberTemplate = isIosUpdate
+    ? `🇵🇭 10RCDG OFFICIAL APPLE iOS MOBILIZATION REGISTRATION
+Batch: ${campaign.title}
+Target Unit: ${campaign.targetUnit}${campaign.targetCompany ? ` (${campaign.targetCompany === "HHC" ? "HHC" : `${campaign.targetCompany} Company`})` : ""}
+
+Attention all 10RCDG personnel & reservists using an Apple iPhone:
+Please register your active mobile number and email address to activate your zero-cost emergency mobilization alert layer:
+
+🔗 Update Link: ${publicUrl}
+🔑 Security Passcode: ${campaign.passcode}
+⏱️ Window Duration: ${campaign.duration}
+
+Restricted Official Military Communication — 10RCDG, Reserve Command, Philippine Army`
+    : `🇵🇭 10RCDG OFFICIAL ENLISTMENT REGISTRATION
 Batch: ${campaign.title}
 Target Unit: ${campaign.targetUnit}${campaign.targetCompany ? ` (${campaign.targetCompany === "HHC" ? "HHC" : `${campaign.targetCompany} Company`})` : ""}
 

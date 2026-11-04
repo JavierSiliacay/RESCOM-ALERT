@@ -498,6 +498,8 @@ export const syncCampaign = mutation({
     duration: v.string(),
     expiresAt: v.number(),
     status: v.union(v.literal("ACTIVE"), v.literal("CLOSED")),
+    campaignType: v.optional(v.union(v.literal("NEW_ENLISTMENT"), v.literal("IOS_UPDATE"))),
+    updatedCount: v.optional(v.number()),
     createdBy: v.string(),
     createdAt: v.string(),
   },
@@ -518,6 +520,8 @@ export const syncCampaign = mutation({
         groupName: args.groupName,
         expiresAt: args.expiresAt,
         status: args.status,
+        campaignType: args.campaignType || existing.campaignType || "NEW_ENLISTMENT",
+        updatedCount: args.updatedCount !== undefined ? args.updatedCount : existing.updatedCount,
       });
       return { success: true, updated: true, id: existing._id };
     }
@@ -534,6 +538,8 @@ export const syncCampaign = mutation({
       duration: args.duration,
       expiresAt: args.expiresAt,
       status: args.status,
+      campaignType: args.campaignType || "NEW_ENLISTMENT",
+      updatedCount: args.updatedCount || 0,
       totalSubmissions: 0,
       pendingCount: 0,
       approvedCount: 0,
@@ -673,5 +679,51 @@ export const normalizeRosterPhones = mutation({
       mergedSantos,
       details,
     };
+  },
+});
+
+export const syncPersonnelDeviceType = mutation({
+  args: {
+    mobileNumber: v.string(),
+    deviceType: v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS")),
+    email: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const rawMobile = args.mobileNumber;
+    const digits = rawMobile.replace(/\D/g, "");
+    let searchCore = digits;
+    if (digits.startsWith("6309")) searchCore = digits.slice(3);
+    else if (digits.startsWith("639")) searchCore = digits.slice(2);
+    else if (digits.startsWith("09")) searchCore = digits.slice(1);
+    else if (digits.startsWith("9") && digits.length === 10) searchCore = digits;
+    else if (digits.length >= 10 && digits.slice(-10).startsWith("9")) searchCore = digits.slice(-10);
+
+    const canonicalPh = "+63" + searchCore;
+    const localPh = "0" + searchCore;
+
+    const existing =
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", rawMobile.trim()))
+        .first());
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        deviceType: args.deviceType,
+        email: args.email || existing.email,
+        updatedAt: new Date().toISOString(),
+        updatedBy: "Self-Service iOS Portal Sync",
+      });
+      return { success: true, updated: true };
+    }
+    return { success: false, reason: "NOT_FOUND" };
   },
 });

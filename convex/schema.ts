@@ -181,6 +181,8 @@ export default defineSchema({
     totalSubmissions: v.optional(v.number()),
     pendingCount: v.optional(v.number()),
     approvedCount: v.optional(v.number()),
+    campaignType: v.optional(v.union(v.literal("NEW_ENLISTMENT"), v.literal("IOS_UPDATE"))),
+    updatedCount: v.optional(v.number()),
     createdBy: v.string(),
     createdAt: v.string(),
   })

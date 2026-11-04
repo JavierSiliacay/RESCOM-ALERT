@@ -463,6 +463,7 @@ export default function PersonnelPage() {
     groupName: "Ready Reserve",
     durationPreset: "24 Hours",
     customDuration: "",
+    campaignType: "NEW_ENLISTMENT" as "NEW_ENLISTMENT" | "IOS_UPDATE",
   });
 
   // Share Modal State
@@ -474,6 +475,7 @@ export default function PersonnelPage() {
     targetCompany?: string;
     duration: string;
     expiresAt: number;
+    campaignType?: "NEW_ENLISTMENT" | "IOS_UPDATE";
   } | null>(null);
 
   // Selected Pending Submissions for Bulk Approval
@@ -1354,6 +1356,7 @@ export default function PersonnelPage() {
         groupId: campaignFormData.groupId || undefined,
         groupName,
         durationStr,
+        campaignType: campaignFormData.campaignType,
         createdBy: currentOfficer.displayName,
         createdByEmail: currentOfficer.email,
       });
@@ -1368,6 +1371,7 @@ export default function PersonnelPage() {
         targetCompany,
         duration: durationStr,
         expiresAt: res.expiresAt,
+        campaignType: campaignFormData.campaignType,
       });
       setActiveTab("ENLISTMENT");
     } catch (err: any) {
@@ -1513,6 +1517,7 @@ export default function PersonnelPage() {
                   groupName: groupsList[0]?.name || "Ready Reserve",
                   durationPreset: "24 Hours",
                   customDuration: "",
+                  campaignType: "NEW_ENLISTMENT",
                 });
                 setIsCampaignModalOpen(true);
               });
@@ -2431,6 +2436,17 @@ export default function PersonnelPage() {
                                 {(camp as any).targetCompany}
                               </span>
                             )}
+                            {(camp as any).campaignType === "IOS_UPDATE" ? (
+                              <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-blue-100 text-blue-900 border border-blue-200 flex items-center gap-1">
+                                <AppleIcon className="w-2.5 h-2.5 text-blue-700" />
+                                <span>iOS Update</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                                <UserCheck className="w-2.5 h-2.5 text-amber-700" />
+                                <span>New Enlistment</span>
+                              </span>
+                            )}
                           </div>
                           <h4 className="text-sm font-bold text-slate-900 mt-1 line-clamp-1">
                             {camp.title}
@@ -2469,10 +2485,21 @@ export default function PersonnelPage() {
                           duration={camp.duration}
                         />
                         <div className="flex items-center justify-between pt-0.5 border-t border-slate-200/60">
-                          <span className="text-slate-500 text-[10px]">Submissions:</span>
-                          <span className="font-bold text-emerald-700">
-                            {camp.totalSubmissions} ({camp.pendingCount} pending)
-                          </span>
+                          {(camp as any).campaignType === "IOS_UPDATE" ? (
+                            <>
+                              <span className="text-slate-500 text-[10px]">Troops Updated to iOS:</span>
+                              <span className="font-bold text-blue-700 font-mono">
+                                {(camp as any).updatedCount || 0} Troops
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-slate-500 text-[10px]">Submissions:</span>
+                              <span className="font-bold text-emerald-700">
+                                {camp.totalSubmissions} ({camp.pendingCount} pending)
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2490,6 +2517,7 @@ export default function PersonnelPage() {
                             targetCompany: (camp as any).targetCompany,
                             duration: camp.duration,
                             expiresAt: camp.expiresAt,
+                            campaignType: (camp as any).campaignType || "NEW_ENLISTMENT",
                           })
                         }
                         className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl border border-amber-200 flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -2980,6 +3008,92 @@ export default function PersonnelPage() {
             </div>
 
             <form onSubmit={handleCreateCampaign} className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs text-slate-700">
+              {/* Campaign Type / Purpose Selector */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Select Link Purpose <span className="text-red-500 font-bold ml-0.5">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <label
+                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+                      campaignFormData.campaignType === "NEW_ENLISTMENT"
+                        ? "bg-amber-50/70 border-amber-600 ring-1 ring-amber-600 text-slate-900 shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-bold text-xs">
+                        <input
+                          type="radio"
+                          name="campaignType"
+                          value="NEW_ENLISTMENT"
+                          checked={campaignFormData.campaignType === "NEW_ENLISTMENT"}
+                          onChange={() =>
+                            setCampaignFormData((prev) => ({
+                              ...prev,
+                              campaignType: "NEW_ENLISTMENT",
+                              title: prev.title === "10RCDG Apple iOS Device & Email Update Drive" ? "" : prev.title,
+                              instructions: "",
+                            }))
+                          }
+                          className="text-amber-700 focus:ring-amber-600"
+                        />
+                        <span className="flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <span>Option 1: New Enlistment</span>
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-200/80 text-amber-950 font-mono">
+                        RECRUITS
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
+                      Standard 3-step registration form for onboarding new cadets, ROTC batches, and recruits.
+                    </p>
+                  </label>
+
+                  <label
+                    className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+                      campaignFormData.campaignType === "IOS_UPDATE"
+                        ? "bg-blue-50/70 border-blue-600 ring-1 ring-blue-600 text-slate-900 shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-bold text-xs">
+                        <input
+                          type="radio"
+                          name="campaignType"
+                          value="IOS_UPDATE"
+                          checked={campaignFormData.campaignType === "IOS_UPDATE"}
+                          onChange={() =>
+                            setCampaignFormData((prev) => ({
+                              ...prev,
+                              campaignType: "IOS_UPDATE",
+                              title: prev.title || "10RCDG Apple iOS Device & Email Update Drive",
+                              instructions:
+                                prev.instructions ||
+                                "Attention all 10RCDG Reservists using an Apple iPhone: Please input your registered mobile number and email address to receive emergency mobilization alerts.",
+                            }))
+                          }
+                          className="text-blue-700 focus:ring-blue-600"
+                        />
+                        <span className="flex items-center gap-1.5">
+                          <AppleIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span>Option 2: iOS Update</span>
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 font-mono">
+                        IPHONE & EMAIL
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
+                      Dedicated form for existing soldiers to switch their phone to Apple iOS and register their email.
+                    </p>
+                  </label>
+                </div>
+              </div>
+
               {/* Custom Campaign Title */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">

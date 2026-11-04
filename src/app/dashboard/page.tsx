@@ -20,16 +20,15 @@ import { Skeleton } from "@/components/skeleton";
 import { formatBroadcastTitle } from "@/lib/sms";
 
 export default function DashboardPage() {
-  const personnelData = useQuery(api.personnel.list);
+  const rosterSummary = useQuery(api.personnel.getRosterSummary);
   const broadcastsData = useQuery(api.broadcasts.list);
 
-  const isLoading = personnelData === undefined || broadcastsData === undefined;
+  const isLoading = rosterSummary === undefined || broadcastsData === undefined;
 
-  const personnel = personnelData || [];
   const broadcasts = broadcastsData || [];
 
-  const totalPersonnel = personnel.length;
-  const activePersonnel = personnel.filter((p) => p.status === "ACTIVE").length;
+  const totalPersonnel = rosterSummary?.totalPersonnel ?? 0;
+  const activePersonnel = rosterSummary?.activePersonnel ?? 0;
   const totalBroadcasts = broadcasts.length;
   const recentBroadcasts = broadcasts.slice(0, 3);
 

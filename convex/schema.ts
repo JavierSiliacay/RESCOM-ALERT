@@ -47,6 +47,7 @@ export default defineSchema({
     .index("by_groupName", ["groupName"])
     .index("by_company", ["company"])
     .index("by_status", ["status"])
+    .index("by_deviceType", ["deviceType"])
     .index("by_lastName", ["lastName"]),
 
   // Contact Groups / Units

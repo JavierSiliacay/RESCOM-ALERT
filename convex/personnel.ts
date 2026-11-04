@@ -40,6 +40,21 @@ export const getRosterSummary = query({
   },
 });
 
+// Lightweight index-backed query to get emails of active iOS personnel without scanning full table
+export const listIosEmails = query({
+  args: {},
+  handler: async (ctx) => {
+    const iosTroops = await ctx.db
+      .query("personnel")
+      .withIndex("by_deviceType", (q) => q.eq("deviceType", "IOS"))
+      .collect();
+
+    return iosTroops
+      .filter((p) => p.status === "ACTIVE" && p.email && p.email.includes("@"))
+      .map((p) => p.email!.trim());
+  },
+});
+
 // Add new personnel
 export const create = mutation({
   args: {

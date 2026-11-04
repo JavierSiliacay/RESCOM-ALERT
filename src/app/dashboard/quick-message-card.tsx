@@ -7,7 +7,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useCurrentOfficer } from "@/components/officer-context";
 import { PersonnelRecipientCombobox, RecipientChip } from "@/components/personnel-recipient-combobox";
-import { AndroidIcon, KeypadPhoneIcon, HybridIcon, ForceSmsIcon } from "@/components/device-icons";
+import { AndroidIcon, KeypadPhoneIcon, HybridIcon, ForceSmsIcon, AppleIcon } from "@/components/device-icons";
 import { isSamePhMobileNumber } from "@/lib/sms";
 
 export interface QuickMessageCardProps {
@@ -73,12 +73,14 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
         .filter((p) => p.status !== "INACTIVE");
     }
 
-    const androidTroops = targetPersonnel.filter((p) => ((p as any).deviceType || "ANDROID") === "ANDROID");
+    const androidTroops = targetPersonnel.filter((p) => !((p as any).deviceType) || (p as any).deviceType === "ANDROID");
+    const iosTroops = targetPersonnel.filter((p) => (p as any).deviceType === "IOS");
     const keypadTroops = targetPersonnel.filter((p) => (p as any).deviceType === "KEYPAD");
 
     return {
       total: targetPersonnel.length,
       androidTroops,
+      iosTroops,
       keypadTroops,
     };
   };
@@ -99,7 +101,7 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
       return;
     }
 
-    const { total, androidTroops, keypadTroops } = getCategorizedRecipients();
+    const { total, androidTroops, iosTroops, keypadTroops } = getCategorizedRecipients();
 
     let smsNumbers: string[] = [];
     let pushNumbers: string[] = [];
@@ -117,11 +119,15 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
       smsNumbers = [
         ...keypadTroops.map((p) => p.mobileNumber),
         ...androidTroops.map((p) => p.mobileNumber),
+        ...iosTroops.map((p) => p.mobileNumber),
       ];
       pushNumbers = [];
     }
 
-    const totalTarget = smsNumbers.length + pushNumbers.length;
+    const totalTarget =
+      dispatchChannel === "HYBRID"
+        ? smsNumbers.length + pushNumbers.length + iosTroops.length
+        : smsNumbers.length + pushNumbers.length;
 
     if (!message.trim() || totalTarget === 0) {
       if (totalTarget === 0) {
@@ -177,7 +183,9 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
       }
 
       // 3. Dispatch iOS / Registered Email Emergency Dispatches (Layer 3 via Resend)
-      const allTargetNumbers = [...smsNumbers, ...pushNumbers];
+      const allTargetNumbers = Array.from(
+        new Set([...smsNumbers, ...pushNumbers, ...iosTroops.map((p) => p.mobileNumber)])
+      );
       if (allTargetNumbers.length > 0) {
         try {
           fetch("/api/email/send", {
@@ -199,7 +207,7 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
       setLastSentCount(totalTarget);
       const breakdownText =
         dispatchChannel === "HYBRID"
-          ? `${pushNumbers.length} App Pushes (₱0) + ${smsNumbers.length} Keypad SMS`
+          ? `${pushNumbers.length} App Pushes (₱0) + ${iosTroops.length} iOS Emails (₱0) + ${smsNumbers.length} Keypad SMS`
           : dispatchChannel === "APP_PUSH"
           ? `${pushNumbers.length} Free App Pushes (₱0 Cost)`
           : dispatchChannel === "KEYPAD_SMS"
@@ -424,11 +432,20 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
               <Radio className="w-3.5 h-3.5 text-emerald-700" />
               Dispatch Channel Strategy
             </label>
-            <span className="text-[10px] font-mono text-slate-500 font-semibold flex items-center gap-1.5">
+            <span className="text-[10px] font-mono text-slate-500 font-semibold flex items-center gap-1.5 flex-wrap justify-end">
               <span className="flex items-center gap-1">
                 <AndroidIcon className="w-3 h-3 text-[#3DDC84]" />
                 <span>{categorizedRecipients.androidTroops.length} Android</span>
               </span>
+              {categorizedRecipients.iosTroops.length > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1 text-blue-700">
+                    <AppleIcon className="w-3 h-3 text-blue-600" />
+                    <span>{categorizedRecipients.iosTroops.length} iOS (Email)</span>
+                  </span>
+                </>
+              )}
               <span>•</span>
               <span className="flex items-center gap-1">
                 <KeypadPhoneIcon className="w-3 h-3 text-slate-500" />
@@ -466,10 +483,10 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
                 </span>
               </div>
               <p className="text-[10.5px] font-medium text-slate-600 pl-4 leading-tight">
-                Free Push for Android + SMS for Keypad
+                Free Push for Android + Email for iOS + SMS for Keypad
               </p>
               <span className="text-[10px] font-semibold text-emerald-700 pl-4 font-mono">
-                {categorizedRecipients.androidTroops.length} Free Push (₱0) + {categorizedRecipients.keypadTroops.length} SMS
+                {categorizedRecipients.androidTroops.length} Push + {categorizedRecipients.iosTroops.length} Email (₱0) + {categorizedRecipients.keypadTroops.length} SMS
               </span>
             </label>
 
@@ -591,7 +608,7 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
               </span>
               <span className="text-emerald-900 font-medium">
                 {dispatchChannel === "HYBRID" &&
-                  "Auto-splits recipients to cut SMS costs: Android phones receive free app sirens (₱0), while keypad phones receive cellular SMS."}
+                  "Auto-splits recipients to cut SMS costs: Android phones receive free app sirens (₱0), iPhones receive free email dispatches (₱0), while keypad phones receive cellular SMS."}
                 {dispatchChannel === "APP_PUSH" &&
                   "Sends in-app sirens exclusively to Android soldiers. Consumes 0 SMS credits. Basic keypad phone users are bypassed."}
                 {dispatchChannel === "KEYPAD_SMS" &&

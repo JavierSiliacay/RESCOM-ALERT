@@ -51,7 +51,7 @@ import {
 import { StatCardSkeleton, TableSkeleton } from "@/components/skeleton";
 import { useCurrentOfficer } from "@/components/officer-context";
 import { PersonnelRecipientCombobox, RecipientChip } from "@/components/personnel-recipient-combobox";
-import { AndroidIcon, KeypadPhoneIcon, HybridIcon, ForceSmsIcon } from "@/components/device-icons";
+import { AndroidIcon, KeypadPhoneIcon, HybridIcon, ForceSmsIcon, AppleIcon } from "@/components/device-icons";
 import { TablePagination } from "@/components/table-pagination";
 import { PRESET_COMPANIES } from "@/lib/military-companies";
 
@@ -339,12 +339,14 @@ function MessagingContent() {
         .filter((p) => p.status !== "INACTIVE");
     }
 
-    const androidTroops = targetPersonnel.filter((p) => ((p as any).deviceType || "ANDROID") === "ANDROID");
+    const androidTroops = targetPersonnel.filter((p) => !((p as any).deviceType) || (p as any).deviceType === "ANDROID");
+    const iosTroops = targetPersonnel.filter((p) => (p as any).deviceType === "IOS");
     const keypadTroops = targetPersonnel.filter((p) => (p as any).deviceType === "KEYPAD");
 
     return {
       total: targetPersonnel.length,
       androidTroops,
+      iosTroops,
       keypadTroops,
     };
   };
@@ -353,7 +355,7 @@ function MessagingContent() {
 
   // Compute effective targets based on dispatch channel mode
   const getEffectiveTargets = () => {
-    const { androidTroops, keypadTroops } = categorizedRecipients;
+    const { androidTroops, iosTroops, keypadTroops } = categorizedRecipients;
     let smsNumbers: string[] = [];
     let pushNumbers: string[] = [];
 
@@ -370,13 +372,17 @@ function MessagingContent() {
       smsNumbers = [
         ...keypadTroops.map((p) => p.mobileNumber),
         ...androidTroops.map((p) => p.mobileNumber),
+        ...iosTroops.map((p) => p.mobileNumber),
       ];
       pushNumbers = [];
     }
     return {
       smsNumbers,
       pushNumbers,
-      totalCount: smsNumbers.length + pushNumbers.length,
+      totalCount:
+        dispatchChannel === "HYBRID"
+          ? smsNumbers.length + pushNumbers.length + iosTroops.length
+          : smsNumbers.length + pushNumbers.length,
     };
   };
 
@@ -533,7 +539,9 @@ function MessagingContent() {
       }
 
       // 3. Dispatch iOS / Registered Email Emergency Dispatches (Layer 3 via Resend)
-      const allTargetNumbers = [...smsNumbers, ...pushNumbers];
+      const allTargetNumbers = Array.from(
+        new Set([...smsNumbers, ...pushNumbers, ...categorizedRecipients.iosTroops.map((p) => p.mobileNumber)])
+      );
       if (allTargetNumbers.length > 0) {
         try {
           fetch("/api/email/send", {
@@ -1425,7 +1433,7 @@ function MessagingContent() {
                   <div className="flex items-center gap-2 text-xs">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span className="text-slate-700 font-medium">
-                      Targeting <strong className="text-slate-900 font-bold">{activeRecipientCount} personnel</strong> ({categorizedRecipients.androidTroops.length} Android, {categorizedRecipients.keypadTroops.length} Keypad)
+                      Targeting <strong className="text-slate-900 font-bold">{activeRecipientCount} personnel</strong> ({categorizedRecipients.androidTroops.length} Android{categorizedRecipients.iosTroops.length > 0 ? `, ${categorizedRecipients.iosTroops.length} iOS` : ""}, {categorizedRecipients.keypadTroops.length} Keypad)
                     </span>
                   </div>
                   <button
@@ -1470,11 +1478,17 @@ function MessagingContent() {
                         Dispatch Channel Strategy
                       </h3>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-mono">
+                    <div className="flex items-center gap-2 text-xs font-mono flex-wrap justify-end">
                       <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold flex items-center gap-1.5">
                         <AndroidIcon className="w-3 h-3 text-[#3DDC84]" />
                         <span>{categorizedRecipients.androidTroops.length} Android</span>
                       </span>
+                      {categorizedRecipients.iosTroops.length > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 font-bold flex items-center gap-1.5">
+                          <AppleIcon className="w-3 h-3 text-blue-600" />
+                          <span>{categorizedRecipients.iosTroops.length} iOS (Email)</span>
+                        </span>
+                      )}
                       <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-bold flex items-center gap-1.5">
                         <KeypadPhoneIcon className="w-3 h-3 text-slate-500" />
                         <span>{categorizedRecipients.keypadTroops.length} Keypad</span>
@@ -1510,7 +1524,7 @@ function MessagingContent() {
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
-                        App Push to {categorizedRecipients.androidTroops.length} Android (Free ₱0) + Cellular SMS to {categorizedRecipients.keypadTroops.length} Keypad.
+                        App Push to {categorizedRecipients.androidTroops.length} Android (Free ₱0) + Email to {categorizedRecipients.iosTroops.length} iOS (Free ₱0) + Cellular SMS to {categorizedRecipients.keypadTroops.length} Keypad.
                       </p>
                     </label>
 

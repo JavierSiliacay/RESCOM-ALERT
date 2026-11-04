@@ -537,6 +537,7 @@ export const verifyMobile = query({
     // 1. Check Active Personnel Roster using direct index
     const canonicalPh = "+63" + searchCore;
     const localPh = "0" + searchCore;
+    const spacedPh = `${localPh.slice(0, 4)} ${localPh.slice(4, 7)} ${localPh.slice(7)}`;
 
     const matchedSoldier =
       (await ctx.db
@@ -546,6 +547,10 @@ export const verifyMobile = query({
       (await ctx.db
         .query("personnel")
         .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", spacedPh))
         .first()) ||
       (await ctx.db
         .query("personnel")
@@ -614,6 +619,10 @@ export const verifyMobile = query({
       (await ctx.db
         .query("enlistmentSubmissions")
         .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", spacedPh))
         .first()) ||
       (await ctx.db
         .query("enlistmentSubmissions")

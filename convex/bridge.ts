@@ -57,6 +57,12 @@ async function findPersonnelByMobile(ctx: any, rawMobile: string) {
     (await ctx.db
       .query("personnel")
       .withIndex("by_mobileNumber", (q: any) => q.eq("mobileNumber", rawMobile.trim()))
+      .first()) ||
+    (await ctx.db
+      .query("personnel")
+      .withIndex("by_mobileNumber", (q: any) =>
+        q.eq("mobileNumber", `${localPh.slice(0, 4)} ${localPh.slice(4, 7)} ${localPh.slice(7)}`)
+      )
       .first())
   );
 }
@@ -425,5 +431,247 @@ export const syncRemovePersonnel = mutation({
       await ctx.db.delete(soldier._id);
     }
     return { success: true };
+  },
+});
+
+/**
+ * Sync Enlistment Submission Review (APPROVED / REJECTED) to Partner Deployment
+ */
+export const syncSubmissionReview = mutation({
+  args: {
+    mobileNumber: v.string(),
+    status: v.union(v.literal("APPROVED"), v.literal("REJECTED")),
+    reviewedBy: v.string(),
+    reviewedAt: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const rawMobile = args.mobileNumber;
+    const digits = rawMobile.replace(/\D/g, "");
+    const core = digits.slice(-10);
+    const canonicalPh = "+63" + core;
+    const localPh = "0" + core;
+    const spacedPh = `${localPh.slice(0, 4)} ${localPh.slice(4, 7)} ${localPh.slice(7)}`;
+
+    const sub =
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", spacedPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", rawMobile.trim()))
+        .first());
+
+    if (sub) {
+      await ctx.db.patch(sub._id, {
+        status: args.status,
+        reviewedBy: args.reviewedBy,
+        reviewedAt: args.reviewedAt,
+      });
+      return { success: true, updated: true, id: sub._id };
+    }
+    return { success: false, reason: "Submission not found" };
+  },
+});
+
+/**
+ * Sync Enlistment Campaign Upsert / Creation to Partner Deployment
+ */
+export const syncCampaign = mutation({
+  args: {
+    campaignCode: v.string(),
+    title: v.string(),
+    instructions: v.optional(v.string()),
+    passcode: v.string(),
+    targetUnit: v.string(),
+    targetCompany: v.optional(v.string()),
+    groupId: v.optional(v.string()),
+    groupName: v.string(),
+    duration: v.string(),
+    expiresAt: v.number(),
+    status: v.union(v.literal("ACTIVE"), v.literal("CLOSED")),
+    createdBy: v.string(),
+    createdAt: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("enlistmentCampaigns")
+      .withIndex("by_campaignCode", (q) => q.eq("campaignCode", args.campaignCode))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        title: args.title,
+        instructions: args.instructions,
+        passcode: args.passcode,
+        targetUnit: args.targetUnit,
+        targetCompany: args.targetCompany,
+        groupId: args.groupId,
+        groupName: args.groupName,
+        expiresAt: args.expiresAt,
+        status: args.status,
+      });
+      return { success: true, updated: true, id: existing._id };
+    }
+
+    const id = await ctx.db.insert("enlistmentCampaigns", {
+      campaignCode: args.campaignCode,
+      title: args.title,
+      instructions: args.instructions,
+      passcode: args.passcode,
+      targetUnit: args.targetUnit,
+      targetCompany: args.targetCompany,
+      groupId: args.groupId,
+      groupName: args.groupName,
+      duration: args.duration,
+      expiresAt: args.expiresAt,
+      status: args.status,
+      totalSubmissions: 0,
+      pendingCount: 0,
+      approvedCount: 0,
+      createdBy: args.createdBy,
+      createdAt: args.createdAt,
+    });
+    return { success: true, inserted: true, id };
+  },
+});
+
+/**
+ * Sync Campaign Early Close to Partner Deployment
+ */
+export const syncCampaignClose = mutation({
+  args: {
+    campaignCode: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("enlistmentCampaigns")
+      .withIndex("by_campaignCode", (q) => q.eq("campaignCode", args.campaignCode))
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { status: "CLOSED" });
+    }
+    return { success: true };
+  },
+});
+
+/**
+ * Sync Campaign Deletion to Partner Deployment
+ */
+export const syncCampaignRemove = mutation({
+  args: {
+    campaignCode: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("enlistmentCampaigns")
+      .withIndex("by_campaignCode", (q) => q.eq("campaignCode", args.campaignCode))
+      .first();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+    return { success: true };
+  },
+});
+
+/**
+ * Normalize all phone numbers in personnel and submissions to canonical +639XXXXXXXXX
+ * and merge duplicate soldier records (e.g. Santos Obut).
+ */
+export const normalizeRosterPhones = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const allPersonnel = await ctx.db.query("personnel").collect();
+    let updatedPersonnel = 0;
+    const details: any[] = [];
+
+    // 1. Clean and normalize all personnel phone numbers
+    for (const person of allPersonnel) {
+      const raw = person.mobileNumber || "";
+      const digits = raw.replace(/\D/g, "");
+      let canonical = raw;
+      if (digits.startsWith("639") && digits.length === 12) {
+        canonical = "+63" + digits.slice(2);
+      } else if (digits.startsWith("09") && digits.length === 11) {
+        canonical = "+63" + digits.slice(1);
+      } else if (digits.startsWith("9") && digits.length === 10) {
+        canonical = "+63" + digits;
+      }
+
+      if (canonical !== raw && canonical.startsWith("+639") && canonical.length === 13) {
+        await ctx.db.patch(person._id, { mobileNumber: canonical });
+        updatedPersonnel++;
+        details.push({
+          id: person._id,
+          name: `${person.firstName} ${person.lastName}`,
+          oldPhone: raw,
+          newPhone: canonical,
+        });
+      }
+    }
+
+    // 2. Clean and normalize enlistmentSubmissions phone numbers
+    const allSubmissions = await ctx.db.query("enlistmentSubmissions").collect();
+    let updatedSubmissions = 0;
+    for (const sub of allSubmissions) {
+      const raw = sub.mobileNumber || "";
+      const digits = raw.replace(/\D/g, "");
+      let canonical = raw;
+      if (digits.startsWith("639") && digits.length === 12) {
+        canonical = "+63" + digits.slice(2);
+      } else if (digits.startsWith("09") && digits.length === 11) {
+        canonical = "+63" + digits.slice(1);
+      } else if (digits.startsWith("9") && digits.length === 10) {
+        canonical = "+63" + digits;
+      }
+
+      if (canonical !== raw && canonical.startsWith("+639") && canonical.length === 13) {
+        await ctx.db.patch(sub._id, { mobileNumber: canonical });
+        updatedSubmissions++;
+      }
+    }
+
+    // 3. Merge Santos Obut duplicate if both records exist
+    const santosRecords = (await ctx.db.query("personnel").collect()).filter((p) => {
+      const raw = (p.mobileNumber || "").replace(/\D/g, "");
+      return raw.slice(-10) === "9756294394";
+    });
+
+    let mergedSantos = false;
+    if (santosRecords.length > 1) {
+      // Find the newer one (RES rank) and older one (SGT rank)
+      const older = santosRecords.reduce((prev, curr) =>
+        prev._creationTime < curr._creationTime ? prev : curr
+      );
+      const newer = santosRecords.reduce((prev, curr) =>
+        prev._creationTime > curr._creationTime ? prev : curr
+      );
+
+      // Preserve the older record with canonical phone and normalized name
+      await ctx.db.patch(older._id, {
+        lastName: "Obut",
+        mobileNumber: "+639756294394",
+        company: older.company || newer.company || "HHC",
+      });
+      // Delete the redundant duplicate created by approval
+      await ctx.db.delete(newer._id);
+      mergedSantos = true;
+    }
+
+    return {
+      success: true,
+      updatedPersonnel,
+      updatedSubmissions,
+      mergedSantos,
+      details,
+    };
   },
 });

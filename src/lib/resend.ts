@@ -177,3 +177,4 @@ export async function dispatchEmergencyEmail(payload: EmergencyAlertEmailPayload
     errors: errors.length > 0 ? errors : undefined,
   };
 }
+

@@ -348,8 +348,21 @@ export default function PublicEnlistmentPage() {
 
   const validateStep1 = () => {
     setSubmissionError(null);
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+    const f = formData.firstName.trim();
+    const l = formData.lastName.trim();
+
+    if (!f || !l) {
       setSubmissionError("Please enter both your first and last name before proceeding.");
+      return false;
+    }
+    if (f.length < 2 || l.length < 2) {
+      setSubmissionError("First name and last name must each be at least 2 characters.");
+      return false;
+    }
+    const dummyRegex = /^(asdf|qwert|zxcv|1234|test|none|n\/a|na|xxx|aaa|bbb|ccc)/i;
+    const repeatPattern = /^(.{2,4})\1+$/i;
+    if (dummyRegex.test(f) || dummyRegex.test(l) || repeatPattern.test(f.toLowerCase()) || repeatPattern.test(l.toLowerCase())) {
+      setSubmissionError("Please enter your genuine legal soldier name. Dummy or placeholder inputs are not allowed.");
       return false;
     }
     if (!isValidPhMobileNumber(formData.mobileNumber)) {

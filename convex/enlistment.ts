@@ -106,6 +106,40 @@ export function validateReservistFields(args: {
   }
 }
 
+/**
+ * Validate soldier First Name and Last Name format and sanity.
+ * Prevents dummy / repetitive placeholder names (e.g. "asdasd asdasd", "qwerty", "1234").
+ */
+export function validateSoldierName(firstName: string, lastName: string) {
+  const f = (firstName || "").trim();
+  const l = (lastName || "").trim();
+
+  if (f.length < 2) {
+    throw new ConvexError("First name must be at least 2 characters.");
+  }
+  if (l.length < 2) {
+    throw new ConvexError("Last name must be at least 2 characters.");
+  }
+
+  // Reject repeating patterns or obvious dummy test strings
+  const dummyRegex = /^(asdf|qwert|zxcv|1234|test|none|n\/a|na|xxx|aaa|bbb|ccc)/i;
+  if (dummyRegex.test(f) || dummyRegex.test(l)) {
+    throw new ConvexError("Please enter a valid soldier name (test/placeholder inputs are not allowed).");
+  }
+
+  // Check for repeated identical syllables (e.g. "asdasd", "hahaha")
+  const repeatPattern = /^(.{2,4})\1+$/i;
+  if (repeatPattern.test(f.toLowerCase()) || repeatPattern.test(l.toLowerCase())) {
+    throw new ConvexError("Please enter a valid soldier name (repetitive gibberish is not allowed).");
+  }
+
+  // Must contain valid letters, spaces, hyphens, and periods (e.g. "Jr.", "Dela Cruz", "Niño")
+  const validCharsRegex = /^[a-zA-Z\s\.\-'\u00C0-\u024F]+$/;
+  if (!validCharsRegex.test(f) || !validCharsRegex.test(l)) {
+    throw new ConvexError("Soldier name must only contain alphabetical letters and standard punctuation.");
+  }
+}
+
 // Helper to generate a clean, readable campaign slug code (e.g. "1001-muster-8N2K")
 function generateCampaignCode(title: string): string {
   const cleanTitle = title
@@ -167,6 +201,30 @@ export const createCampaign = mutation({
       createdBy: args.createdBy,
       createdAt: new Date().toISOString(),
     });
+
+    // Dual-Database Sync Bridge: Mirror new campaign to partner deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncCampaign",
+        args: {
+          campaignCode,
+          title: args.title.trim(),
+          instructions: args.instructions?.trim() || undefined,
+          passcode: cleanPasscode,
+          targetUnit,
+          targetCompany: args.targetCompany?.trim() || undefined,
+          groupId: args.groupId,
+          groupName: args.groupName.trim() || "All 10RCDG Personnel",
+          duration: args.durationStr.trim(),
+          expiresAt,
+          status: "ACTIVE" as const,
+          createdBy: args.createdBy,
+          createdAt: new Date().toISOString(),
+        },
+      });
+    }
 
     return {
       campaignId,
@@ -337,6 +395,9 @@ export const checkStep1Duplicate = mutation({
     campaignCode: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // 0. Sanity & Integrity Check on Soldier Name
+    validateSoldierName(args.firstName, args.lastName);
+
     const rawDigits = args.mobileNumber.replace(/\D/g, "");
     let cleanMobile = "";
     if (rawDigits.startsWith("639") && rawDigits.length === 12) {
@@ -349,18 +410,15 @@ export const checkStep1Duplicate = mutation({
       cleanMobile = "+63" + rawDigits;
     }
 
-    const normalizePh = (numStr: string) => {
-      const digits = (numStr || "").replace(/\D/g, "");
-      if (digits.startsWith("639") && digits.length === 12) return "+63" + digits.slice(2);
-      if (digits.startsWith("09") && digits.length === 11) return "+63" + digits.slice(1);
-      if (digits.startsWith("9") && digits.length === 10) return "+63" + digits;
-      return "+" + digits;
-    };
+    const core10 = rawDigits.slice(-10);
+    const canonicalPh = "+63" + core10;
+    const localPh = "0" + core10;
+    const spacedPh = `${localPh.slice(0, 4)} ${localPh.slice(4, 7)} ${localPh.slice(7)}`;
 
     const cleanFirst = args.firstName.trim().replace(/\s+/g, " ").toLowerCase();
     const cleanLast = args.lastName.trim().replace(/\s+/g, " ").toLowerCase();
 
-    // Strict First Name + Last Name matching helper (Prevents blocking different soldiers with same family name)
+    // Strict First Name + Last Name matching helper
     const isFullNameMatch = (first?: string, last?: string) => {
       const f = (first || "").trim().replace(/\s+/g, " ").toLowerCase();
       const l = (last || "").trim().replace(/\s+/g, " ").toLowerCase();
@@ -368,15 +426,23 @@ export const checkStep1Duplicate = mutation({
     };
 
     // 1. Check active personnel roster
-    // Check by Mobile Number in active personnel using index (1 document read)
+    // Check by all standard Philippine mobile formatting variants
     const existingTroopByPhone =
       (await ctx.db
         .query("personnel")
-        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
         .first()) ||
       (await ctx.db
         .query("personnel")
-        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", "0" + cleanMobile.slice(3)))
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", spacedPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
         .first());
 
     if (existingTroopByPhone) {
@@ -430,19 +496,36 @@ export const checkStep1Duplicate = mutation({
       };
     }
 
-    // 2. Check pending / approved enlistment submissions using index
+    // 2. Check pending / approved enlistment submissions across all phone variants
     const existingSubmissionByPhone =
       (await ctx.db
         .query("enlistmentSubmissions")
-        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
         .first()) ||
       (await ctx.db
         .query("enlistmentSubmissions")
-        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", "0" + cleanMobile.slice(3)))
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", spacedPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
         .first());
 
     if (existingSubmissionByPhone && existingSubmissionByPhone.status !== "REJECTED") {
       const isSameName = isFullNameMatch(existingSubmissionByPhone.firstName, existingSubmissionByPhone.lastName);
+
+      if (existingSubmissionByPhone.status === "APPROVED") {
+        return {
+          isDuplicate: true,
+          status: "SUBMISSION_APPROVED",
+          message: `Your enlistment application for ${existingSubmissionByPhone.rank} ${existingSubmissionByPhone.firstName} ${existingSubmissionByPhone.lastName} (Batch: ${existingSubmissionByPhone.campaignCode}) has already been APPROVED by 10RCDG Command Headquarters. You can proceed directly to download the official mobile app.`,
+          canDownload: true,
+        };
+      }
 
       if (isSameName) {
         return {
@@ -455,13 +538,13 @@ export const checkStep1Duplicate = mutation({
         return {
           isDuplicate: true,
           status: "SUBMISSION_PHONE_PENDING",
-          message: `This mobile number is already used in an existing enlistment submission for ${existingSubmissionByPhone.rank} ${existingSubmissionByPhone.firstName} ${existingSubmissionByPhone.lastName}. Please verify your phone number.`,
+          message: `This mobile number is already used in an existing enlistment submission for ${existingSubmissionByPhone.rank} ${existingSubmissionByPhone.firstName} ${existingSubmissionByPhone.lastName}. Please enter your personal mobile number.`,
           canDownload: false,
         };
       }
     }
 
-    // Check by Name in pending submissions using surname index
+    // Check by Name in pending/approved submissions using surname index
     let surnameSubmissions: any[] = [];
     for (const variant of lastNameVariations) {
       const subs = await ctx.db
@@ -476,8 +559,16 @@ export const checkStep1Duplicate = mutation({
         (s) => s.status !== "REJECTED" && isFullNameMatch(s.firstName, s.lastName)
       ) || null;
 
-
     if (existingSubmissionByName) {
+      if (existingSubmissionByName.status === "APPROVED") {
+        return {
+          isDuplicate: true,
+          status: "SUBMISSION_APPROVED",
+          message: `An enlistment application for ${existingSubmissionByName.rank} ${existingSubmissionByName.firstName} ${existingSubmissionByName.lastName} (Batch: ${existingSubmissionByName.campaignCode}) has already been APPROVED by 10RCDG Command Headquarters. You can proceed directly to download the official mobile app.`,
+          canDownload: true,
+        };
+      }
+
       return {
         isDuplicate: true,
         status: "SUBMISSION_NAME_PENDING",
@@ -547,6 +638,9 @@ export const submitEnlistment = mutation({
       throw new ConvexError("Invalid unit passcode. Entry denied.");
     }
 
+    // 0. Sanity & Integrity Check on Soldier Name
+    validateSoldierName(args.firstName, args.lastName);
+
     // Validate Military & Reservist Background fields
     validateReservistFields({
       age: args.age,
@@ -571,37 +665,120 @@ export const submitEnlistment = mutation({
       cleanMobile = "+63" + rawDigits;
     }
 
-    // 1. Check if number already exists in active personnel directory using index
+    const core10 = rawDigits.slice(-10);
+    const canonicalPh = "+63" + core10;
+    const localPh = "0" + core10;
+    const spacedPh = `${localPh.slice(0, 4)} ${localPh.slice(4, 7)} ${localPh.slice(7)}`;
+
+    const cleanFirst = args.firstName.trim().replace(/\s+/g, " ").toLowerCase();
+    const cleanLast = args.lastName.trim().replace(/\s+/g, " ").toLowerCase();
+    const isFullNameMatch = (first?: string, last?: string) => {
+      const f = (first || "").trim().replace(/\s+/g, " ").toLowerCase();
+      const l = (last || "").trim().replace(/\s+/g, " ").toLowerCase();
+      return f === cleanFirst && l === cleanLast;
+    };
+
+    // 1. Check if number already exists in active personnel directory across all phone variants
     const existingPersonnel =
       (await ctx.db
         .query("personnel")
-        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
         .first()) ||
       (await ctx.db
         .query("personnel")
-        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", "0" + cleanMobile.slice(3)))
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", spacedPh))
+        .first()) ||
+      (await ctx.db
+        .query("personnel")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
         .first());
 
     if (existingPersonnel) {
       throw new ConvexError(
-        `This mobile number (${cleanMobile}) is already registered in the official 10RCDG personnel roster. You can download the app directly at the official download portal (/download).`
+        `This mobile number (${cleanMobile}) is already registered in the official 10RCDG personnel roster to ${existingPersonnel.rank} ${existingPersonnel.firstName} ${existingPersonnel.lastName}. You can download the app directly at the official download portal (/download).`
       );
     }
 
-    // 2. Check if number already exists across enlistment submissions (pending or approved) using index
+    // Check if soldier full name already exists in active personnel
+    const trimmedLast = args.lastName.trim();
+    const lastNameVariations = Array.from(
+      new Set([
+        trimmedLast,
+        trimmedLast.toUpperCase(),
+        trimmedLast.charAt(0).toUpperCase() + trimmedLast.slice(1).toLowerCase(),
+      ])
+    );
+
+    let surnameTroops: any[] = [];
+    for (const variant of lastNameVariations) {
+      const troops = await ctx.db
+        .query("personnel")
+        .withIndex("by_lastName", (q) => q.eq("lastName", variant))
+        .collect();
+      surnameTroops.push(...troops);
+    }
+
+    const existingByName = surnameTroops.find((p) => isFullNameMatch(p.firstName, p.lastName));
+    if (existingByName) {
+      throw new ConvexError(
+        `Soldier ${existingByName.rank} ${existingByName.firstName} ${existingByName.lastName} is already registered in the official 10RCDG personnel roster (${existingByName.groupName}). Duplicate soldier registrations are not permitted.`
+      );
+    }
+
+    // 2. Check if number or soldier already exists across enlistment submissions
     const existingSubmission =
       (await ctx.db
         .query("enlistmentSubmissions")
-        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonicalPh))
         .first()) ||
       (await ctx.db
         .query("enlistmentSubmissions")
-        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", "0" + cleanMobile.slice(3)))
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", localPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", spacedPh))
+        .first()) ||
+      (await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", cleanMobile))
         .first());
 
     if (existingSubmission && existingSubmission.status !== "REJECTED") {
+      if (existingSubmission.status === "APPROVED") {
+        throw new ConvexError(
+          `Your enlistment application for this mobile number (${cleanMobile}) has already been APPROVED. You can download the app directly at /download.`
+        );
+      }
       throw new ConvexError(
         `You have already submitted an enlistment request for this mobile number (${cleanMobile}). Please wait for administrator approval so you can download the app at the official download portal (/download).`
+      );
+    }
+
+    let surnameSubmissions: any[] = [];
+    for (const variant of lastNameVariations) {
+      const subs = await ctx.db
+        .query("enlistmentSubmissions")
+        .withIndex("by_lastName", (q) => q.eq("lastName", variant))
+        .collect();
+      surnameSubmissions.push(...subs);
+    }
+
+    const existingSubByName = surnameSubmissions.find(
+      (s) => s.status !== "REJECTED" && isFullNameMatch(s.firstName, s.lastName)
+    );
+    if (existingSubByName) {
+      if (existingSubByName.status === "APPROVED") {
+        throw new ConvexError(
+          `Your enlistment application for ${existingSubByName.rank} ${existingSubByName.firstName} ${existingSubByName.lastName} has already been APPROVED. You can proceed directly to download the mobile app at /download.`
+        );
+      }
+      throw new ConvexError(
+        `An enlistment application for ${existingSubByName.rank} ${existingSubByName.firstName} ${existingSubByName.lastName} has already been submitted and is currently awaiting Command approval.`
       );
     }
 
@@ -867,6 +1044,18 @@ export const approveSubmission = mutation({
           updatedAt: updateTimestamp,
         },
       });
+
+      // Mirror submission review status to partner deployment
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncSubmissionReview",
+        args: {
+          mobileNumber: sub.mobileNumber,
+          status: "APPROVED" as const,
+          reviewedBy: approverName,
+          reviewedAt: new Date().toISOString(),
+        },
+      });
     }
 
     return { success: true };
@@ -1016,6 +1205,18 @@ export const bulkApproveSubmissions = mutation({
             updatedAt: updateTimestamp,
           },
         });
+
+        // Mirror submission review status to partner deployment
+        await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+          targetCloudUrl: partnerUrl,
+          path: "bridge:syncSubmissionReview",
+          args: {
+            mobileNumber: sub.mobileNumber,
+            status: "APPROVED" as const,
+            reviewedBy: approverName,
+            reviewedAt: nowStr,
+          },
+        });
       }
     }
 
@@ -1048,14 +1249,30 @@ export const rejectSubmission = mutation({
     if (!sub) return { success: false };
 
     const reviewer = args.reviewerName || args.reviewerEmail || "Authorized Officer";
+    const nowIso = new Date().toISOString();
     await ctx.db.patch(args.submissionId, {
       status: "REJECTED",
-      reviewedAt: new Date().toISOString(),
+      reviewedAt: nowIso,
       reviewedBy: reviewer,
     });
 
     if (sub.status === "PENDING" && sub.campaignId) {
       await adjustCampaignCounts(ctx, sub.campaignId, { pending: -1 });
+    }
+
+    // Dual-Database Sync Bridge: Mirror rejection to partner deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncSubmissionReview",
+        args: {
+          mobileNumber: sub.mobileNumber,
+          status: "REJECTED" as const,
+          reviewedBy: reviewer,
+          reviewedAt: nowIso,
+        },
+      });
     }
 
     return { success: true };
@@ -1070,9 +1287,23 @@ export const closeCampaign = mutation({
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.officerEmail, "close enlistment campaign");
+    const campaign = await ctx.db.get(args.campaignId);
+    if (!campaign) return { success: false };
+
     await ctx.db.patch(args.campaignId, {
       status: "CLOSED",
     });
+
+    // Dual-Database Sync Bridge: Mirror early close to partner deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncCampaignClose",
+        args: { campaignCode: campaign.campaignCode },
+      });
+    }
+
     return { success: true };
   },
 });
@@ -1103,6 +1334,17 @@ export const removeCampaign = mutation({
       await ctx.db.delete(sub._id);
     }
     await ctx.db.delete(args.campaignId);
+
+    // Dual-Database Sync Bridge: Mirror campaign deletion to partner deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncCampaignRemove",
+        args: { campaignCode: campaign.campaignCode },
+      });
+    }
+
     return { success: true };
   },
 });

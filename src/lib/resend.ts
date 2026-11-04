@@ -15,25 +15,54 @@ export interface EmergencyAlertEmailPayload {
 }
 
 /**
- * Generate a high-contrast, military-grade HTML email template for 10RCDG emergency dispatches
+ * Generate a clean, non-technical, human-friendly HTML email template for 10RCDG troop advisories and alerts
  */
 export function buildEmergencyEmailHtml(payload: EmergencyAlertEmailPayload): string {
-  const title = payload.title ? payload.title.toUpperCase() : "10RCDG EMERGENCY ALERT";
+  // Strip any raw developer/tech jargon like "(iOS Layer)", "(iOS)", "(Layer 3)", "(Resend)"
+  const rawTitle = payload.title || "Official Command Advisory";
+  const cleanTitle = rawTitle.replace(/\s*\((ios|email|layer|resend)[^)]*\)/gi, "").trim();
+
   const priority = payload.priority || "CRITICAL";
-  const sender = payload.sender || "10RCDG Tactical Command HQ";
-  const soldierGreeting = payload.soldierName ? `ATTN: ${payload.soldierName.toUpperCase()}` : "ATTN: ALL 10RCDG RESERVIST TROOPS";
-  const unit = payload.unit || "10RCDG RESERVE COMMAND, PHILIPPINE ARMY";
+  const senderName = payload.sender || "10RCDG Command Headquarters";
+  const unitName = payload.unit || "10th Regional Community Defense Group";
+  const soldierGreeting = payload.soldierName
+    ? `ATTENTION: ${payload.soldierName.toUpperCase()}`
+    : "ATTENTION: ALL 10RCDG RESERVIST TROOPS";
+
   const timestamp = new Date().toLocaleString("en-US", {
     timeZone: "Asia/Manila",
     month: "short",
     day: "numeric",
     year: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   });
 
-  const priorityColor = priority === "CRITICAL" ? "#dc2626" : priority === "HIGH" ? "#d97706" : "#059669";
-  const priorityBg = priority === "CRITICAL" ? "#fef2f2" : priority === "HIGH" ? "#fffbeb" : "#ecfdf5";
+  const badgeConfig =
+    priority === "CRITICAL"
+      ? {
+          label: "🚨 URGENT MOBILIZATION ORDER",
+          color: "#991b1b",
+          bg: "#fef2f2",
+          border: "#fecaca",
+          accentBar: "#dc2626",
+        }
+      : priority === "HIGH"
+      ? {
+          label: "⚠️ PRIORITY NOTICE",
+          color: "#92400e",
+          bg: "#fffbeb",
+          border: "#fde68a",
+          accentBar: "#f59e0b",
+        }
+      : {
+          label: "📢 TROOP ADVISORY",
+          color: "#065f46",
+          bg: "#ecfdf5",
+          border: "#a7f3d0",
+          accentBar: "#10b981",
+        };
 
   return `
 <!DOCTYPE html>
@@ -41,68 +70,204 @@ export function buildEmergencyEmailHtml(payload: EmergencyAlertEmailPayload): st
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <title>${cleanTitle}</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 20px 10px; }
-    .container { max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border: 1px solid #334155; }
-    .header { background: linear-gradient(135deg, #1b3d2f 0%, #064e3b 100%); color: #ffffff; padding: 24px 20px; text-align: center; border-bottom: 4px solid #10b981; }
-    .badge { display: inline-block; padding: 4px 12px; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; border-radius: 9999px; background-color: ${priorityBg}; color: ${priorityColor}; border: 1px solid ${priorityColor}; margin-bottom: 12px; }
-    .title { font-size: 22px; font-weight: 800; letter-spacing: 0.5px; line-height: 1.3; margin: 8px 0 0; color: #ffffff; }
-    .subtitle { font-size: 11px; color: #a7f3d0; letter-spacing: 1.2px; text-transform: uppercase; margin-top: 6px; font-weight: 600; }
-    .body-content { padding: 28px 24px; color: #1e293b; font-size: 15px; line-height: 1.6; }
-    .alert-box { background-color: #f8fafc; border-left: 5px solid #064e3b; border-radius: 0 8px 8px 0; padding: 18px 20px; margin: 18px 0; font-size: 16px; font-weight: 500; color: #0f172a; white-space: pre-wrap; word-break: break-word; }
-    .meta-table { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 12px; background-color: #f1f5f9; border-radius: 8px; }
-    .meta-table td { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; }
-    .meta-table td.label { font-weight: 700; color: #475569; width: 35%; text-transform: uppercase; letter-spacing: 0.5px; }
-    .meta-table td.val { font-weight: 600; color: #0f172a; }
-    .footer { background-color: #0b1329; color: #94a3b8; padding: 20px; text-align: center; font-size: 11px; line-height: 1.5; border-top: 1px solid #1e293b; }
-    .footer strong { color: #f8fafc; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f1f5f9;
+      margin: 0;
+      padding: 24px 12px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      max-width: 580px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.07);
+      border: 1px solid #e2e8f0;
+    }
+    .accent-bar {
+      height: 4px;
+      background: linear-gradient(90deg, #d97706, #fbbf24, #d97706);
+    }
+    .header {
+      background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+      color: #ffffff;
+      padding: 24px 22px 20px;
+      text-align: left;
+    }
+    .org-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background-color: rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fef08a;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+    .title {
+      font-size: 21px;
+      font-weight: 800;
+      line-height: 1.3;
+      margin: 12px 0 4px;
+      color: #ffffff;
+    }
+    .subtitle {
+      font-size: 12px;
+      color: #a7f3d0;
+      margin: 0;
+      font-weight: 500;
+    }
+    .body-content {
+      padding: 26px 22px;
+      color: #1e293b;
+    }
+    .priority-badge {
+      display: inline-block;
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 800;
+      border-radius: 9999px;
+      background-color: ${badgeConfig.bg};
+      color: ${badgeConfig.color};
+      border: 1px solid ${badgeConfig.border};
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .greeting {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 4px;
+    }
+    .intro {
+      font-size: 14px;
+      color: #64748b;
+      margin: 0 0 16px;
+      line-height: 1.5;
+    }
+    .message-box {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #059669;
+      border-radius: 10px;
+      padding: 18px 18px;
+      margin: 16px 0 20px;
+      font-size: 15px;
+      line-height: 1.65;
+      color: #1e293b;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .details-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 18px 0;
+      font-size: 13px;
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .details-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .details-table tr:last-child td {
+      border-bottom: none;
+    }
+    .details-table td.label {
+      font-weight: 600;
+      color: #64748b;
+      width: 35%;
+    }
+    .details-table td.value {
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .cta-container {
+      text-align: center;
+      margin: 26px 0 12px;
+    }
+    .cta-button {
+      display: inline-block;
+      background-color: #065f46;
+      color: #ffffff !important;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      padding: 13px 26px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(6, 95, 70, 0.25);
+    }
+    .footer {
+      background-color: #f8fafc;
+      padding: 20px 22px;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+      color: #64748b;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .footer strong {
+      color: #1e293b;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="wrapper">
+    <div class="accent-bar"></div>
     <div class="header">
-      <div class="badge">${priority} PRIORITY // 10RCDG RESCOM</div>
-      <div class="title">🚨 ${title}</div>
-      <div class="subtitle">${unit}</div>
+      <div class="org-badge">PHILIPPINE ARMY • 10RCDG RESERVE COMMAND</div>
+      <div class="title">${cleanTitle}</div>
+      <div class="subtitle">Citizen Armed Forces • Operational Advisory</div>
     </div>
     
     <div class="body-content">
-      <p style="margin: 0 0 14px; font-size: 13px; font-weight: 700; color: #064e3b; letter-spacing: 0.8px;">${soldierGreeting}</p>
-      
-      <p style="margin: 0 0 12px; font-size: 14px; color: #334155;">
-        You have received an official emergency mobilization and operational dispatch from Command Headquarters:
-      </p>
+      <div class="priority-badge">${badgeConfig.label}</div>
+      <div class="greeting">${soldierGreeting}</div>
+      <div class="intro">
+        You have received an official notification from your Command Headquarters:
+      </div>
 
-      <div class="alert-box">
+      <div class="message-box">
 ${payload.message}
       </div>
 
-      <table class="meta-table">
+      <table class="details-table">
         <tr>
           <td class="label">Dispatched By:</td>
-          <td class="val">${sender}</td>
+          <td class="value">${senderName}</td>
         </tr>
         <tr>
-          <td class="label">Timestamp:</td>
-          <td class="val">${timestamp} PHT</td>
+          <td class="label">Date & Time:</td>
+          <td class="value">${timestamp} PHT</td>
         </tr>
         <tr>
-          <td class="label">Channel:</td>
-          <td class="val">Resend iOS/Email Emergency Layer</td>
-        </tr>
-        <tr>
-          <td class="label">Security Level:</td>
-          <td class="val">RESTRICTED - OFFICIAL 10RCDG USE ONLY</td>
+          <td class="label">Assigned Unit:</td>
+          <td class="value">${unitName}</td>
         </tr>
       </table>
+
+      <div class="cta-container">
+        <a href="https://rescom-alert.site" class="cta-button" target="_blank">
+          📱 Open Command Portal & Confirm Receipt &rarr;
+        </a>
+      </div>
     </div>
 
     <div class="footer">
       <strong>HEADQUARTERS 10TH REGIONAL COMMUNITY DEFENSE GROUP</strong><br>
       Reserve Command, Philippine Army • Camp R.T. Morgan, Cagayan de Oro City<br>
-      <span style="font-size: 10px; color: #64748b; margin-top: 8px; display: inline-block;">
-        This is an automated operational defense dispatch. Do not reply directly to this email address.
+      <span style="display: inline-block; margin-top: 8px; color: #94a3b8;">
+        For inquiries, please coordinate directly with your CDC Administrative Officer or Unit Commander.<br>
+        Serving with Honor, Duty, and Patriotism.
       </span>
     </div>
   </div>
@@ -128,9 +293,9 @@ export async function dispatchEmergencyEmail(payload: EmergencyAlertEmailPayload
     return { success: false, sentCount: 0, reason: "No valid recipient emails" };
   }
 
-  const subject = payload.title
-    ? `🚨 10RCDG ALERT: ${payload.title}`
-    : "🚨 10RCDG EMERGENCY MOBILIZATION ALERT";
+  const rawSubject = payload.title || "Official Mobilization Notice";
+  const cleanSubject = rawSubject.replace(/\s*\((ios|email|layer|resend)[^)]*\)/gi, "").trim();
+  const subject = `[10RCDG] ${cleanSubject}`;
 
   const html = buildEmergencyEmailHtml(payload);
 

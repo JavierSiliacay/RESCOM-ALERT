@@ -345,6 +345,7 @@ export const setDeviceType = mutation({
     id: v.id("personnel"),
     deviceType: v.union(v.literal("ANDROID"), v.literal("KEYPAD"), v.literal("IOS")),
     officerEmail: v.optional(v.string()),
+    isMirrored: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await assertCallerAuthorized(ctx, args.officerEmail, "update personnel device type");
@@ -353,6 +354,28 @@ export const setDeviceType = mutation({
     await assertCallerAuthorizedGroup(ctx, args.officerEmail, [existing.groupName], "update personnel device type");
 
     await ctx.db.patch(args.id, { deviceType: args.deviceType });
+
+    // Dual-Database Sync Bridge: Mirror device type change to partner deployment
+    const partnerUrl = process.env.PARTNER_CONVEX_URL;
+    if (partnerUrl && !args.isMirrored) {
+      await ctx.scheduler.runAfter(0, internal.bridge.mirrorMutation, {
+        targetCloudUrl: partnerUrl,
+        path: "bridge:syncPersonnel",
+        args: {
+          firstName: existing.firstName,
+          lastName: existing.lastName,
+          rank: existing.rank,
+          mobileNumber: existing.mobileNumber,
+          unit: existing.unit,
+          company: existing.company,
+          groupId: existing.groupId,
+          groupName: existing.groupName,
+          deviceType: args.deviceType,
+          status: existing.status,
+          email: existing.email,
+        },
+      });
+    }
 
     return { success: true };
   },

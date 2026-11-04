@@ -17,7 +17,6 @@ import {
   Layers,
   BatteryCharging,
   WifiOff,
-  Sparkles,
   ExternalLink,
   Copy,
   Check,

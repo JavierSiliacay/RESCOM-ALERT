@@ -17,7 +17,7 @@ export interface QuickMessageCardProps {
 export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}) {
   const currentOfficer = useCurrentOfficer();
   const { isViewer, guardAction, isGlobalAdmin, isScopedAdmin, isGroupAuthorized } = currentOfficer;
-  const groupsData = useQuery(api.groups.list);
+  const groupsData = useQuery(api.groups.listOptions);
   const personnelData = useQuery(api.personnel.list);
   const templatesData = useQuery(api.templates.list);
   const recordBroadcast = useMutation(api.broadcasts.record);
@@ -173,6 +173,25 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
           setError(data.error || "Failed to send text message via SMS gateway.");
           setIsSending(false);
           return;
+        }
+      }
+
+      // 3. Dispatch iOS / Registered Email Emergency Dispatches (Layer 3 via Resend)
+      const allTargetNumbers = [...smsNumbers, ...pushNumbers];
+      if (allTargetNumbers.length > 0) {
+        try {
+          fetch("/api/email/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              recipients: allTargetNumbers,
+              message: message,
+              title: broadcastTitle,
+              sender: currentOfficer.displayName || "10RCDG Tactical HQ",
+            }),
+          }).catch((e) => console.error("Email dispatch background error:", e));
+        } catch (emailErr) {
+          console.error("Email dispatch error:", emailErr);
         }
       }
 
@@ -360,11 +379,14 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
                   ? `All My Assigned Units (${personnel.length})`
                   : `All 10RCDG Personnel (${personnel.length})`}
               </option>
-              {groups.map((g) => (
-                <option key={g._id} value={g.name}>
-                  {g.name} ({g.memberCount})
-                </option>
-              ))}
+              {groups.map((g) => {
+                const count = (g as any).memberCount ?? personnel.filter((p) => p.groupId === g._id || p.groupName === g.name).length;
+                return (
+                  <option key={g._id} value={g.name}>
+                    {g.name} ({count})
+                  </option>
+                );
+              })}
             </select>
           )}
 

@@ -20,8 +20,8 @@ import {
   QrCode,
   KeyRound,
   Clock,
-  Sparkles,
   AlertTriangle,
+  AlertCircle,
   ChevronRight,
   Send,
   UserPlus,
@@ -34,7 +34,16 @@ import {
   Lock,
   ShieldAlert,
   Bell,
+  GraduationCap,
+  Briefcase,
+  MapPin,
+  Award,
+  Wrench,
+  Calendar,
+  Navigation,
+  Loader2,
 } from "lucide-react";
+import { COMMON_10RCDG_LOCATIONS, requestDeviceLocation } from "@/lib/geo";
 import { QRCodeSVG } from "qrcode.react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -63,8 +72,27 @@ import {
   CampaignCardSkeleton,
 } from "@/components/skeleton";
 import { useCurrentOfficer } from "@/components/officer-context";
-import { AndroidIcon, KeypadPhoneIcon } from "@/components/device-icons";
+import { AndroidIcon, KeypadPhoneIcon, AppleIcon } from "@/components/device-icons";
 import { TablePagination } from "@/components/table-pagination";
+
+const TRAINING_CATEGORIES = [
+  { id: "BASIC ROTC", label: "Basic ROTC", desc: "MS 1 & 2 Graduate" },
+  { id: "ADVANCE ROTC", label: "Advance ROTC", desc: "Officer Candidate" },
+  { id: "BCMT", label: "BCMT", desc: "Basic Citizen Military Training" },
+  { id: "POTC GRADUATE", label: "POTC Graduate", desc: "Probationary Officer Course" },
+  { id: "COMMISSION UNDER RA2334", label: "RA 2334 Commission", desc: "Direct Commission" },
+];
+
+const QUICK_SKILLS = [
+  "Combat Medic / First Aid",
+  "Radio / Comms",
+  "Driver (Prof DL)",
+  "Heavy Equipment",
+  "IT / Cybersecurity",
+  "Civil Works / Engineering",
+  "Disaster Rescue (DRRO)",
+  "Security / Law Enforcement",
+];
 
 /**
  * Highlight matching words/characters with a light-green badge.
@@ -303,7 +331,7 @@ export default function PersonnelPage() {
   const currentOfficer = useCurrentOfficer();
   const { isViewer, guardAction, isGlobalAdmin, isScopedAdmin, isGroupAuthorized } = currentOfficer;
   const personnel = useQuery(api.personnel.list);
-  const groups = useQuery(api.groups.list);
+  const groups = useQuery(api.groups.listOptions);
   const campaigns = useQuery(api.enlistment.listCampaigns);
   const submissions = useQuery(api.enlistment.listSubmissions, {});
 
@@ -336,7 +364,8 @@ export default function PersonnelPage() {
   const [selectedGroup, setSelectedGroup] = useState("ALL");
   const [selectedCompany, setSelectedCompany] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
-  const [selectedDevice, setSelectedDevice] = useState<"ALL" | "PAIRED" | "UNPAIRED" | "ANDROID" | "KEYPAD">("ALL");
+  const [selectedDevice, setSelectedDevice] = useState<"ALL" | "PAIRED" | "UNPAIRED" | "ANDROID" | "KEYPAD" | "IOS">("ALL");
+  const [selectedTrainingCategory, setSelectedTrainingCategory] = useState("ALL");
 
   // Selected Personnel for Batch Actions
   const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<Id<"personnel">[]>([]);
@@ -359,6 +388,7 @@ export default function PersonnelPage() {
   // Manual Add/Edit Personnel Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<Id<"personnel"> | null>(null);
+  const [addModalTab, setAddModalTab] = useState<"IDENTITY" | "MILITARY" | "CIVILIAN">("IDENTITY");
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -369,7 +399,7 @@ export default function PersonnelPage() {
   // Device Capability Confirmation Modal State (Prevents misclick / accidental tagging)
   const [deviceConfirmTarget, setDeviceConfirmTarget] = useState<{
     mode: "BATCH" | "SINGLE";
-    targetDevice: "ANDROID" | "KEYPAD";
+    targetDevice: "ANDROID" | "KEYPAD" | "IOS";
     person?: (typeof rawPersonnelList)[number];
     ids?: Id<"personnel">[];
     count: number;
@@ -388,12 +418,36 @@ export default function PersonnelPage() {
     lastName: "",
     rank: "PVT",
     mobileNumber: "09",
+    age: "" as string | number,
+    currentAddress: "",
+    trainingCategory: "BASIC ROTC",
+    school: "",
+    yearGraduated: "",
+    currentJob: "",
+    skills: "",
     groupId: "",
     unit: "10RCDG HQ",
     company: "HHC",
     email: "",
     deviceType: "ANDROID" as "ANDROID" | "KEYPAD" | "IOS",
   });
+
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [locationNotice, setLocationNotice] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const handleDetectLocation = async () => {
+    setIsDetectingLocation(true);
+    setLocationNotice(null);
+    try {
+      const { address } = await requestDeviceLocation();
+      setFormData((prev) => ({ ...prev, currentAddress: address }));
+      setLocationNotice({ message: `GPS lock acquired: ${address}`, type: "success" });
+    } catch (err: any) {
+      setLocationNotice({ message: err?.message || "Could not detect location.", type: "error" });
+    } finally {
+      setIsDetectingLocation(false);
+    }
+  };
 
   // Campaign Generator Modal State
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
@@ -460,22 +514,6 @@ export default function PersonnelPage() {
 
   const pendingSubmissions = submissionsList.filter((s) => s.status === "PENDING");
 
-  const androidCount = useMemo(() => {
-    return personnelList.filter((p) => ((p as any).deviceType || "ANDROID") === "ANDROID").length;
-  }, [personnelList]);
-
-  const keypadCount = useMemo(() => {
-    return personnelList.filter((p) => (p as any).deviceType === "KEYPAD").length;
-  }, [personnelList]);
-
-  const pairedAppCount = useMemo(() => {
-    return personnelList.filter((p) => Boolean((p as any).fcmToken)).length;
-  }, [personnelList]);
-
-  const unpairedCount = useMemo(() => {
-    return personnelList.length - pairedAppCount;
-  }, [personnelList, pairedAppCount]);
-
   // Search Bar Dropdown & Autocomplete State
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -493,142 +531,198 @@ export default function PersonnelPage() {
 
   const trimmedQuery = searchQuery.trim().toLowerCase();
 
-  // Filtered Personnel List (space-insensitive and case-insensitive for numbers and names)
-  const filteredPersonnel = personnelList.filter((person) => {
-    const isPaired = Boolean((person as any).fcmToken);
-    const personDevice = (person as any).deviceType || "ANDROID";
-    let matchesDevice = true;
-    if (selectedDevice === "PAIRED") {
-      matchesDevice = isPaired;
-    } else if (selectedDevice === "UNPAIRED") {
-      matchesDevice = !isPaired;
-    } else if (selectedDevice === "ANDROID") {
-      matchesDevice = personDevice === "ANDROID";
-    } else if (selectedDevice === "KEYPAD") {
-      matchesDevice = personDevice === "KEYPAD";
-    }
-    if (!matchesDevice) return false;
-
-    if (!trimmedQuery) {
+  // 1. Scoped Personnel: Filtered by all active filters EXCEPT device filter
+  const scopedPersonnel = useMemo(() => {
+    return personnelList.filter((person) => {
+      // Group filter
       const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
+      if (!matchesGroup) return false;
+
+      // Company filter
       const matchesCompany = selectedCompany === "ALL" || (person as any).company === selectedCompany;
+      if (!matchesCompany) return false;
+
+      // Status filter
       const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
-      return matchesGroup && matchesCompany && matchesStatus;
-    }
+      if (!matchesStatus) return false;
 
-    // 1. Mobile number normalization (strips all spaces, dashes, +, (), etc.)
-    const qDigits = trimmedQuery.replace(/\D/g, "");
-    const qClean = trimmedQuery.replace(/[\s\-_+()]/g, "");
+      // Source of Enlistment / Training Category filter
+      const matchesTrainingCategory =
+        selectedTrainingCategory === "ALL" ||
+        ((person as any).trainingCategory || "").toUpperCase() === selectedTrainingCategory.toUpperCase();
+      if (!matchesTrainingCategory) return false;
 
-    const rawMobile = (person.mobileNumber || "").toLowerCase();
-    const cleanMobile = rawMobile.replace(/[\s\-_+()]/g, "");
-    const mobileDigits = rawMobile.replace(/\D/g, "");
+      // Search Query filter
+      if (!trimmedQuery) return true;
 
-    const formattedMobile = formatPhMobileDisplay(person.mobileNumber).toLowerCase();
-    const formattedDigits = formattedMobile.replace(/\D/g, "");
+      // 1. Mobile number normalization (strips all spaces, dashes, +, (), etc.)
+      const qDigits = trimmedQuery.replace(/\D/g, "");
+      const qClean = trimmedQuery.replace(/[\s\-_+()]/g, "");
 
-    // Cross-match local (09...) and international (639...) formats & core national digits
-    const getPhCoreDigits = (str: string) => {
-      const d = str.replace(/\D/g, "");
-      if (d.startsWith("639")) return d.slice(2);
-      if (d.startsWith("09")) return d.slice(1);
-      return d;
-    };
+      const rawMobile = (person.mobileNumber || "").toLowerCase();
+      const cleanMobile = rawMobile.replace(/[\s\-_+()]/g, "");
+      const mobileDigits = rawMobile.replace(/\D/g, "");
 
-    const storedCore = getPhCoreDigits(mobileDigits);
-    const queryCore = getPhCoreDigits(qDigits);
+      const formattedMobile = formatPhMobileDisplay(person.mobileNumber).toLowerCase();
+      const formattedDigits = formattedMobile.replace(/\D/g, "");
 
-    const localMobileDigits = mobileDigits.startsWith("63")
-      ? "0" + mobileDigits.slice(2)
-      : mobileDigits;
-    const intlMobileDigits = mobileDigits.startsWith("0")
-      ? "63" + mobileDigits.slice(1)
-      : mobileDigits;
+      // Cross-match local (09...) and international (639...) formats & core national digits
+      const getPhCoreDigits = (str: string) => {
+        const d = str.replace(/\D/g, "");
+        if (d.startsWith("639")) return d.slice(2);
+        if (d.startsWith("09")) return d.slice(1);
+        return d;
+      };
 
-    const matchesMobile =
-      matchesPhMobileSearch(person.mobileNumber, trimmedQuery) ||
-      rawMobile.includes(trimmedQuery) ||
-      cleanMobile.includes(qClean) ||
-      formattedMobile.includes(trimmedQuery) ||
-      (qDigits.length > 0 && (
-        mobileDigits.includes(qDigits) ||
-        formattedDigits.includes(qDigits) ||
-        localMobileDigits.includes(qDigits) ||
-        intlMobileDigits.includes(qDigits) ||
-        (queryCore.length >= 2 && storedCore.includes(queryCore))
-      ));
+      const storedCore = getPhCoreDigits(mobileDigits);
+      const queryCore = getPhCoreDigits(qDigits);
 
-    // 2. Name, Rank, Unit & Group (space-insensitive and multi-word token matching)
-    const fullName = `${person.firstName} ${person.lastName}`.toLowerCase();
-    const cleanFullName = fullName.replace(/[\s\-_]/g, "");
+      const localMobileDigits = mobileDigits.startsWith("63")
+        ? "0" + mobileDigits.slice(2)
+        : mobileDigits;
+      const intlMobileDigits = mobileDigits.startsWith("0")
+        ? "63" + mobileDigits.slice(1)
+        : mobileDigits;
 
-    const rankFullName = getRankFullName(person.rank).toLowerCase();
-    const rankCode = person.rank.toLowerCase();
+      const matchesMobile =
+        matchesPhMobileSearch(person.mobileNumber, trimmedQuery) ||
+        rawMobile.includes(trimmedQuery) ||
+        cleanMobile.includes(qClean) ||
+        formattedMobile.includes(trimmedQuery) ||
+        (qDigits.length > 0 && (
+          mobileDigits.includes(qDigits) ||
+          formattedDigits.includes(qDigits) ||
+          localMobileDigits.includes(qDigits) ||
+          intlMobileDigits.includes(qDigits) ||
+          (queryCore.length >= 2 && storedCore.includes(queryCore))
+        ));
 
-    const unit = (person.unit || "").toLowerCase();
-    const cleanUnit = unit.replace(/[\s\-_]/g, "");
+      // 2. Name, Rank, Unit & Group (space-insensitive and multi-word token matching)
+      const fullName = `${person.firstName} ${person.lastName}`.toLowerCase();
+      const cleanFullName = fullName.replace(/[\s\-_]/g, "");
 
-    const groupName = (person.groupName || "").toLowerCase();
-    const company = ((person as any).company || "").toLowerCase();
-    const cleanCompany = company.replace(/[\s\-_]/g, "");
+      const rankFullName = getRankFullName(person.rank).toLowerCase();
+      const rankCode = person.rank.toLowerCase();
 
-    // Multi-word tokens: "cruz juan" or "juan bgen" matches "BGEN Juan Dela Cruz"
-    const words = trimmedQuery.split(/\s+/).filter(Boolean);
-    const matchesAllTokens = words.length > 0 && words.every((w) => {
-      const wClean = w.replace(/[\s\-_+()]/g, "");
-      const wDigits = w.replace(/\D/g, "");
-      const wCore = getPhCoreDigits(wDigits);
-      return (
-        fullName.includes(w) ||
-        cleanFullName.includes(wClean) ||
-        rankCode.includes(w) ||
-        rankFullName.includes(w) ||
-        unit.includes(w) ||
-        company.includes(w) ||
-        cleanCompany.includes(wClean) ||
-        groupName.includes(w) ||
-        cleanMobile.includes(wClean) ||
-        matchesPhMobileSearch(person.mobileNumber, w) ||
-        (wDigits.length > 0 && (
-          mobileDigits.includes(wDigits) ||
-          localMobileDigits.includes(wDigits) ||
-          intlMobileDigits.includes(wDigits) ||
-          (wCore.length >= 2 && storedCore.includes(wCore))
-        ))
-      );
+      const unit = (person.unit || "").toLowerCase();
+      const cleanUnit = unit.replace(/[\s\-_]/g, "");
+
+      const groupName = (person.groupName || "").toLowerCase();
+      const company = ((person as any).company || "").toLowerCase();
+      const cleanCompany = company.replace(/[\s\-_]/g, "");
+
+      const school = ((person as any).school || "").toLowerCase();
+      const yearGraduated = ((person as any).yearGraduated || "").toLowerCase();
+      const skills = ((person as any).skills || "").toLowerCase();
+      const trainingCat = ((person as any).trainingCategory || "").toLowerCase();
+      const currentJob = ((person as any).currentJob || "").toLowerCase();
+      const currentAddress = ((person as any).currentAddress || "").toLowerCase();
+      const ageStr = (person as any).age ? String((person as any).age).toLowerCase() : "";
+
+      // Multi-word tokens: "cruz juan", "juan bgen", "ustp 2018", or "medic carmen"
+      const words = trimmedQuery.split(/\s+/).filter(Boolean);
+      const matchesAllTokens = words.length > 0 && words.every((w) => {
+        const wClean = w.replace(/[\s\-_+()]/g, "");
+        const wDigits = w.replace(/\D/g, "");
+        const wCore = getPhCoreDigits(wDigits);
+        return (
+          fullName.includes(w) ||
+          cleanFullName.includes(wClean) ||
+          rankCode.includes(w) ||
+          rankFullName.includes(w) ||
+          unit.includes(w) ||
+          company.includes(w) ||
+          cleanCompany.includes(wClean) ||
+          groupName.includes(w) ||
+          school.includes(w) ||
+          yearGraduated.includes(w) ||
+          skills.includes(w) ||
+          trainingCat.includes(w) ||
+          currentJob.includes(w) ||
+          currentAddress.includes(w) ||
+          ageStr === w ||
+          cleanMobile.includes(wClean) ||
+          matchesPhMobileSearch(person.mobileNumber, w) ||
+          (wDigits.length > 0 && (
+            mobileDigits.includes(wDigits) ||
+            localMobileDigits.includes(wDigits) ||
+            intlMobileDigits.includes(wDigits) ||
+            (wCore.length >= 2 && storedCore.includes(wCore))
+          ))
+        );
+      });
+
+      const matchesName =
+        fullName.includes(trimmedQuery) ||
+        cleanFullName.includes(qClean) ||
+        matchesAllTokens;
+
+      const matchesRank =
+        rankCode.includes(trimmedQuery) ||
+        rankFullName.includes(trimmedQuery) ||
+        rankFullName.replace(/[\s\-_]/g, "").includes(qClean);
+
+      const matchesUnit =
+        unit.includes(trimmedQuery) ||
+        cleanUnit.includes(qClean);
+
+      const matchesGroupText = groupName.includes(trimmedQuery);
+      const matchesCompanyText = company.includes(trimmedQuery) || cleanCompany.includes(qClean);
+      const matchesBackground =
+        school.includes(trimmedQuery) ||
+        yearGraduated.includes(trimmedQuery) ||
+        skills.includes(trimmedQuery) ||
+        trainingCat.includes(trimmedQuery) ||
+        currentJob.includes(trimmedQuery) ||
+        currentAddress.includes(trimmedQuery) ||
+        (ageStr.length > 0 && ageStr === trimmedQuery);
+
+      const matchesSearch =
+        matchesMobile ||
+        matchesName ||
+        matchesRank ||
+        matchesUnit ||
+        matchesCompanyText ||
+        matchesGroupText ||
+        matchesBackground;
+
+      return matchesSearch;
     });
+  }, [personnelList, selectedGroup, selectedCompany, selectedStatus, selectedTrainingCategory, trimmedQuery]);
 
-    const matchesName =
-      fullName.includes(trimmedQuery) ||
-      cleanFullName.includes(qClean) ||
-      matchesAllTokens;
+  // 2. Dynamic Device counts scoped to active filters and search query
+  const scopedTotal = scopedPersonnel.length;
 
-    const matchesRank =
-      rankCode.includes(trimmedQuery) ||
-      rankFullName.includes(trimmedQuery) ||
-      rankFullName.replace(/[\s\-_]/g, "").includes(qClean);
+  const androidCount = useMemo(() => {
+    return scopedPersonnel.filter((p) => ((p as any).deviceType || "ANDROID") === "ANDROID").length;
+  }, [scopedPersonnel]);
 
-    const matchesUnit =
-      unit.includes(trimmedQuery) ||
-      cleanUnit.includes(qClean);
+  const keypadCount = useMemo(() => {
+    return scopedPersonnel.filter((p) => (p as any).deviceType === "KEYPAD").length;
+  }, [scopedPersonnel]);
 
-    const matchesGroupText = groupName.includes(trimmedQuery);
-    const matchesCompanyText = company.includes(trimmedQuery) || cleanCompany.includes(qClean);
+  const iosCount = useMemo(() => {
+    return scopedPersonnel.filter((p) => (p as any).deviceType === "IOS").length;
+  }, [scopedPersonnel]);
 
-    const matchesSearch =
-      matchesMobile ||
-      matchesName ||
-      matchesRank ||
-      matchesUnit ||
-      matchesCompanyText ||
-      matchesGroupText;
+  const pairedAppCount = useMemo(() => {
+    return scopedPersonnel.filter((p) => Boolean((p as any).fcmToken)).length;
+  }, [scopedPersonnel]);
 
-    const matchesGroup = selectedGroup === "ALL" || person.groupId === selectedGroup || person.groupName === selectedGroup;
-    const matchesCompany = selectedCompany === "ALL" || (person as any).company === selectedCompany;
-    const matchesStatus = selectedStatus === "ALL" || person.status === selectedStatus;
+  const unpairedCount = useMemo(() => {
+    return scopedPersonnel.length - pairedAppCount;
+  }, [scopedPersonnel, pairedAppCount]);
 
-    return matchesSearch && matchesGroup && matchesCompany && matchesStatus;
-  });
+  // 3. Final Filtered Personnel List applying the Device Filter on top of Scoped Personnel
+  const filteredPersonnel = useMemo(() => {
+    if (selectedDevice === "ALL") return scopedPersonnel;
+    if (selectedDevice === "PAIRED") return scopedPersonnel.filter((p) => Boolean((p as any).fcmToken));
+    if (selectedDevice === "UNPAIRED") return scopedPersonnel.filter((p) => !Boolean((p as any).fcmToken));
+    if (selectedDevice === "ANDROID") return scopedPersonnel.filter((p) => ((p as any).deviceType || "ANDROID") === "ANDROID");
+    if (selectedDevice === "KEYPAD") return scopedPersonnel.filter((p) => (p as any).deviceType === "KEYPAD");
+    if (selectedDevice === "IOS") return scopedPersonnel.filter((p) => (p as any).deviceType === "IOS");
+    return scopedPersonnel;
+  }, [scopedPersonnel, selectedDevice]);
 
   const totalMatches = filteredPersonnel.length;
   const showSearchDropdown = isSearchFocused && trimmedQuery.length > 0;
@@ -640,7 +734,7 @@ export default function PersonnelPage() {
   // Auto-reset personnel page when filters change
   useEffect(() => {
     setPersonnelPage(1);
-  }, [searchQuery, selectedGroup, selectedCompany, selectedStatus, selectedDevice]);
+  }, [searchQuery, selectedGroup, selectedCompany, selectedStatus, selectedDevice, selectedTrainingCategory]);
 
   // Paginated Personnel Slice
   const paginatedPersonnel = useMemo(() => {
@@ -650,19 +744,71 @@ export default function PersonnelPage() {
 
   // Submissions Queue Filter & Pagination State
   const [submissionStatusFilter, setSubmissionStatusFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL");
+  const [submissionSearchQuery, setSubmissionSearchQuery] = useState("");
   const [submissionsPage, setSubmissionsPage] = useState(1);
   const [submissionsPageSize, setSubmissionsPageSize] = useState(20);
 
-  // Filtered Submissions List
+  // Filtered Submissions List with tokenized case-insensitive search across identity, background & skills
   const filteredSubmissions = useMemo(() => {
-    if (submissionStatusFilter === "ALL") return submissionsList;
-    return submissionsList.filter((s) => s.status === submissionStatusFilter);
-  }, [submissionsList, submissionStatusFilter]);
+    let list = submissionsList;
+    if (submissionStatusFilter !== "ALL") {
+      list = list.filter((s) => s.status === submissionStatusFilter);
+    }
+    const q = submissionSearchQuery.trim().toLowerCase();
+    if (!q) return list;
 
-  // Auto-reset submissions page when filter changes
+    const words = q.split(/\s+/).filter(Boolean);
+
+    return list.filter((sub) => {
+      const fullName = `${sub.firstName} ${sub.lastName}`.toLowerCase();
+      const cleanFullName = fullName.replace(/[\s\-_]/g, "");
+      const rankCode = sub.rank.toLowerCase();
+      const rankFullName = getRankFullName(sub.rank).toLowerCase();
+      const rawMobile = (sub.mobileNumber || "").toLowerCase();
+      const cleanMobile = rawMobile.replace(/[\s\-_+()]/g, "");
+      const mobileDigits = rawMobile.replace(/\D/g, "");
+      const unit = (sub.unit || "").toLowerCase();
+      const company = ((sub as any).company || "").toLowerCase();
+      const groupName = (sub.groupName || "").toLowerCase();
+
+      const school = ((sub as any).school || "").toLowerCase();
+      const yearGraduated = ((sub as any).yearGraduated || "").toLowerCase();
+      const trainingCategory = ((sub as any).trainingCategory || "").toLowerCase();
+      const skills = ((sub as any).skills || "").toLowerCase();
+      const currentAddress = ((sub as any).currentAddress || "").toLowerCase();
+      const currentJob = ((sub as any).currentJob || "").toLowerCase();
+      const ageStr = (sub as any).age ? String((sub as any).age).toLowerCase() : "";
+
+      return words.every((w) => {
+        const wClean = w.replace(/[\s\-_+()]/g, "");
+        const wDigits = w.replace(/\D/g, "");
+        return (
+          fullName.includes(w) ||
+          cleanFullName.includes(wClean) ||
+          rankCode.includes(w) ||
+          rankFullName.includes(w) ||
+          unit.includes(w) ||
+          company.includes(w) ||
+          groupName.includes(w) ||
+          school.includes(w) ||
+          yearGraduated.includes(w) ||
+          trainingCategory.includes(w) ||
+          skills.includes(w) ||
+          currentAddress.includes(w) ||
+          currentJob.includes(w) ||
+          ageStr === w ||
+          cleanMobile.includes(wClean) ||
+          matchesPhMobileSearch(sub.mobileNumber, w) ||
+          (wDigits.length > 0 && mobileDigits.includes(wDigits))
+        );
+      });
+    });
+  }, [submissionsList, submissionStatusFilter, submissionSearchQuery]);
+
+  // Auto-reset submissions page when filter or search changes
   useEffect(() => {
     setSubmissionsPage(1);
-  }, [submissionStatusFilter]);
+  }, [submissionStatusFilter, submissionSearchQuery]);
 
   // Paginated Submissions Slice
   const paginatedSubmissions = useMemo(() => {
@@ -683,6 +829,13 @@ export default function PersonnelPage() {
         lastName: "",
         rank: "PVT",
         mobileNumber: "09",
+        age: "",
+        currentAddress: "",
+        trainingCategory: "BASIC ROTC",
+        school: "",
+        yearGraduated: "",
+        currentJob: "",
+        skills: "",
         groupId: groupsList[0]?._id || "",
         unit: "10RCDG",
         company: "HHC",
@@ -690,6 +843,7 @@ export default function PersonnelPage() {
         deviceType: "ANDROID",
       });
       setIsAddModalOpen(true);
+      setAddModalTab("IDENTITY");
     });
   };
 
@@ -697,6 +851,7 @@ export default function PersonnelPage() {
     guardAction("edit personnel record", () => {
       setEditingId(person._id);
       setPhoneError(null);
+      setAddModalTab("IDENTITY");
       const matchedGroup = groupsList.find(
         (g) => g._id === person.groupId || g.name === person.groupName
       );
@@ -708,6 +863,13 @@ export default function PersonnelPage() {
         lastName: person.lastName || "",
         rank: person.rank || "PVT",
         mobileNumber: person.mobileNumber || "09",
+        age: (person as any).age !== undefined ? String((person as any).age) : "",
+        currentAddress: (person as any).currentAddress || "",
+        trainingCategory: (person as any).trainingCategory || "BASIC ROTC",
+        school: (person as any).school || "",
+        yearGraduated: (person as any).yearGraduated || "",
+        currentJob: (person as any).currentJob || "",
+        skills: (person as any).skills || "",
         groupId: initialGroupId,
         unit: person.unit || "10RCDG",
         company: (person as any).company || "HHC",
@@ -731,7 +893,7 @@ export default function PersonnelPage() {
     });
   };
 
-  const handleInitiateBatchSetDevice = (type: "ANDROID" | "KEYPAD") => {
+  const handleInitiateBatchSetDevice = (type: "ANDROID" | "KEYPAD" | "IOS") => {
     if (selectedPersonnelIds.length === 0) return;
     guardAction(`set ${selectedPersonnelIds.length} soldiers to ${type}`, () => {
       setDeviceConfirmTarget({
@@ -951,6 +1113,22 @@ export default function PersonnelPage() {
     setSelectedPersonnelIds(filteredPersonnel.map((p) => p._id));
   };
 
+  const validateIdentityTab = () => {
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      setPhoneError("Please enter both First Name and Last Name.");
+      return false;
+    }
+    const cleanDigits = (formData.mobileNumber || "").replace(/\D/g, "");
+    if (cleanDigits.length < 10) {
+      setPhoneError("Please enter a valid 11-digit Philippine mobile number.");
+      return false;
+    }
+    if (phoneError) {
+      return false;
+    }
+    return true;
+  };
+
   const handleSavePersonnel = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isViewer) {
@@ -991,6 +1169,33 @@ export default function PersonnelPage() {
     }
     setPhoneError(null);
 
+    // Validate Reservist Background fields
+    if (formData.age) {
+      const ageNum = Number(formData.age);
+      if (isNaN(ageNum) || !Number.isInteger(ageNum) || ageNum < 16 || ageNum > 85) {
+        alert("Age must be a valid whole number between 16 and 85 years.");
+        setAddModalTab("IDENTITY");
+        return;
+      }
+    }
+
+    if (formData.yearGraduated) {
+      const cleanYear = formData.yearGraduated.trim();
+      const currentYear = new Date().getFullYear();
+      const yearNum = Number(cleanYear);
+      if (!/^\d{4}$/.test(cleanYear) || isNaN(yearNum) || yearNum < 1950 || yearNum > currentYear + 1) {
+        alert(`Year Graduated in ROTC must be a 4-digit calendar year between 1950 and ${currentYear + 1} (e.g. 2018).`);
+        setAddModalTab("MILITARY");
+        return;
+      }
+    }
+
+    if (formData.currentAddress && formData.currentAddress.trim().length > 250) {
+      alert("Current address must not exceed 250 characters.");
+      setAddModalTab("IDENTITY");
+      return;
+    }
+
     setIsSaving(true);
     try {
       const selectedGrp = groupsList.find((g) => g._id === formData.groupId);
@@ -1008,6 +1213,13 @@ export default function PersonnelPage() {
           unit: formData.unit.trim(),
           company: formData.company?.trim() || undefined,
           email: formData.email.trim() || undefined,
+          school: formData.school.trim() || undefined,
+          yearGraduated: formData.yearGraduated.trim() || undefined,
+          trainingCategory: formData.trainingCategory || undefined,
+          skills: formData.skills.trim() || undefined,
+          currentAddress: formData.currentAddress.trim() || undefined,
+          age: formData.age !== "" && !isNaN(Number(formData.age)) ? Number(formData.age) : undefined,
+          currentJob: formData.currentJob.trim() || undefined,
           deviceType: formData.deviceType,
           updatedBy: currentOfficer.displayName,
           updatedByEmail: currentOfficer.email,
@@ -1023,6 +1235,13 @@ export default function PersonnelPage() {
           unit: formData.unit.trim(),
           company: formData.company?.trim() || undefined,
           email: formData.email.trim() || undefined,
+          school: formData.school.trim() || undefined,
+          yearGraduated: formData.yearGraduated.trim() || undefined,
+          trainingCategory: formData.trainingCategory || undefined,
+          skills: formData.skills.trim() || undefined,
+          currentAddress: formData.currentAddress.trim() || undefined,
+          age: formData.age !== "" && !isNaN(Number(formData.age)) ? Number(formData.age) : undefined,
+          currentJob: formData.currentJob.trim() || undefined,
           deviceType: formData.deviceType,
           createdBy: currentOfficer.displayName,
           createdByEmail: currentOfficer.email,
@@ -1439,7 +1658,7 @@ export default function PersonnelPage() {
                     value={searchQuery}
                     onFocus={() => setIsSearchFocused(true)}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by name, rank, unit, or mobile..."
+                    placeholder="Search by name, rank, school, year in ROTC, skills, or job..."
                     className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 transition-all font-medium"
                   />
                   {searchQuery && (
@@ -1513,6 +1732,15 @@ export default function PersonnelPage() {
                                         <span>
                                           <HighlightMatch text={person.unit} query={searchQuery} />
                                         </span>
+                                        {(person as any).currentAddress && (
+                                          <>
+                                            <span>•</span>
+                                            <span className="flex items-center gap-0.5 text-slate-600 truncate max-w-[140px]" title={(person as any).currentAddress}>
+                                              <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                              <HighlightMatch text={(person as any).currentAddress} query={searchQuery} />
+                                            </span>
+                                          </>
+                                        )}
                                         <span>•</span>
                                         <span className="text-slate-400">
                                           {(person as any).updatedBy
@@ -1569,7 +1797,7 @@ export default function PersonnelPage() {
                   onChange={(e) => setSelectedDevice(e.target.value as any)}
                   className="flex-1 sm:flex-none px-2.5 sm:px-3 py-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer transition-all"
                 >
-                  <option value="ALL">All Devices ({personnelList.length})</option>
+                  <option value="ALL">All Devices ({scopedTotal})</option>
                   <option value="PAIRED">Paired App ({pairedAppCount})</option>
                   <option value="UNPAIRED">Unpaired ({unpairedCount})</option>
                   <option value="ANDROID">Android ({androidCount})</option>
@@ -1613,7 +1841,21 @@ export default function PersonnelPage() {
                   <option value="INACTIVE">Inactive</option>
                 </select>
 
-                {(selectedDevice !== "ALL" || selectedGroup !== "ALL" || selectedCompany !== "ALL" || selectedStatus !== "ALL" || searchQuery) && (
+                <select
+                  value={selectedTrainingCategory}
+                  onChange={(e) => setSelectedTrainingCategory(e.target.value)}
+                  className="flex-1 sm:flex-none px-2.5 sm:px-3 py-2 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer transition-all max-w-[140px] sm:max-w-[170px] truncate"
+                  title="Filter roster by Source of Enlistment / Training Category"
+                >
+                  <option value="ALL">All Categories</option>
+                  <option value="BASIC ROTC">Basic ROTC</option>
+                  <option value="ADVANCE ROTC">Advance ROTC</option>
+                  <option value="BCMT">BCMT</option>
+                  <option value="POTC GRADUATE">POTC Graduate</option>
+                  <option value="COMMISSION UNDER RA2334">RA 2334</option>
+                </select>
+
+                {(selectedDevice !== "ALL" || selectedGroup !== "ALL" || selectedCompany !== "ALL" || selectedStatus !== "ALL" || selectedTrainingCategory !== "ALL" || searchQuery) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1621,6 +1863,7 @@ export default function PersonnelPage() {
                       setSelectedGroup("ALL");
                       setSelectedCompany("ALL");
                       setSelectedStatus("ALL");
+                      setSelectedTrainingCategory("ALL");
                       setSearchQuery("");
                     }}
                     className="px-2.5 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-all cursor-pointer shrink-0"
@@ -1648,7 +1891,7 @@ export default function PersonnelPage() {
                       : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
                   }`}
                 >
-                  All ({personnelList.length})
+                  All ({scopedTotal})
                 </button>
 
                 <button
@@ -1665,7 +1908,7 @@ export default function PersonnelPage() {
                   <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
                     selectedDevice === "PAIRED" ? "bg-white/20 text-white" : "bg-emerald-200/70 text-emerald-900"
                   }`}>
-                    {pairedAppCount} ({Math.round((pairedAppCount / (personnelList.length || 1)) * 100)}%)
+                    {pairedAppCount} ({Math.round((pairedAppCount / (scopedTotal || 1)) * 100)}%)
                   </span>
                 </button>
 
@@ -1704,10 +1947,28 @@ export default function PersonnelPage() {
                     {keypadCount}
                   </span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDevice(selectedDevice === "IOS" ? "ALL" : "IOS")}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    selectedDevice === "IOS"
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100/70"
+                  }`}
+                >
+                  <AppleIcon className="w-3.5 h-3.5" />
+                  <span>iOS (Email)</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    selectedDevice === "IOS" ? "bg-white/20 text-white" : "bg-blue-200/70 text-blue-900"
+                  }`}>
+                    {iosCount}
+                  </span>
+                </button>
               </div>
 
               <div className="text-[11px] font-mono text-slate-500 font-medium">
-                Showing <strong className="text-slate-800">{filteredPersonnel.length}</strong> of <strong className="text-slate-800">{personnelList.length}</strong> troops
+                Showing <strong className="text-slate-800">{filteredPersonnel.length}</strong> of <strong className="text-slate-800">{scopedTotal === personnelList.length ? `${personnelList.length} troops` : `${scopedTotal} filtered (${personnelList.length} total)`}</strong>
               </div>
             </div>
           </div>
@@ -1762,6 +2023,15 @@ export default function PersonnelPage() {
                 >
                   <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-200 shrink-0" />
                   <span>Tag Keypad ({selectedPersonnelIds.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInitiateBatchSetDevice("IOS")}
+                  disabled={isUpdatingDevice}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-800 text-white transition-colors cursor-pointer shadow-2xs"
+                >
+                  <AppleIcon className="w-3.5 h-3.5 text-white shrink-0" />
+                  <span>Tag iOS ({selectedPersonnelIds.length})</span>
                 </button>
                 <button
                   type="button"
@@ -1856,31 +2126,73 @@ export default function PersonnelPage() {
                             className="rounded text-emerald-700 focus:ring-emerald-600 cursor-pointer"
                           />
                         </td>
-                        <td className="py-3.5 px-3 sm:px-4 font-bold text-slate-900">
-                          <div className="flex items-center gap-2.5">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono border ${badge.bg} ${badge.text} ${badge.border}`}>
-                              <HighlightMatch text={person.rank} query={searchQuery} />
-                            </span>
-                            <div>
-                              <span>
+                        <td className="py-3 px-3 sm:px-4 text-slate-900 align-top">
+                          <div className="min-w-0 space-y-1">
+                            {/* Line 1: Rank Badge + Soldier Full Name */}
+                            <div className="flex items-center gap-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold font-mono border shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}>
+                                <HighlightMatch text={person.rank} query={searchQuery} />
+                              </span>
+                              <span className="font-bold text-slate-900 text-xs">
                                 <HighlightMatch text={`${person.firstName} ${person.lastName}`} query={searchQuery} />
                               </span>
-                              <span className="block text-[10px] font-normal text-slate-400 font-mono">
+                            </div>
+
+                            {/* Line 2: Rank Full Name & Age & Address */}
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 flex-wrap">
+                              <span className="font-mono text-slate-400">
                                 <HighlightMatch text={getRankFullName(person.rank)} query={searchQuery} />
+                                {(person as any).age ? ` · ${(person as any).age} yrs old` : ""}
                               </span>
+                              {(person as any).currentAddress && (
+                                <span className="inline-flex items-center gap-0.5 text-slate-600 truncate max-w-[240px]" title={(person as any).currentAddress}>
+                                  <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">
+                                    <HighlightMatch text={(person as any).currentAddress} query={searchQuery} />
+                                  </span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Line 3: Training Category, School 'Year, Job, Skills */}
+                            {((person as any).trainingCategory || (person as any).school || (person as any).skills || (person as any).currentJob) && (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                {(person as any).trainingCategory && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                                    <HighlightMatch text={(person as any).trainingCategory} query={searchQuery} />
+                                  </span>
+                                )}
+                                {(person as any).school && (
+                                  <span className="text-[10px] text-slate-500 font-medium truncate max-w-[170px]" title={(person as any).school}>
+                                    🎓 <HighlightMatch text={(person as any).school} query={searchQuery} /> {(person as any).yearGraduated ? `'${(person as any).yearGraduated.slice(-2)}` : ""}
+                                  </span>
+                                )}
+                                {(person as any).currentJob && (
+                                  <span className="text-[10px] text-slate-600 font-medium truncate max-w-[150px]" title={(person as any).currentJob}>
+                                    💼 <HighlightMatch text={(person as any).currentJob} query={searchQuery} />
+                                  </span>
+                                )}
+                                {(person as any).skills && (
+                                  <span className="text-[10px] text-emerald-800 font-medium truncate max-w-[160px]" title={(person as any).skills}>
+                                    🛠️ <HighlightMatch text={(person as any).skills} query={searchQuery} />
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Line 4: Audit info in subtle 9px mono */}
+                            <div className="text-[9px] font-mono text-slate-400">
                               {(person as any).updatedBy ? (
-                                <span className="block text-[10px] text-slate-500 font-medium mt-0.5">
-                                  Last edited by: <strong className="text-slate-700 font-semibold">{(person as any).updatedBy}</strong>
-                                  {(person as any).updatedAt ? <span className="text-slate-400 font-mono font-normal"> · {(person as any).updatedAt}</span> : null}
+                                <span>
+                                  Edited by: <strong className="text-slate-600 font-semibold">{(person as any).updatedBy}</strong>
+                                  {(person as any).updatedAt ? <span> · {(person as any).updatedAt}</span> : null}
                                 </span>
                               ) : (person as any).createdBy ? (
-                                <span className="block text-[10px] text-slate-500 font-medium mt-0.5">
-                                  Added by: <strong className="text-slate-700 font-semibold">{(person as any).createdBy}</strong>
+                                <span>
+                                  Added by: <strong className="text-slate-600 font-semibold">{(person as any).createdBy}</strong>
                                 </span>
                               ) : (
-                                <span className="block text-[10px] text-slate-400 mt-0.5">
-                                  Added by: <span className="text-slate-500 font-medium">Command</span>
-                                </span>
+                                <span>Added by: Command</span>
                               )}
                             </div>
                           </div>
@@ -1922,6 +2234,16 @@ export default function PersonnelPage() {
                             >
                               <Link2 className="w-3 h-3 text-amber-600 shrink-0" />
                               <span>Pair App</span>
+                            </button>
+                          ) : (person as any).deviceType === "IOS" ? (
+                            <button
+                              type="button"
+                              onClick={() => handleInitiateToggleDevice(person)}
+                              title={`Apple iPhone (iOS)\nEmergency alerts sent via Resend to: ${person.email || "No email set (click to edit)"}`}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-300 hover:bg-blue-100 transition-all cursor-pointer shadow-2xs"
+                            >
+                              <AppleIcon className="w-3 h-3 text-blue-700 shrink-0" />
+                              <span className="max-w-[100px] truncate">{person.email ? "iOS (Email)" : "iOS (No Email)"}</span>
                             </button>
                           ) : (
                             <button
@@ -2235,53 +2557,77 @@ export default function PersonnelPage() {
               )}
             </div>
 
-            {/* Filter Tabs for Submissions */}
-            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl w-fit">
-              <button
-                type="button"
-                onClick={() => setSubmissionStatusFilter("ALL")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  submissionStatusFilter === "ALL"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                All ({submissionsList.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setSubmissionStatusFilter("PENDING")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  submissionStatusFilter === "PENDING"
-                    ? "bg-white text-amber-900 shadow-xs"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                Pending ({pendingSubmissions.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setSubmissionStatusFilter("APPROVED")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  submissionStatusFilter === "APPROVED"
-                    ? "bg-white text-emerald-900 shadow-xs"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                Approved ({submissionsList.filter((s) => s.status === "APPROVED").length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setSubmissionStatusFilter("REJECTED")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  submissionStatusFilter === "REJECTED"
-                    ? "bg-white text-rose-900 shadow-xs"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                Rejected ({submissionsList.filter((s) => s.status === "REJECTED").length})
-              </button>
+            {/* Filter Tabs & Search for Submissions */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl w-fit">
+                <button
+                  type="button"
+                  onClick={() => setSubmissionStatusFilter("ALL")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    submissionStatusFilter === "ALL"
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  All ({submissionsList.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubmissionStatusFilter("PENDING")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    submissionStatusFilter === "PENDING"
+                      ? "bg-white text-amber-900 shadow-xs"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                  Pending ({pendingSubmissions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubmissionStatusFilter("APPROVED")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    submissionStatusFilter === "APPROVED"
+                      ? "bg-white text-emerald-900 shadow-xs"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  Approved ({submissionsList.filter((s) => s.status === "APPROVED").length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubmissionStatusFilter("REJECTED")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    submissionStatusFilter === "REJECTED"
+                      ? "bg-white text-rose-900 shadow-xs"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  Rejected ({submissionsList.filter((s) => s.status === "REJECTED").length})
+                </button>
+              </div>
+
+              {/* Submissions Search Box with Tokenized Logic */}
+              <div className="relative flex-1 max-w-sm">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={submissionSearchQuery}
+                  onChange={(e) => setSubmissionSearchQuery(e.target.value)}
+                  placeholder="Search submissions by name, school, year, skills..."
+                  className="w-full pl-8 pr-7 py-1.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-600 transition-all font-medium shadow-2xs"
+                />
+                {submissionSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSubmissionSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Submissions Table */}
@@ -2349,6 +2695,7 @@ export default function PersonnelPage() {
                         </th>
                         <th className="py-3 px-4">Soldier & Rank</th>
                         <th className="py-3 px-4">Mobile Number</th>
+                        <th className="py-3 px-4">Background & Skills</th>
                         <th className="py-3 px-4">Device</th>
                         <th className="py-3 px-4">Assigned Unit</th>
                         <th className="py-3 px-4">Batch Code</th>
@@ -2391,14 +2738,60 @@ export default function PersonnelPage() {
                             <td className="py-3 px-4 font-bold text-slate-900">
                               <div className="flex items-center gap-2">
                                 <span className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold font-mono border ${getRankBadgeStyle(sub.rank)}`}>
-                                  {sub.rank}
+                                  <HighlightMatch text={sub.rank} query={submissionSearchQuery} />
                                 </span>
-                                <span>{sub.firstName} {sub.lastName}</span>
+                                <div>
+                                  <span>
+                                    <HighlightMatch text={`${sub.firstName} ${sub.lastName}`} query={submissionSearchQuery} />
+                                  </span>
+                                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-normal mt-0.5">
+                                    {(sub as any).age ? (
+                                      <span className="font-mono shrink-0">{(sub as any).age} yrs old</span>
+                                    ) : null}
+                                    {(sub as any).age && (sub as any).currentAddress ? <span>•</span> : null}
+                                    {(sub as any).currentAddress && (
+                                      <span className="flex items-center gap-1 text-slate-500 truncate max-w-[200px]" title={(sub as any).currentAddress}>
+                                        <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                        <span className="truncate">
+                                          <HighlightMatch text={(sub as any).currentAddress} query={submissionSearchQuery} />
+                                        </span>
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </td>
 
                             <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                              {formatPhMobileDisplay(sub.mobileNumber)}
+                              <HighlightMatch text={formatPhMobileDisplay(sub.mobileNumber)} query={submissionSearchQuery} />
+                            </td>
+
+                            {/* Military Background, ROTC School & Skills */}
+                            <td className="py-3 px-4">
+                              <div className="space-y-1 max-w-[200px]">
+                                {(sub as any).trainingCategory && (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                                    <HighlightMatch text={(sub as any).trainingCategory} query={submissionSearchQuery} />
+                                  </span>
+                                )}
+                                {((sub as any).school || (sub as any).yearGraduated) && (
+                                  <div className="text-[11px] text-slate-800 font-medium truncate" title={(sub as any).school}>
+                                    🎓 <HighlightMatch text={(sub as any).school || "School N/A"} query={submissionSearchQuery} /> {(sub as any).yearGraduated ? `(' ${(sub as any).yearGraduated.slice(-2)})` : ""}
+                                  </div>
+                                )}
+                                {((sub as any).skills || (sub as any).currentJob) && (
+                                  <div className="text-[10px] text-slate-500 truncate" title={`${(sub as any).currentJob || ""} ${(sub as any).skills || ""}`}>
+                                    {(sub as any).skills ? (
+                                      <span>🛠️ <HighlightMatch text={(sub as any).skills} query={submissionSearchQuery} /></span>
+                                    ) : (
+                                      <span>💼 <HighlightMatch text={(sub as any).currentJob} query={submissionSearchQuery} /></span>
+                                    )}
+                                  </div>
+                                )}
+                                {!(sub as any).trainingCategory && !(sub as any).school && !(sub as any).skills && (
+                                  <span className="text-[10px] text-slate-400 font-mono italic">—</span>
+                                )}
+                              </div>
                             </td>
 
                             <td className="py-3 px-4">
@@ -2547,7 +2940,7 @@ export default function PersonnelPage() {
               {/* Custom Campaign Title */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Custom Campaign Title <span className="text-amber-700">*</span>
+                  Custom Campaign Title <span className="text-red-500 font-bold ml-0.5">*</span>
                 </label>
                 <input
                   type="text"
@@ -2581,7 +2974,7 @@ export default function PersonnelPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Pre-assigned Unit / CDC <span className="text-amber-700">*</span>
+                    Pre-assigned Unit / CDC <span className="text-red-500 font-bold ml-0.5">*</span>
                   </label>
                   <input
                     type="text"
@@ -2600,7 +2993,7 @@ export default function PersonnelPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Pre-assigned Company <span className="text-amber-700">*</span>
+                    Pre-assigned Company <span className="text-red-500 font-bold ml-0.5">*</span>
                   </label>
                   <select
                     value={campaignFormData.targetCompany}
@@ -2655,7 +3048,7 @@ export default function PersonnelPage() {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Unit Security Passcode <span className="text-amber-700">*</span>
+                    Unit Security Passcode <span className="text-red-500 font-bold ml-0.5">*</span>
                   </label>
                   <button
                     type="button"
@@ -2831,221 +3224,600 @@ export default function PersonnelPage() {
               </button>
             </div>
 
+            {/* Tactical Tabs */}
+            <div className="flex border-b border-slate-200 bg-slate-50/70 px-4 sm:px-6 pt-2 gap-2 text-xs font-bold overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setAddModalTab("IDENTITY")}
+                className={`pb-2.5 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                  addModalTab === "IDENTITY"
+                    ? "border-emerald-600 text-emerald-950 font-extrabold"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <div className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-800 text-[10px] flex items-center justify-center font-bold">1</div>
+                <span>Soldier Identity</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (addModalTab === "IDENTITY" && !validateIdentityTab()) return;
+                  setAddModalTab("MILITARY");
+                }}
+                className={`pb-2.5 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                  addModalTab === "MILITARY"
+                    ? "border-emerald-600 text-emerald-950 font-extrabold"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <div className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] flex items-center justify-center font-bold">2</div>
+                <span>Military & ROTC</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (addModalTab === "IDENTITY" && !validateIdentityTab()) return;
+                  setAddModalTab("CIVILIAN");
+                }}
+                className={`pb-2.5 px-3 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                  addModalTab === "CIVILIAN"
+                    ? "border-emerald-600 text-emerald-950 font-extrabold"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-800 text-[10px] flex items-center justify-center font-bold">3</div>
+                <span>Skills & Device</span>
+              </button>
+            </div>
+
             <form onSubmit={handleSavePersonnel} className="p-4 sm:p-6 space-y-4 text-xs">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Military Rank *
-                </label>
-                <RankSearchSelect
-                  value={formData.rank}
-                  onChange={(val) => setFormData({ ...formData, rank: val })}
-                  required
-                />
-              </div>
+              {/* TAB 1: SOLDIER IDENTITY */}
+              {addModalTab === "IDENTITY" && (
+                <div className="space-y-3.5 animate-in fade-in duration-150">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Military Rank <span className="text-red-500 font-bold ml-0.5">*</span>
+                    </label>
+                    <RankSearchSelect
+                      value={formData.rank}
+                      onChange={(val) => setFormData({ ...formData, rank: val })}
+                      required
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    placeholder="e.g. Juan"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    placeholder="e.g. Dela Cruz"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Mobile Number *
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={formData.mobileNumber}
-                  onChange={(e) => {
-                    const val = sanitizePhMobileInput(e.target.value);
-                    setFormData({ ...formData, mobileNumber: val });
-                    
-                    const valDigits = val.replace(/\D/g, "");
-                    const valCore = valDigits.startsWith("639")
-                      ? valDigits.slice(2)
-                      : valDigits.startsWith("09")
-                      ? valDigits.slice(1)
-                      : valDigits;
-
-                    if (valCore.length === 10) {
-                      const dup = personnelList.find((p) => {
-                        if (editingId && p._id === editingId) return false;
-                        const pDigits = (p.mobileNumber || "").replace(/\D/g, "");
-                        const pCore = pDigits.startsWith("639")
-                          ? pDigits.slice(2)
-                          : pDigits.startsWith("09")
-                          ? pDigits.slice(1)
-                          : pDigits;
-                        return pCore === valCore;
-                      });
-                      if (dup) {
-                        setPhoneError(`Already registered to ${dup.rank} ${dup.firstName} ${dup.lastName} (${dup.groupName})`);
-                      } else {
-                        setPhoneError(null);
-                      }
-                    } else if (phoneError) {
-                      setPhoneError(null);
-                    }
-                  }}
-                  placeholder="09171234567"
-                  className={`w-full px-3 py-2 font-mono bg-slate-50 border rounded-xl text-xs focus:outline-none focus:bg-white transition-all ${
-                    phoneError ? "border-red-500 bg-red-50/30 text-red-950 font-bold" : "border-slate-200 focus:border-emerald-600"
-                  }`}
-                />
-                {phoneError && (
-                  <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-start gap-2 mt-1.5 animate-in fade-in">
-                    <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <span className="font-bold block text-red-900">Duplicate Number Detected</span>
-                      <span className="text-[11px] leading-tight text-red-700">{phoneError}</span>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        First Name <span className="text-red-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                        placeholder="e.g. Juan"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Last Name <span className="text-red-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.lastName}
+                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                        placeholder="e.g. Dela Cruz"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                      />
                     </div>
                   </div>
-                )}
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Assigned Group *
-                </label>
-                <select
-                  value={formData.groupId}
-                  onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600"
-                >
-                  <option value="">
-                    {isScopedAdmin ? "Select an Assigned Group..." : "All 10RCDG Personnel (General Roster)"}
-                  </option>
-                  {groupsList.map((g) => (
-                    <option key={g._id} value={g._id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Mobile Number <span className="text-red-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={formData.mobileNumber}
+                        onChange={(e) => {
+                          const val = sanitizePhMobileInput(e.target.value);
+                          setFormData({ ...formData, mobileNumber: val });
+                          
+                          const valDigits = val.replace(/\D/g, "");
+                          const valCore = valDigits.startsWith("639")
+                            ? valDigits.slice(2)
+                            : valDigits.startsWith("09")
+                            ? valDigits.slice(1)
+                            : valDigits;
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Unit / Station
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.unit}
-                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                    placeholder="e.g. 10RCDG"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-                    <span>Company</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Sub-unit</span>
-                  </label>
-                  <select
-                    value={formData.company}
-                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 cursor-pointer"
-                  >
-                    <option value="HHC">HHC (Headquarters & HQ Company)</option>
-                    <option value="Alpha">Alpha Company (A Coy)</option>
-                    <option value="Bravo">Bravo Company (B Coy)</option>
-                    <option value="Charlie">Charlie Company (C Coy)</option>
-                    <option value="Delta">Delta Company (D Coy)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Primary Device Capability *
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <label
-                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2.5 transition-all ${
-                      formData.deviceType === "ANDROID"
-                        ? "bg-emerald-50/80 border-emerald-600 ring-1 ring-emerald-600 font-bold text-emerald-950 shadow-2xs"
-                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="deviceType"
-                      value="ANDROID"
-                      checked={formData.deviceType === "ANDROID"}
-                      onChange={() => setFormData({ ...formData, deviceType: "ANDROID" })}
-                      className="text-emerald-700 focus:ring-emerald-600"
-                    />
-                    <div className="flex items-center gap-1.5">
-                      <AndroidIcon className="w-3.5 h-3.5 text-[#3DDC84] shrink-0" />
-                      <span>Android (Push Capable)</span>
+                          if (valCore.length === 10) {
+                            const dup = personnelList.find((p) => {
+                              if (editingId && p._id === editingId) return false;
+                              const pDigits = (p.mobileNumber || "").replace(/\D/g, "");
+                              const pCore = pDigits.startsWith("639")
+                                ? pDigits.slice(2)
+                                : pDigits.startsWith("09")
+                                ? pDigits.slice(1)
+                                : pDigits;
+                              return pCore === valCore;
+                            });
+                            if (dup) {
+                              setPhoneError(`Already registered to ${dup.rank} ${dup.firstName} ${dup.lastName} (${dup.groupName})`);
+                            } else {
+                              setPhoneError(null);
+                            }
+                          } else if (phoneError) {
+                            setPhoneError(null);
+                          }
+                        }}
+                        placeholder="09171234567"
+                        className={`w-full px-3 py-2 font-mono bg-slate-50 border rounded-xl text-xs focus:outline-none focus:bg-white transition-all ${
+                          phoneError ? "border-red-500 bg-red-50/30 text-red-950 font-bold" : "border-slate-200 focus:border-emerald-600"
+                        }`}
+                      />
+                      {phoneError && (
+                        <div className="p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-start gap-1.5 mt-1 animate-in fade-in">
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0 mt-0.5" />
+                          <span className="text-[11px] leading-tight text-red-700">{phoneError}</span>
+                        </div>
+                      )}
                     </div>
-                  </label>
 
-                  <label
-                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2.5 transition-all ${
-                      formData.deviceType === "KEYPAD"
-                        ? "bg-slate-100 border-slate-600 ring-1 ring-slate-600 font-bold text-slate-900 shadow-2xs"
-                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="deviceType"
-                      value="KEYPAD"
-                      checked={formData.deviceType === "KEYPAD"}
-                      onChange={() => setFormData({ ...formData, deviceType: "KEYPAD" })}
-                      className="text-slate-700 focus:ring-slate-600"
-                    />
-                    <div className="flex items-center gap-1.5">
-                      <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                      <span>Keypad (SMS Only)</span>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Age
+                      </label>
+                      <input
+                        type="number"
+                        min={16}
+                        max={85}
+                        value={formData.age}
+                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                        placeholder="e.g. 24"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                      />
                     </div>
-                  </label>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Android devices receive free in-app alerts; keypad phones will be sent cellular SMS.
-                </p>
-              </div>
+                  </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Current Residential Address
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleDetectLocation}
+                        disabled={isDetectingLocation}
+                        className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100/80 px-2.5 py-0.5 rounded-md border border-emerald-300 transition-all active:scale-95 disabled:opacity-50 shadow-2xs"
+                        title="Auto-detect address using device GPS"
+                      >
+                        {isDetectingLocation ? (
+                          <>
+                            <Loader2 className="w-3 h-3 text-emerald-700 animate-spin" />
+                            <span>Detecting GPS...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Navigation className="w-3 h-3 text-emerald-700" />
+                            <span>Auto-Detect GPS</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={formData.currentAddress}
+                        onChange={(e) => {
+                          setFormData({ ...formData, currentAddress: e.target.value });
+                          if (locationNotice) setLocationNotice(null);
+                        }}
+                        placeholder="e.g. Brgy. Carmen, Cagayan de Oro City, Misamis Oriental"
+                        className="w-full pl-3 pr-16 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                      />
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {formData.currentAddress && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...formData, currentAddress: "" });
+                              if (locationNotice) setLocationNotice(null);
+                            }}
+                            className="p-0.5 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 cursor-pointer"
+                            title="Clear address"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </div>
+
+                    {/* GPS Detection Feedback */}
+                      {locationNotice && (
+                        <div className={`p-2 rounded-lg text-[11px] mt-1.5 flex items-center gap-1.5 border animate-in fade-in duration-150 ${
+                          locationNotice.type === "success"
+                            ? "bg-emerald-50 text-emerald-900 border-emerald-200 font-medium"
+                            : "bg-amber-50 text-amber-900 border-amber-200"
+                        }`}>
+                          {locationNotice.type === "success" ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          ) : (
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          )}
+                          <span className="truncate">{locationNotice.message}</span>
+                        </div>
+                      )}
+
+                    {/* Quick-Tap 10RCDG Regional Chips */}
+                    <div className="mt-2">
+                      <span className="text-[10px] text-slate-400 block mb-1">
+                        Quick-tap common 10RCDG troop locations:
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {COMMON_10RCDG_LOCATIONS.map((loc) => {
+                          const isSelected = formData.currentAddress.toLowerCase().includes(loc.short.toLowerCase());
+                          return (
+                            <button
+                              key={loc.full}
+                              type="button"
+                              onClick={() => {
+                                setFormData({ ...formData, currentAddress: loc.full });
+                                if (locationNotice) setLocationNotice(null);
+                              }}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all cursor-pointer ${
+                                isSelected
+                                  ? "bg-emerald-100 text-emerald-950 border-emerald-300 shadow-2xs font-extrabold"
+                                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              {isSelected ? "✓ " : "📍 "}
+                              {loc.short}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Email Address (Optional)
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="e.g. soldier@example.com"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: MILITARY & ROTC */}
+              {addModalTab === "MILITARY" && (
+                <div className="space-y-3.5 animate-in fade-in duration-150">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                      <span>Source of Enlistment / Training Category</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Command Options</span>
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                      {TRAINING_CATEGORIES.map((cat) => {
+                        const isSelected = formData.trainingCategory === cat.id;
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, trainingCategory: cat.id })}
+                            className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-emerald-50 border-emerald-600 ring-1 ring-emerald-600 text-emerald-950 shadow-2xs"
+                                : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[11px] font-bold ${isSelected ? "text-emerald-950 font-extrabold" : "text-slate-800"}`}>
+                                {cat.label}
+                              </span>
+                              {isSelected && <Check className="w-3 h-3 text-emerald-700" />}
+                            </div>
+                            <span className={`text-[9px] block truncate ${isSelected ? "text-emerald-700 font-medium" : "text-slate-400"}`}>
+                              {cat.desc}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                        <span>School / ROTC Unit</span>
+                        <span className="text-[10px] text-slate-400 font-normal">Basic ROTC</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.school}
+                        onChange={(e) => setFormData({ ...formData, school: e.target.value })}
+                        placeholder="e.g. USTP, Liceo, Xavier, BukSU"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Year Graduated in ROTC
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.yearGraduated}
+                        onChange={(e) => setFormData({ ...formData, yearGraduated: e.target.value })}
+                        placeholder="e.g. 2018"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-emerald-600 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Assigned Group <span className="text-red-500 font-bold ml-0.5">*</span>
+                    </label>
+                    <select
+                      value={formData.groupId}
+                      onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 cursor-pointer"
+                    >
+                      <option value="">
+                        {isScopedAdmin ? "Select an Assigned Group..." : "All 10RCDG Personnel (General Roster)"}
+                      </option>
+                      {groupsList.map((g) => (
+                        <option key={g._id} value={g._id}>
+                          {g.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Unit / Station
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.unit}
+                        onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                        placeholder="e.g. 10RCDG HQ / 1001st CDC"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                        <span>Company</span>
+                        <span className="text-[10px] text-slate-400 font-normal">Sub-unit</span>
+                      </label>
+                      <select
+                        value={formData.company}
+                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 cursor-pointer"
+                      >
+                        <option value="HHC">HHC (Headquarters & HQ Company)</option>
+                        <option value="Alpha">Alpha Company (A Coy)</option>
+                        <option value="Bravo">Bravo Company (B Coy)</option>
+                        <option value="Charlie">Charlie Company (C Coy)</option>
+                        <option value="Delta">Delta Company (D Coy)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: SKILLS & DEVICE */}
+              {addModalTab === "CIVILIAN" && (
+                <div className="space-y-3.5 animate-in fade-in duration-150">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Current Job / Occupation
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.currentJob}
+                      onChange={(e) => setFormData({ ...formData, currentJob: e.target.value })}
+                      placeholder="e.g. Teacher, Civil Engineer, Security, IT, Self-Employed"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                      <span>Special Skills / Qualifications</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Tap tags to add</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.skills}
+                      onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
+                      placeholder="e.g. First Aid, Radio Comms, Heavy Equipment Driving"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-600 focus:bg-white mb-1.5"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {QUICK_SKILLS.map((sk) => {
+                        const isIncluded = formData.skills.toLowerCase().includes(sk.toLowerCase());
+                        return (
+                          <button
+                            key={sk}
+                            type="button"
+                            onClick={() => {
+                              if (isIncluded) {
+                                const updated = formData.skills
+                                  .split(",")
+                                  .map((s) => s.trim())
+                                  .filter((s) => s.toLowerCase() !== sk.toLowerCase())
+                                  .join(", ");
+                                setFormData({ ...formData, skills: updated });
+                              } else {
+                                const current = formData.skills.trim();
+                                const updated = current ? `${current}, ${sk}` : sk;
+                                setFormData({ ...formData, skills: updated });
+                              }
+                            }}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                              isIncluded
+                                ? "bg-emerald-100 text-emerald-950 border-emerald-300"
+                                : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {isIncluded ? "✓ " : "+ "}
+                            {sk}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Primary Device Capability <span className="text-red-500 font-bold ml-0.5">*</span>
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <label
+                        className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2 transition-all ${
+                          formData.deviceType === "ANDROID"
+                            ? "bg-emerald-50/80 border-emerald-600 ring-1 ring-emerald-600 font-bold text-emerald-950 shadow-2xs"
+                            : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="deviceType"
+                          value="ANDROID"
+                          checked={formData.deviceType === "ANDROID"}
+                          onChange={() => setFormData({ ...formData, deviceType: "ANDROID" })}
+                          className="text-emerald-700 focus:ring-emerald-600"
+                        />
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <AndroidIcon className="w-3.5 h-3.5 text-[#3DDC84] shrink-0" />
+                          <span className="text-xs truncate">Android (App)</span>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2 transition-all ${
+                          formData.deviceType === "IOS"
+                            ? "bg-blue-50/80 border-blue-600 ring-1 ring-blue-600 font-bold text-blue-950 shadow-2xs"
+                            : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="deviceType"
+                          value="IOS"
+                          checked={formData.deviceType === "IOS"}
+                          onChange={() => setFormData({ ...formData, deviceType: "IOS" })}
+                          className="text-blue-700 focus:ring-blue-600"
+                        />
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <AppleIcon className="w-3.5 h-3.5 text-slate-800 shrink-0" />
+                          <span className="text-xs truncate">Apple (iOS)</span>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`p-2.5 rounded-xl border cursor-pointer flex items-center gap-2 transition-all ${
+                          formData.deviceType === "KEYPAD"
+                            ? "bg-slate-100 border-slate-600 ring-1 ring-slate-600 font-bold text-slate-900 shadow-2xs"
+                            : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="deviceType"
+                          value="KEYPAD"
+                          checked={formData.deviceType === "KEYPAD"}
+                          onChange={() => setFormData({ ...formData, deviceType: "KEYPAD" })}
+                          className="text-slate-700 focus:ring-slate-600"
+                        />
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <KeypadPhoneIcon className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                          <span className="text-xs truncate">Keypad (SMS)</span>
+                        </div>
+                      </label>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Android receives in-app siren alerts; iOS receives direct email alerts via Resend; Keypad receives cellular SMS.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Footer with Step Navigation */}
+              <div className="pt-3 flex items-center justify-between gap-2.5 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-5 py-2 bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-400 text-white rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer"
-                >
-                  {isSaving ? "Saving..." : editingId ? "Save Changes" : "Register Member"}
-                </button>
+
+                <div className="flex items-center gap-2">
+                  {addModalTab === "MILITARY" && (
+                    <button
+                      type="button"
+                      onClick={() => setAddModalTab("IDENTITY")}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      ← Back
+                    </button>
+                  )}
+                  {addModalTab === "CIVILIAN" && (
+                    <button
+                      type="button"
+                      onClick={() => setAddModalTab("MILITARY")}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      ← Back
+                    </button>
+                  )}
+                  {addModalTab === "IDENTITY" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (validateIdentityTab()) {
+                          setAddModalTab("MILITARY");
+                        }
+                      }}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Military Details</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {addModalTab === "MILITARY" && (
+                    <button
+                      type="button"
+                      onClick={() => setAddModalTab("CIVILIAN")}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Skills & Device</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-5 py-2 bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-400 text-white rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs"
+                  >
+                    {isSaving ? "Saving..." : editingId ? "Save Changes" : "Register Member"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -3228,11 +4000,15 @@ export default function PersonnelPage() {
                   className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
                     deviceConfirmTarget.targetDevice === "ANDROID"
                       ? "bg-emerald-50 text-emerald-800 border-emerald-200 shadow-2xs"
+                      : deviceConfirmTarget.targetDevice === "IOS"
+                      ? "bg-blue-50 text-blue-800 border-blue-200 shadow-2xs"
                       : "bg-slate-100 text-slate-800 border-slate-200 shadow-2xs"
                   }`}
                 >
                   {deviceConfirmTarget.targetDevice === "ANDROID" ? (
                     <AndroidIcon className="w-5 h-5 text-[#3DDC84]" />
+                  ) : deviceConfirmTarget.targetDevice === "IOS" ? (
+                    <AppleIcon className="w-5 h-5 text-blue-700" />
                   ) : (
                     <KeypadPhoneIcon className="w-5 h-5 text-slate-700" />
                   )}
@@ -3240,12 +4016,26 @@ export default function PersonnelPage() {
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
                     {deviceConfirmTarget.mode === "BATCH"
-                      ? `Confirm Set as ${deviceConfirmTarget.targetDevice === "ANDROID" ? "Android" : "Keypad"}?`
-                      : `Switch to ${deviceConfirmTarget.targetDevice === "ANDROID" ? "Android Smartphone" : "Basic Keypad Phone"}?`}
+                      ? `Confirm Set as ${
+                          deviceConfirmTarget.targetDevice === "ANDROID"
+                            ? "Android"
+                            : deviceConfirmTarget.targetDevice === "IOS"
+                            ? "Apple iOS"
+                            : "Keypad"
+                        }?`
+                      : `Switch to ${
+                          deviceConfirmTarget.targetDevice === "ANDROID"
+                            ? "Android Smartphone"
+                            : deviceConfirmTarget.targetDevice === "IOS"
+                            ? "Apple iPhone (iOS)"
+                            : "Basic Keypad Phone"
+                        }?`}
                   </h3>
                   <p className="text-xs text-slate-500">
                     {deviceConfirmTarget.targetDevice === "ANDROID"
                       ? "Enables free in-app alert sirens (₱0 SMS cost)"
+                      : deviceConfirmTarget.targetDevice === "IOS"
+                      ? "Routes emergency mobilization alerts to email inbox via Resend"
                       : "Routes alerts through cellular SMS gateway"}
                   </p>
                 </div>
@@ -3291,6 +4081,11 @@ export default function PersonnelPage() {
                             <AndroidIcon className="w-2.5 h-2.5 text-[#3DDC84]" />
                             <span>Android</span>
                           </>
+                        ) : (deviceConfirmTarget.person as any).deviceType === "IOS" ? (
+                          <>
+                            <AppleIcon className="w-2.5 h-2.5 text-blue-700" />
+                            <span>Apple iOS</span>
+                          </>
                         ) : (
                           <>
                             <KeypadPhoneIcon className="w-2.5 h-2.5 text-slate-600" />
@@ -3303,6 +4098,8 @@ export default function PersonnelPage() {
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
                           deviceConfirmTarget.targetDevice === "ANDROID"
                             ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : deviceConfirmTarget.targetDevice === "IOS"
+                            ? "bg-blue-50 text-blue-800 border-blue-300"
                             : "bg-slate-100 text-slate-800 border-slate-300"
                         }`}
                       >
@@ -3310,6 +4107,11 @@ export default function PersonnelPage() {
                           <>
                             <AndroidIcon className="w-2.5 h-2.5 text-[#3DDC84]" />
                             <span>Android (New)</span>
+                          </>
+                        ) : deviceConfirmTarget.targetDevice === "IOS" ? (
+                          <>
+                            <AppleIcon className="w-2.5 h-2.5 text-blue-700" />
+                            <span>Apple iOS (New)</span>
                           </>
                         ) : (
                           <>
@@ -3335,6 +4137,8 @@ export default function PersonnelPage() {
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${
                         deviceConfirmTarget.targetDevice === "ANDROID"
                           ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                          : deviceConfirmTarget.targetDevice === "IOS"
+                          ? "bg-blue-50 text-blue-800 border-blue-300"
                           : "bg-slate-100 text-slate-800 border-slate-300"
                       }`}
                     >
@@ -3342,6 +4146,11 @@ export default function PersonnelPage() {
                         <>
                           <AndroidIcon className="w-3 h-3 text-[#3DDC84]" />
                           <span>Android Smartphone</span>
+                        </>
+                      ) : deviceConfirmTarget.targetDevice === "IOS" ? (
+                        <>
+                          <AppleIcon className="w-3 h-3 text-blue-700" />
+                          <span>Apple iPhone (iOS)</span>
                         </>
                       ) : (
                         <>
@@ -3366,6 +4175,19 @@ export default function PersonnelPage() {
                   </p>
                   <p className="text-[11px] text-emerald-800 leading-relaxed">
                     During Smart Hybrid broadcasts, RESCOM ALERT will automatically transmit in-app siren alerts to their companion app for free (saving cellular SMS credits).
+                  </p>
+                </div>
+              ) : deviceConfirmTarget.targetDevice === "IOS" ? (
+                <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-950 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-xs text-blue-950">
+                    <AppleIcon className="w-4 h-4 text-blue-700 shrink-0" />
+                    <span>Emergency Email Dispatch Layer (Resend)</span>
+                  </div>
+                  <p className="text-[11px] text-blue-900 leading-relaxed font-semibold">
+                    Are you sure you want to mark {deviceConfirmTarget.count > 1 ? `these ${deviceConfirmTarget.count} soldiers` : "this soldier"} as Apple iOS?
+                  </p>
+                  <p className="text-[11px] text-blue-800 leading-relaxed">
+                    Because iPhones cannot install the Android APK, all emergency broadcasts and mobilization orders will be dispatched directly to their registered email inbox via Resend. Make sure their email address is populated.
                   </p>
                 </div>
               ) : (
@@ -3401,6 +4223,8 @@ export default function PersonnelPage() {
                 className={`px-4.5 py-2 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                   deviceConfirmTarget.targetDevice === "ANDROID"
                     ? "bg-emerald-700 hover:bg-emerald-600"
+                    : deviceConfirmTarget.targetDevice === "IOS"
+                    ? "bg-blue-700 hover:bg-blue-600"
                     : "bg-slate-800 hover:bg-slate-700"
                 }`}
               >
@@ -3413,6 +4237,11 @@ export default function PersonnelPage() {
                   <>
                     <AndroidIcon className="w-3.5 h-3.5 text-white" />
                     <span>Confirm Set as Android</span>
+                  </>
+                ) : deviceConfirmTarget.targetDevice === "IOS" ? (
+                  <>
+                    <AppleIcon className="w-3.5 h-3.5 text-white" />
+                    <span>Confirm Set as Apple iOS</span>
                   </>
                 ) : (
                   <>

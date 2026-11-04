@@ -147,7 +147,7 @@ function MessagingContent() {
   const initialGroupQuery = searchParams.get("group");
 
   // Convex Data Hooks
-  const groupsData = useQuery(api.groups.list);
+  const groupsData = useQuery(api.groups.listOptions);
   const personnelData = useQuery(api.personnel.list);
   const templatesData = useQuery(api.templates.list);
   const broadcastsData = useQuery(api.broadcasts.list);
@@ -530,6 +530,25 @@ function MessagingContent() {
         });
         data = await res.json();
         isOk = res.ok && data.success;
+      }
+
+      // 3. Dispatch iOS / Registered Email Emergency Dispatches (Layer 3 via Resend)
+      const allTargetNumbers = [...smsNumbers, ...pushNumbers];
+      if (allTargetNumbers.length > 0) {
+        try {
+          fetch("/api/email/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              recipients: allTargetNumbers,
+              message: messageContent,
+              title: finalBroadcastTitle,
+              sender: currentOfficer.displayName || "10RCDG Tactical HQ",
+            }),
+          }).catch((e) => console.error("Email dispatch background error:", e));
+        } catch (emailErr) {
+          console.error("Email dispatch error:", emailErr);
+        }
       }
 
       if (isOk) {
@@ -1301,7 +1320,7 @@ function MessagingContent() {
                                     : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                                 }`}
                               >
-                                {grp.name} ({grp.memberCount})
+                                {grp.name} ({(grp as any).memberCount ?? personnel.filter((p) => p.groupId === grp._id || p.groupName === grp.name).length})
                               </button>
                             );
                           })}

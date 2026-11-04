@@ -207,7 +207,7 @@ export default function AuthorizedPersonnelPage() {
   const currentOfficer = useCurrentOfficer();
   const { isViewer, guardAction } = currentOfficer;
   const officersData = useQuery(api.access.list);
-  const groupsData = useQuery(api.groups.list);
+  const groupsData = useQuery(api.groups.listOptions);
   const createOfficer = useMutation(api.access.create);
   const updateOfficer = useMutation(api.access.update);
   const updateOfficerRole = useMutation(api.access.updateRole);

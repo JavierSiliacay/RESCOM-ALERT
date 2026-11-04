@@ -15,7 +15,6 @@ import {
   Unlock,
   ArrowRight,
   ExternalLink,
-  Sparkles,
   Loader2,
   ChevronDown,
   ChevronUp,
@@ -213,7 +212,7 @@ export default function SoldierDownloadPage() {
 
   const recordDownload = useMutation(api.downloads.record);
   const recordSessionUnlock = useMutation(api.downloads.recordSessionUnlock);
-  const stats = useQuery(api.downloads.getStats);
+  const stats = useQuery(api.downloads.getPublicCounter);
 
   const apkUrl =
     "https://github.com/JavierSiliacay/RESCOM-ALERT/releases/download/v1.3.0/rescom-alert-v1.3.0.apk";

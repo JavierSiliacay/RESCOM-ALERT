@@ -142,7 +142,6 @@ export default function GroupsPage() {
   const currentOfficer = useCurrentOfficer();
   const { isViewer, guardAction, isGlobalAdmin, isScopedAdmin, isGroupAuthorized } = currentOfficer;
   const groupsData = useQuery(api.groups.list);
-  const personnelData = useQuery(api.personnel.list);
   const createGroup = useMutation(api.groups.create);
   const updateGroup = useMutation(api.groups.update);
   const removeGroup = useMutation(api.groups.remove);
@@ -174,6 +173,19 @@ export default function GroupsPage() {
     targetCompany?: string;
   } | null>(null);
 
+  // On-demand lightweight query for active group roster modal (0 personnel reads on initial page load)
+  const activeInspectionGroup = selectedGroupRoster || transferSourceGroup;
+  const activeInspectionGroupName = activeInspectionGroup?.name;
+  const activeInspectionGroupId = activeInspectionGroup?._id;
+  const groupMembersData = useQuery(
+    api.personnel.listByGroup,
+    activeInspectionGroupName
+      ? { groupName: activeInspectionGroupName, groupId: activeInspectionGroupId }
+      : "skip"
+  );
+  const isRosterLoading = activeInspectionGroupName ? groupMembersData === undefined : false;
+  const personnelList = groupMembersData || [];
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -183,7 +195,6 @@ export default function GroupsPage() {
 
   const isLoading = groupsData === undefined;
   const groups = groupsData || [];
-  const personnelList = personnelData || [];
 
   // Filter groups with tokenized, space-insensitive logic
   const trimmedGroupQuery = searchQuery.trim();
@@ -1037,7 +1048,12 @@ export default function GroupsPage() {
 
               {/* Members List Container */}
               <div className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-2.5">
-                {assignedMembers.length === 0 ? (
+                {isRosterLoading ? (
+                  <div className="py-14 text-center text-slate-400 space-y-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto" />
+                    <p className="text-xs font-semibold text-slate-600">Retrieving group roster securely...</p>
+                  </div>
+                ) : assignedMembers.length === 0 ? (
                   <div className="py-12 text-center text-slate-400 space-y-3">
                     <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
                       <Users className="w-6 h-6" />

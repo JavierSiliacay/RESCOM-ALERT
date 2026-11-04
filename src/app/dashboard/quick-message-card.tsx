@@ -18,7 +18,7 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
   const currentOfficer = useCurrentOfficer();
   const { isViewer, guardAction, isGlobalAdmin, isScopedAdmin, isGroupAuthorized } = currentOfficer;
   const groupsData = useQuery(api.groups.listOptions);
-  const personnelData = useQuery(api.personnel.list);
+  const personnelData = useQuery(api.personnel.listDispatchTargets);
   const templatesData = useQuery(api.templates.list);
   const recordBroadcast = useMutation(api.broadcasts.record);
 

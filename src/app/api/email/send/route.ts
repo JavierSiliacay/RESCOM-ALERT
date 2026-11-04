@@ -29,20 +29,13 @@ export async function POST(req: NextRequest) {
 
       targetEmails.push(...directEmails);
 
-      // If mobile numbers were passed, resolve corresponding email addresses from Convex
+      // If mobile numbers were passed, resolve corresponding email addresses using indexed lookup
       if (mobileNumbers.length > 0) {
         const convex = new ConvexHttpClient(convexUrl);
-        const allPersonnel = await convex.query(api.personnel.list, {});
-        const phoneSet = new Set(mobileNumbers.map((m: string) => m.replace(/\D/g, "").slice(-10)));
-
-        for (const p of allPersonnel) {
-          if (p.email && p.email.trim().includes("@")) {
-            const rawPhone = (p.mobileNumber || "").replace(/\D/g, "").slice(-10);
-            if (phoneSet.has(rawPhone)) {
-              targetEmails.push(p.email.trim());
-            }
-          }
-        }
+        const resolvedEmails = await convex.query(api.personnel.listEmailsByMobileNumbers, {
+          mobileNumbers,
+        });
+        targetEmails.push(...resolvedEmails);
       }
     } else {
       // If no specific recipients passed, target active iOS personnel with registered emails to protect Resend usage

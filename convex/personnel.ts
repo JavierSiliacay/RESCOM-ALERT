@@ -55,6 +55,110 @@ export const listIosEmails = query({
   },
 });
 
+// Lightweight recipient query for dispatch engines (QuickMessageCard & MessagingPage)
+// Strips bulky fields (skills, school, yearGraduated, address, currentJob, etc.) to minimize I/O and egress
+export const listDispatchTargets = query({
+  args: {},
+  handler: async (ctx) => {
+    const troops = await ctx.db.query("personnel").collect();
+    return troops.map((p) => ({
+      _id: p._id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      rank: p.rank,
+      mobileNumber: p.mobileNumber,
+      email: p.email,
+      deviceType: p.deviceType,
+      groupName: p.groupName,
+      groupId: p.groupId,
+      unit: p.unit,
+      company: p.company,
+      status: p.status,
+    }));
+  },
+});
+
+// Index-backed query to fetch members of a specific contact group on demand
+export const listByGroup = query({
+  args: {
+    groupName: v.string(),
+    groupId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const troops = await ctx.db
+      .query("personnel")
+      .withIndex("by_groupName", (q) => q.eq("groupName", args.groupName))
+      .collect();
+
+    if (args.groupId && troops.length === 0) {
+      const all = await ctx.db.query("personnel").collect();
+      return all.filter((p) => p.groupId === args.groupId);
+    }
+    return troops;
+  },
+});
+
+// Fast index-backed lookup to resolve registered emails for a specific set of mobile numbers
+export const listEmailsByMobileNumbers = query({
+  args: {
+    mobileNumbers: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const emails: string[] = [];
+    for (const rawNumber of args.mobileNumbers) {
+      const core = rawNumber.replace(/\D/g, "").slice(-10);
+      const canonical = "+63" + core;
+      const local = "0" + core;
+
+      const soldier =
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", canonical))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", local))
+          .first()) ||
+        (await ctx.db
+          .query("personnel")
+          .withIndex("by_mobileNumber", (q) => q.eq("mobileNumber", rawNumber.trim()))
+          .first());
+
+      if (soldier?.email && soldier.email.includes("@")) {
+        emails.push(soldier.email.trim());
+      }
+    }
+    return Array.from(new Set(emails));
+  },
+});
+
+// Lightweight query for Tactical Map View: only returns fields needed for map plotting and soldier preview
+export const listTacticalMapPersonnel = query({
+  args: {},
+  handler: async (ctx) => {
+    const troops = await ctx.db.query("personnel").collect();
+    return troops.map((p) => ({
+      _id: p._id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      rank: p.rank,
+      unit: p.unit,
+      company: p.company,
+      groupName: p.groupName,
+      groupId: p.groupId,
+      mobileNumber: p.mobileNumber,
+      status: p.status,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      locationAccuracy: p.locationAccuracy,
+      locationUpdatedAt: p.locationUpdatedAt,
+      isGpsEnabled: p.isGpsEnabled,
+      deviceType: p.deviceType,
+      deviceModel: p.deviceModel,
+    }));
+  },
+});
+
 // Add new personnel
 export const create = mutation({
   args: {

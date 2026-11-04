@@ -148,7 +148,7 @@ function MessagingContent() {
 
   // Convex Data Hooks
   const groupsData = useQuery(api.groups.listOptions);
-  const personnelData = useQuery(api.personnel.list);
+  const personnelData = useQuery(api.personnel.listDispatchTargets);
   const templatesData = useQuery(api.templates.list);
   const broadcastsData = useQuery(api.broadcasts.list);
   const auditLogsData = useQuery(api.auditLogs.list);

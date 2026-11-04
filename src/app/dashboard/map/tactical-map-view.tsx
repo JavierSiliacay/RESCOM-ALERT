@@ -57,7 +57,7 @@ const TILE_LAYERS = {
 };
 
 export default function TacticalMapView() {
-  const personnel = useQuery(api.personnel.list) || [];
+  const personnel = useQuery(api.personnel.listTacticalMapPersonnel) || [];
   const contactGroups = useQuery(api.groups.listOptions) || [];
   const currentOfficer = useCurrentOfficer();
 

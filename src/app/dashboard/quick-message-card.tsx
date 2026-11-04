@@ -38,7 +38,7 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
   const [lastSentCount, setLastSentCount] = useState<number>(0);
   const [lastChannelBreakdown, setLastChannelBreakdown] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [dispatchChannel, setDispatchChannel] = useState<"HYBRID" | "APP_PUSH" | "KEYPAD_SMS" | "FORCE_SMS">("HYBRID");
+  const [dispatchChannel, setDispatchChannel] = useState<"HYBRID" | "APP_PUSH" | "IOS_EMAIL" | "KEYPAD_SMS" | "FORCE_SMS">("HYBRID");
 
   const rawGroups = groupsData || [];
   const rawPersonnel = personnelData || [];
@@ -112,6 +112,9 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
     } else if (dispatchChannel === "APP_PUSH") {
       smsNumbers = [];
       pushNumbers = androidTroops.map((p) => p.mobileNumber);
+    } else if (dispatchChannel === "IOS_EMAIL") {
+      smsNumbers = [];
+      pushNumbers = [];
     } else if (dispatchChannel === "KEYPAD_SMS") {
       smsNumbers = keypadTroops.map((p) => p.mobileNumber);
       pushNumbers = [];
@@ -127,6 +130,8 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
     const totalTarget =
       dispatchChannel === "HYBRID"
         ? smsNumbers.length + pushNumbers.length + iosTroops.length
+        : dispatchChannel === "IOS_EMAIL"
+        ? iosTroops.length
         : smsNumbers.length + pushNumbers.length;
 
     if (!message.trim() || totalTarget === 0) {
@@ -183,10 +188,14 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
       }
 
       // 3. Dispatch iOS / Registered Email Emergency Dispatches (Layer 3 via Resend)
-      const allTargetNumbers = Array.from(
-        new Set([...smsNumbers, ...pushNumbers, ...iosTroops.map((p) => p.mobileNumber)])
-      );
-      if (allTargetNumbers.length > 0) {
+      const allTargetNumbers =
+        dispatchChannel === "IOS_EMAIL"
+          ? iosTroops.map((p) => p.mobileNumber)
+          : Array.from(
+              new Set([...smsNumbers, ...pushNumbers, ...iosTroops.map((p) => p.mobileNumber)])
+            );
+
+      if (allTargetNumbers.length > 0 && dispatchChannel !== "KEYPAD_SMS") {
         try {
           fetch("/api/email/send", {
             method: "POST",
@@ -210,6 +219,8 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
           ? `${pushNumbers.length} App Pushes (₱0) + ${iosTroops.length} iOS Emails (₱0) + ${smsNumbers.length} Keypad SMS`
           : dispatchChannel === "APP_PUSH"
           ? `${pushNumbers.length} Free App Pushes (₱0 Cost)`
+          : dispatchChannel === "IOS_EMAIL"
+          ? `${iosTroops.length} iOS Direct Emails (₱0 Cost)`
           : dispatchChannel === "KEYPAD_SMS"
           ? `${smsNumbers.length} Keypad SMS`
           : `${smsNumbers.length} Mass Cellular SMS`;
@@ -237,17 +248,22 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
                   ? groups.map((g) => g.name)
                   : ["All 10RCDG Personnel"]
                 : [selectedGroup]
-              : ["Direct SMS"],
-          recipients: [...smsNumbers, ...pushNumbers],
+              : ["Direct Dispatch"],
+          recipients:
+            dispatchChannel === "IOS_EMAIL"
+              ? iosTroops.map((p) => p.mobileNumber)
+              : [...smsNumbers, ...pushNumbers],
           totalRecipients: totalTarget,
           deliveredCount: totalTarget,
           failedCount: 0,
           channel: dispatchChannel,
           pushRecipientCount: pushNumbers.length,
           smsRecipientCount: smsNumbers.length,
+          emailRecipientCount:
+            dispatchChannel === "HYBRID" || dispatchChannel === "IOS_EMAIL" ? iosTroops.length : 0,
           status: "DELIVERED",
           simSubscriptionId: smsNumbers.length > 0 ? 1 : undefined,
-          gatewayBatchId: data.messageId || data.smsBatchId || "APP_PUSH_INSTANT",
+          gatewayBatchId: data.messageId || data.smsBatchId || (dispatchChannel === "IOS_EMAIL" ? "RESEND_EMAIL_DIRECT" : "APP_PUSH_INSTANT"),
           recipientStatuses: [
             ...pushNumbers.map((num) => ({
               number: num,
@@ -261,6 +277,14 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
               channel: "SMS_GATEWAY",
               sentAt: new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Manila" }),
             })),
+            ...(dispatchChannel === "IOS_EMAIL"
+              ? iosTroops.map((p) => ({
+                  number: p.mobileNumber,
+                  status: "sent",
+                  channel: "EMAIL_DISPATCH",
+                  sentAt: new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Manila" }),
+                }))
+              : []),
           ],
         });
         if (newBroadcastId) {
@@ -525,6 +549,41 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
               </span>
             </label>
 
+            {/* 3. iOS Email Only (₱0) */}
+            <label
+              className={`p-2.5 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+                dispatchChannel === "IOS_EMAIL"
+                  ? "bg-white border-blue-600 ring-1 ring-blue-600 text-slate-900 font-bold shadow-2xs"
+                  : "bg-slate-100/70 border-slate-200 text-slate-600 hover:bg-white"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <input
+                    type="radio"
+                    name="dispatchChannel"
+                    value="IOS_EMAIL"
+                    checked={dispatchChannel === "IOS_EMAIL"}
+                    onChange={() => setDispatchChannel("IOS_EMAIL")}
+                    className="text-blue-700 focus:ring-blue-600"
+                  />
+                  <span className="text-xs font-bold flex items-center gap-1.5 text-slate-900">
+                    <AppleIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>iOS Email Only (₱0)</span>
+                  </span>
+                </div>
+                <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 font-mono shrink-0">
+                  FREE ₱0
+                </span>
+              </div>
+              <p className="text-[10.5px] font-medium text-slate-600 pl-4 leading-tight">
+                Direct email dispatch to iPhone troops; zero SMS cost
+              </p>
+              <span className="text-[10px] font-semibold text-blue-700 pl-4 font-mono">
+                {categorizedRecipients.iosTroops.length} iOS troops • 0 SMS
+              </span>
+            </label>
+
             {/* 3. Keypad SMS Only */}
             <label
               className={`p-2.5 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
@@ -560,9 +619,9 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
               </span>
             </label>
 
-            {/* 4. Force SMS (All) */}
+            {/* 5. Force SMS (All) */}
             <label
-              className={`p-2.5 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+              className={`p-2.5 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all sm:col-span-2 ${
                 dispatchChannel === "FORCE_SMS"
                   ? "bg-white border-emerald-600 ring-1 ring-emerald-600 text-slate-900 font-bold shadow-2xs"
                   : "bg-slate-100/70 border-slate-200 text-slate-600 hover:bg-white"
@@ -580,7 +639,7 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
                   />
                   <span className="text-xs font-bold flex items-center gap-1.5 text-slate-900">
                     <ForceSmsIcon className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                    <span>Force SMS (All)</span>
+                    <span>Force SMS (All Personnel)</span>
                   </span>
                 </div>
                 <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-red-100 text-red-900 font-mono shrink-0">
@@ -588,7 +647,7 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
                 </span>
               </div>
               <p className="text-[10.5px] font-medium text-slate-600 pl-4 leading-tight">
-                Direct cellular blast to 100% of troops
+                Direct cellular blast to 100% of troops regardless of device type
               </p>
               <span className="text-[10px] font-semibold text-rose-700 pl-4 font-mono">
                 {categorizedRecipients.total} Total via Cellular SMS
@@ -603,6 +662,7 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
               <span className="font-bold text-emerald-950">
                 {dispatchChannel === "HYBRID" && "Strategy: Smart Hybrid Routing — "}
                 {dispatchChannel === "APP_PUSH" && "Strategy: Zero-Cost Android App Siren — "}
+                {dispatchChannel === "IOS_EMAIL" && "Strategy: Zero-Cost iOS Direct Email — "}
                 {dispatchChannel === "KEYPAD_SMS" && "Strategy: Keypad SMS Cellular Channel — "}
                 {dispatchChannel === "FORCE_SMS" && "Strategy: Full Cellular SMS Blast — "}
               </span>
@@ -610,9 +670,11 @@ export function QuickMessageCard({ onBroadcastSent }: QuickMessageCardProps = {}
                 {dispatchChannel === "HYBRID" &&
                   "Auto-splits recipients to cut SMS costs: Android phones receive free app sirens (₱0), iPhones receive free email dispatches (₱0), while keypad phones receive cellular SMS."}
                 {dispatchChannel === "APP_PUSH" &&
-                  "Sends in-app sirens exclusively to Android soldiers. Consumes 0 SMS credits. Basic keypad phone users are bypassed."}
+                  "Sends in-app sirens exclusively to Android soldiers. Consumes 0 SMS credits. Basic keypad and iOS users are bypassed."}
+                {dispatchChannel === "IOS_EMAIL" &&
+                  "Dispatches high-priority emergency notifications directly to iPhone reservists' registered email inboxes via Resend. Consumes 0 SMS credits."}
                 {dispatchChannel === "KEYPAD_SMS" &&
-                  "Sends SMS only to soldiers with basic feature/keypad phones. Android soldiers are bypassed to save unnecessary charges."}
+                  "Sends SMS only to soldiers with basic feature/keypad phones. Android and iOS soldiers are bypassed to save unnecessary charges."}
                 {dispatchChannel === "FORCE_SMS" &&
                   "Forces a cellular SMS to all soldiers regardless of device type. Ideal for red alerts, power grid outages, or offline areas."}
               </span>

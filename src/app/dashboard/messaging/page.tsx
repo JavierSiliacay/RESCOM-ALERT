@@ -217,7 +217,7 @@ function MessagingContent() {
   const [selectedTemplateTitle, setSelectedTemplateTitle] = useState<string | null>(null);
   const [messageTitle, setMessageTitle] = useState("");
   const [messageContent, setMessageContent] = useState("");
-  const [dispatchChannel, setDispatchChannel] = useState<"HYBRID" | "APP_PUSH" | "KEYPAD_SMS" | "FORCE_SMS">("HYBRID");
+  const [dispatchChannel, setDispatchChannel] = useState<"HYBRID" | "APP_PUSH" | "IOS_EMAIL" | "KEYPAD_SMS" | "FORCE_SMS">("HYBRID");
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [appliedTemplateFeedback, setAppliedTemplateFeedback] = useState<string | null>(null);
 
@@ -365,6 +365,9 @@ function MessagingContent() {
     } else if (dispatchChannel === "APP_PUSH") {
       smsNumbers = [];
       pushNumbers = androidTroops.map((p) => p.mobileNumber);
+    } else if (dispatchChannel === "IOS_EMAIL") {
+      smsNumbers = [];
+      pushNumbers = [];
     } else if (dispatchChannel === "KEYPAD_SMS") {
       smsNumbers = keypadTroops.map((p) => p.mobileNumber);
       pushNumbers = [];
@@ -382,6 +385,8 @@ function MessagingContent() {
       totalCount:
         dispatchChannel === "HYBRID"
           ? smsNumbers.length + pushNumbers.length + iosTroops.length
+          : dispatchChannel === "IOS_EMAIL"
+          ? iosTroops.length
           : smsNumbers.length + pushNumbers.length,
     };
   };
@@ -539,10 +544,13 @@ function MessagingContent() {
       }
 
       // 3. Dispatch iOS / Registered Email Emergency Dispatches (Layer 3 via Resend)
-      const allTargetNumbers = Array.from(
-        new Set([...smsNumbers, ...pushNumbers, ...categorizedRecipients.iosTroops.map((p) => p.mobileNumber)])
-      );
-      if (allTargetNumbers.length > 0) {
+      const allTargetNumbers =
+        dispatchChannel === "IOS_EMAIL"
+          ? categorizedRecipients.iosTroops.map((p) => p.mobileNumber)
+          : Array.from(
+              new Set([...smsNumbers, ...pushNumbers, ...categorizedRecipients.iosTroops.map((p) => p.mobileNumber)])
+            );
+      if (allTargetNumbers.length > 0 && dispatchChannel !== "KEYPAD_SMS") {
         try {
           fetch("/api/email/send", {
             method: "POST",
@@ -590,16 +598,23 @@ function MessagingContent() {
                     return selectedCompanies.includes("ALL") ? name : `${name} (${selectedCompanies.join(", ")})`;
                   })
               : ["Direct SMS"],
-          recipients: [...smsNumbers, ...pushNumbers],
+          recipients:
+            dispatchChannel === "IOS_EMAIL"
+              ? categorizedRecipients.iosTroops.map((p) => p.mobileNumber)
+              : [...smsNumbers, ...pushNumbers],
           totalRecipients: totalCount,
           deliveredCount: isOk ? totalCount : pushNumbers.length,
           failedCount: isOk ? 0 : smsNumbers.length,
           channel: dispatchChannel,
           pushRecipientCount: pushNumbers.length,
           smsRecipientCount: smsNumbers.length,
-          status: isOk ? "DELIVERED" : (pushNumbers.length > 0 ? "DELIVERED" : "FAILED"),
+          emailRecipientCount:
+            dispatchChannel === "HYBRID" || dispatchChannel === "IOS_EMAIL"
+              ? categorizedRecipients.iosTroops.length
+              : 0,
+          status: isOk ? "DELIVERED" : (pushNumbers.length > 0 || dispatchChannel === "IOS_EMAIL" ? "DELIVERED" : "FAILED"),
           simSubscriptionId: smsNumbers.length > 0 ? 1 : undefined,
-          gatewayBatchId: data.messageId || data.smsBatchId || "APP_PUSH_INSTANT",
+          gatewayBatchId: data.messageId || data.smsBatchId || (dispatchChannel === "IOS_EMAIL" ? "RESEND_EMAIL_DIRECT" : "APP_PUSH_INSTANT"),
           recipientStatuses: [
             ...pushNumbers.map((num) => ({
               number: num,
@@ -613,6 +628,14 @@ function MessagingContent() {
               channel: "SMS_GATEWAY",
               sentAt: new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Manila" }),
             })),
+            ...(dispatchChannel === "IOS_EMAIL"
+              ? categorizedRecipients.iosTroops.map((p) => ({
+                  number: p.mobileNumber,
+                  status: "sent",
+                  channel: "IOS_EMAIL",
+                  sentAt: new Date().toLocaleTimeString("en-US", { timeZone: "Asia/Manila" }),
+                }))
+              : []),
           ],
         });
       } catch (dbErr) {
@@ -1199,6 +1222,8 @@ function MessagingContent() {
                       ? "Hybrid"
                       : dispatchChannel === "APP_PUSH"
                       ? "Push"
+                      : dispatchChannel === "IOS_EMAIL"
+                      ? "iOS Email"
                       : dispatchChannel === "KEYPAD_SMS"
                       ? "SMS"
                       : "Force"}
@@ -1561,6 +1586,37 @@ function MessagingContent() {
 
                     <label
                       className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+                        dispatchChannel === "IOS_EMAIL"
+                          ? "bg-blue-50/70 border-blue-600 ring-1 ring-blue-600 text-slate-900 shadow-2xs"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-bold text-xs">
+                          <input
+                            type="radio"
+                            name="dispatchChannel"
+                            value="IOS_EMAIL"
+                            checked={dispatchChannel === "IOS_EMAIL"}
+                            onChange={() => setDispatchChannel("IOS_EMAIL")}
+                            className="text-blue-700 focus:ring-blue-600"
+                          />
+                          <span className="flex items-center gap-1.5">
+                            <AppleIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span>iOS Email Only (₱0)</span>
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 font-mono">
+                          FREE (₱0)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 pl-5 leading-relaxed">
+                        Reaches {categorizedRecipients.iosTroops.length} iOS iPhone troops via emergency email dispatch. Consumes 0 SMS credits.
+                      </p>
+                    </label>
+
+                    <label
+                      className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
                         dispatchChannel === "KEYPAD_SMS"
                           ? "bg-emerald-50/70 border-emerald-600 ring-1 ring-emerald-600 text-slate-900 shadow-2xs"
                           : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
@@ -1591,7 +1647,7 @@ function MessagingContent() {
                     </label>
 
                     <label
-                      className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all ${
+                      className={`p-3 rounded-xl border cursor-pointer flex flex-col justify-between gap-1.5 transition-all sm:col-span-2 ${
                         dispatchChannel === "FORCE_SMS"
                           ? "bg-emerald-50/70 border-emerald-600 ring-1 ring-emerald-600 text-slate-900 shadow-2xs"
                           : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
@@ -1769,8 +1825,12 @@ function MessagingContent() {
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
                     <div className="flex items-center gap-2 text-slate-600">
                       <span className="text-[10px] uppercase font-bold text-slate-400">Carrier Gateway:</span>
-                      {dispatchChannel === "APP_PUSH" ? (
-                        <span className="font-bold text-blue-700">Bypassed (Free App Push • ₱0 SMS)</span>
+                      {dispatchChannel === "APP_PUSH" || dispatchChannel === "IOS_EMAIL" ? (
+                        <span className="font-bold text-blue-700">
+                          {dispatchChannel === "APP_PUSH"
+                            ? "Bypassed (Free App Push • ₱0 SMS)"
+                            : "Bypassed (Free Emergency Email • ₱0 SMS)"}
+                        </span>
                       ) : (
                         <span className="font-bold text-emerald-800">SIM 1 · TNT (Infinix X6711)</span>
                       )}
@@ -1779,7 +1839,7 @@ function MessagingContent() {
                     <div className="flex items-center gap-1.5 text-slate-600">
                       <span className="text-[10px] uppercase font-bold text-slate-400">Estimated Cost:</span>
                       <span className="font-bold text-emerald-700">
-                        {dispatchChannel === "APP_PUSH"
+                        {dispatchChannel === "APP_PUSH" || dispatchChannel === "IOS_EMAIL"
                           ? "₱0.00 (Free)"
                           : dispatchChannel === "HYBRID"
                           ? `₱${(categorizedRecipients.keypadTroops.length * smsSegments).toFixed(2)} (${categorizedRecipients.keypadTroops.length} SMS)`
@@ -1814,7 +1874,7 @@ function MessagingContent() {
                   >
                     <Send className="w-4 h-4" />
                     <span>Review & Broadcast ({effectiveTargets.totalCount} Troops)</span>
-                    {dispatchChannel === "APP_PUSH" ? " (Free ₱0)" : ""}
+                    {dispatchChannel === "APP_PUSH" || dispatchChannel === "IOS_EMAIL" ? " (Free ₱0)" : ""}
                   </button>
                 </div>
               </div>
@@ -1863,6 +1923,8 @@ function MessagingContent() {
                       ? "Smart Hybrid (₱0)"
                       : dispatchChannel === "APP_PUSH"
                       ? "Android Push (₱0)"
+                      : dispatchChannel === "IOS_EMAIL"
+                      ? "iOS Email (₱0)"
                       : dispatchChannel === "KEYPAD_SMS"
                       ? "Keypad SMS"
                       : "Force SMS (All)"}
@@ -2128,6 +2190,11 @@ function MessagingContent() {
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">
                                   <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
                                   <span>PUSH (₱0)</span>
+                                </span>
+                              ) : msg.channel === "IOS_EMAIL" ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase font-mono bg-blue-50 text-blue-700 border border-blue-200">
+                                  <AppleIcon className="w-3 h-3 text-blue-600 shrink-0" />
+                                  <span>IOS EMAIL (₱0)</span>
                                 </span>
                               ) : msg.channel === "KEYPAD_SMS" ? (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase font-mono bg-amber-50 text-amber-700 border border-amber-200">
@@ -2511,12 +2578,17 @@ function MessagingContent() {
                   {dispatchChannel === "HYBRID" ? (
                     <>
                       <HybridIcon className="w-3.5 h-3.5 shrink-0" />
-                      <span>Smart Hybrid ({effectiveTargets.pushNumbers.length} Push [₱0] + {effectiveTargets.smsNumbers.length} SMS)</span>
+                      <span>Smart Hybrid ({effectiveTargets.pushNumbers.length} Push [₱0] + {categorizedRecipients.iosTroops.length} Email [₱0] + {effectiveTargets.smsNumbers.length} SMS)</span>
                     </>
                   ) : dispatchChannel === "APP_PUSH" ? (
                     <>
                       <AndroidIcon className="w-3.5 h-3.5 text-[#3DDC84] shrink-0" />
                       <span>Android Push Notification ({effectiveTargets.pushNumbers.length} Troops • 100% Free ₱0)</span>
+                    </>
+                  ) : dispatchChannel === "IOS_EMAIL" ? (
+                    <>
+                      <AppleIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>iOS Emergency Email ({categorizedRecipients.iosTroops.length} Troops • 100% Free ₱0)</span>
                     </>
                   ) : dispatchChannel === "KEYPAD_SMS" ? (
                     <>
@@ -2536,6 +2608,8 @@ function MessagingContent() {
                 <span className="font-mono font-bold text-emerald-700">
                   {effectiveTargets.smsNumbers.length > 0
                     ? "SIM 1 · TNT (Infinix X6711 GSM Gateway)"
+                    : dispatchChannel === "IOS_EMAIL"
+                    ? "Bypassed (Free Emergency Email via Resend • ₱0 Cost)"
                     : "Bypassed (Free Push via Companion App • ₱0 Cost)"}
                 </span>
               </div>
@@ -2755,12 +2829,17 @@ function MessagingContent() {
                         {selectedMessage.channel === "HYBRID" ? (
                           <>
                             <HybridIcon className="w-3.5 h-3.5 shrink-0" />
-                            <span>Smart Hybrid ({selectedMessage.pushRecipientCount || 0} Push + {selectedMessage.smsRecipientCount || 0} SMS)</span>
+                            <span>Smart Hybrid ({selectedMessage.pushRecipientCount || 0} Push + {selectedMessage.emailRecipientCount ? `${selectedMessage.emailRecipientCount} Email + ` : ""}{selectedMessage.smsRecipientCount || 0} SMS)</span>
                           </>
                         ) : selectedMessage.channel === "APP_PUSH" ? (
                           <>
                             <AndroidIcon className="w-3.5 h-3.5 text-[#3DDC84] shrink-0" />
                             <span>Android Push Only (100% Free ₱0)</span>
+                          </>
+                        ) : selectedMessage.channel === "IOS_EMAIL" ? (
+                          <>
+                            <AppleIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span>iOS Email Only ({selectedMessage.emailRecipientCount || selectedMessage.totalRecipients || 0} Troops • 100% Free ₱0)</span>
                           </>
                         ) : selectedMessage.channel === "KEYPAD_SMS" ? (
                           <>
@@ -3089,6 +3168,11 @@ function MessagingContent() {
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                                     <AndroidIcon className="w-3 h-3 text-[#3DDC84] shrink-0" />
                                     <span>Push (₱0)</span>
+                                  </span>
+                                ) : perRecipientStatus?.channel === "IOS_EMAIL" || perRecipientStatus?.channel === "EMAIL_DISPATCH" ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                    <AppleIcon className="w-3 h-3 text-blue-600 shrink-0" />
+                                    <span>iOS Email (₱0)</span>
                                   </span>
                                 ) : perRecipientStatus?.channel === "SMS_GATEWAY" ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">

@@ -80,9 +80,10 @@ export default defineSchema({
     totalRecipients: v.number(),
     deliveredCount: v.number(),
     failedCount: v.number(),
-    channel: v.optional(v.union(v.literal("HYBRID"), v.literal("APP_PUSH"), v.literal("KEYPAD_SMS"), v.literal("FORCE_SMS"))),
+    channel: v.optional(v.union(v.literal("HYBRID"), v.literal("APP_PUSH"), v.literal("IOS_EMAIL"), v.literal("KEYPAD_SMS"), v.literal("FORCE_SMS"))),
     pushRecipientCount: v.optional(v.number()),
     smsRecipientCount: v.optional(v.number()),
+    emailRecipientCount: v.optional(v.number()),
     status: v.union(v.literal("DELIVERED"), v.literal("SENDING"), v.literal("FAILED")),
     simSubscriptionId: v.optional(v.number()), // 1 for SIM 1, 2 for SIM 2
     gatewayBatchId: v.optional(v.string()),

@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-const resendApiKey = process.env.RESEND_API_KEY;
+const resendApiKey = (process.env.RESEND_API_KEY || "").replace(/['"]/g, "").trim();
 export const resend = resendApiKey ? new Resend(resendApiKey) : null;
 export const DEFAULT_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "10RCDG RESCOM <alerts@rescom-alert.site>";
 

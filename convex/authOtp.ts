@@ -255,3 +255,22 @@ export const verifyAndBurnOtp = mutation({
   },
 });
 
+/**
+ * Administrative helper: Clear security lockout for an officer account
+ */
+export const clearLockout = mutation({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const cleanEmail = args.email.toLowerCase().trim();
+    const existing = await ctx.db
+      .query("authLockouts")
+      .withIndex("by_email", (q) => q.eq("email", cleanEmail))
+      .first();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+      return { success: true, message: "Lockout cleared." };
+    }
+    return { success: false, message: "No lockout found." };
+  },
+});
+

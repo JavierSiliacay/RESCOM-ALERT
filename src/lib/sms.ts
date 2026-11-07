@@ -20,14 +20,14 @@ export interface SmsGatewayConfig {
 }
 
 export const DEFAULT_GATEWAY_CONFIG: SmsGatewayConfig = {
-  apiKey: process.env.NEXT_PUBLIC_TEXTBEE_API_KEY || "",
-  deviceId: process.env.NEXT_PUBLIC_TEXTBEE_DEVICE_ID || "",
+  apiKey: "",
+  deviceId: "6abf274ecf8e7692e088d0ab",
   senderPrefix: "[10RCDG ALERT]",
   status: "ONLINE",
   phoneModel: "Infinix X6711 (10RCDG Primary Gateway)",
   batteryLevel: 86,
   simCarrier: "SIM 1 (TNT) / SIM 2 (TM)",
-  simSubscriptionId: Number(process.env.NEXT_PUBLIC_TEXTBEE_SIM_ID || "1"),
+  simSubscriptionId: 1,
 };
 
 /**

@@ -401,7 +401,7 @@ export function SignInCard({
           <form onSubmit={handleRequestCode} className="space-y-2.5">
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Official or Personal Email
+                Sign in with email
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">

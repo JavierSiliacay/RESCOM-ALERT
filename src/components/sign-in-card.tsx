@@ -191,20 +191,20 @@ export function SignInCard({
   };
 
   return (
-    <div className="w-full max-w-md relative corner-bracket-light bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 xl:p-8 shadow-xl transition-all">
+    <div className="w-full max-w-md relative corner-bracket-light bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 lg:p-6 shadow-xl transition-all">
       {/* Card Brand Header */}
-      <div className="mb-4 xl:mb-5 text-center space-y-1">
-        <div className="inline-flex items-center justify-center w-11 h-11 xl:w-12 xl:h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 mb-1 shadow-xs">
+      <div className="mb-2.5 sm:mb-3 text-center space-y-0.5">
+        <div className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 mb-0.5 shadow-2xs">
           {step === "EMAIL_INPUT" ? (
-            <Shield className="w-5 h-5 xl:w-6 xl:h-6 text-emerald-700" />
+            <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700" />
           ) : (
-            <Mail className="w-5 h-5 xl:w-6 xl:h-6 text-emerald-700 animate-pulse" />
+            <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700 animate-pulse" />
           )}
         </div>
-        <h2 className="text-lg xl:text-xl font-extrabold text-slate-900 tracking-tight">
+        <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
           {step === "EMAIL_INPUT" ? "Sign in to RESCOM ALERT" : "Check Your Email"}
         </h2>
-        <p className="text-[11px] xl:text-xs text-slate-500">
+        <p className="text-[11px] text-slate-500">
           {step === "EMAIL_INPUT"
             ? "10th Regional Community Defense Group Portal"
             : `We sent a 6-digit security code to ${email}`}
@@ -263,7 +263,7 @@ export function SignInCard({
 
       {/* STEP 1: INITIAL LOGIN VIEW (GOOGLE OR EMAIL) */}
       {step === "EMAIL_INPUT" && (
-        <div className="space-y-4 animate-in fade-in duration-150">
+        <div className="space-y-3 animate-in fade-in duration-150">
           {/* Option A: 1-Click Google Sign In */}
           <button
             type="button"
@@ -278,9 +278,9 @@ export function SignInCard({
               }
             }}
             disabled={isSubmittingGoogle}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 xl:py-3.5 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-300 hover:border-emerald-600 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 shadow-xs hover:shadow-md active:scale-[0.99] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2.5 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-800 border-2 border-slate-300 hover:border-emerald-600 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 shadow-2xs hover:shadow-xs active:scale-[0.99] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
               <path
                 fill="#4285F4"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -302,22 +302,22 @@ export function SignInCard({
           </button>
 
           {/* Clean Modern Divider */}
-          <div className="relative flex items-center justify-center">
+          <div className="relative flex items-center justify-center my-0.5">
             <div className="w-full border-t border-slate-200" />
-            <span className="absolute bg-white px-3 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+            <span className="absolute bg-white px-2.5 text-[9.5px] font-bold uppercase tracking-wider text-slate-400 font-mono">
               or continue with email
             </span>
           </div>
 
           {/* Option B: Email OTP Form */}
-          <form onSubmit={handleRequestCode} className="space-y-3">
+          <form onSubmit={handleRequestCode} className="space-y-2.5">
             <div>
-              <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">
                 Official or Personal Email
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-4 h-4" />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <Mail className="w-3.5 h-3.5" />
                 </div>
                 <input
                   type="email"
@@ -327,7 +327,7 @@ export function SignInCard({
                     setErrorMessage(null);
                   }}
                   placeholder="e.g. officer@yahoo.com, outlook, afp.mil.ph"
-                  className="w-full pl-10 pr-4 py-2.5 sm:py-3 text-xs sm:text-sm bg-slate-50 border border-slate-300 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 rounded-xl transition-all text-slate-900 placeholder:text-slate-400 outline-none"
+                  className="w-full pl-9 pr-3.5 py-2 sm:py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-300 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 rounded-xl transition-all text-slate-900 placeholder:text-slate-400 outline-none"
                   autoComplete="email"
                   required
                 />
@@ -337,25 +337,25 @@ export function SignInCard({
             <button
               type="submit"
               disabled={isSendingCode || !email.trim()}
-              className="w-full flex items-center justify-center gap-2 py-3 xl:py-3.5 bg-emerald-800 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-sm hover:shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-800 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-xs hover:shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSendingCode ? (
                 <>
-                  <RotateCw className="w-4 h-4 animate-spin" />
+                  <RotateCw className="w-3.5 h-3.5 animate-spin" />
                   <span>Sending Security Code...</span>
                 </>
               ) : (
                 <>
                   <span>Continue with Email</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </>
               )}
             </button>
           </form>
 
           {/* Legal Agreement Micro-Footer */}
-          <div className="pt-2 text-center">
-            <p className="text-[10px] sm:text-[11px] text-slate-500 leading-relaxed">
+          <div className="pt-1 text-center">
+            <p className="text-[10px] text-slate-500 leading-normal">
               By signing in, you agree to our{" "}
               <button
                 type="button"
@@ -421,11 +421,11 @@ export function SignInCard({
                       onChange={(e) => handleOtpChange(idx, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                       onPaste={handleOtpPaste}
-                      className="w-9 h-12 sm:w-11 sm:h-13 text-center text-xl sm:text-2xl font-mono font-bold text-slate-900 bg-slate-50 border-2 border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/20 rounded-xl transition-all outline-none"
+                      className="w-8 h-10 sm:w-10 sm:h-12 text-center text-lg sm:text-xl font-mono font-bold text-slate-900 bg-slate-50 border-2 border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/20 rounded-xl transition-all outline-none"
                     />
                     {/* Middle Dash Separator between digit 3 and 4 */}
                     {idx === 2 && (
-                      <span className="mx-1 text-slate-400 font-bold font-mono text-sm select-none">
+                      <span className="mx-1 text-slate-400 font-bold font-mono text-xs select-none">
                         —
                       </span>
                     )}
@@ -437,24 +437,24 @@ export function SignInCard({
             <button
               type="submit"
               disabled={isVerifying || otp.join("").length !== 6}
-              className="w-full flex items-center justify-center gap-2 py-3 xl:py-3.5 bg-emerald-800 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-sm hover:shadow-md cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-800 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl font-bold text-xs sm:text-sm transition-all shadow-xs hover:shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isVerifying ? (
                 <>
-                  <RotateCw className="w-4 h-4 animate-spin" />
+                  <RotateCw className="w-3.5 h-3.5 animate-spin" />
                   <span>Verifying Credentials...</span>
                 </>
               ) : (
                 <>
                   <span>Verify & Enter Dashboard</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </>
               )}
             </button>
           </form>
 
           {/* Countdown & Resend Code Controls */}
-          <div className="space-y-2 pt-1 text-center">
+          <div className="space-y-1.5 pt-0.5 text-center">
             <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
               <Clock className="w-3.5 h-3.5 text-amber-600" />
               <span>
@@ -479,7 +479,7 @@ export function SignInCard({
             </div>
 
             {/* Non-technical spam reminder tip */}
-            <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200/80 text-[11px] text-amber-900 flex items-start gap-2 text-left">
+            <div className="p-2 rounded-lg bg-amber-50 border border-amber-200/80 text-[10.5px] text-amber-900 flex items-start gap-1.5 text-left">
               <Info className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
               <span>
                 <strong>Quick Tip:</strong> Can&apos;t find the email? Please check your <strong>Spam</strong> or{" "}
@@ -488,16 +488,16 @@ export function SignInCard({
             </div>
 
             {/* Back button */}
-            <div className="pt-2">
+            <div className="pt-1">
               <button
                 type="button"
                 onClick={() => {
                   setStep("EMAIL_INPUT");
                   setErrorMessage(null);
                 }}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-medium cursor-pointer transition-colors"
+                className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 font-medium cursor-pointer transition-colors"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
+                <ArrowLeft className="w-3 h-3" />
                 <span>Back to all sign-in options</span>
               </button>
             </div>
@@ -506,7 +506,7 @@ export function SignInCard({
       )}
 
       {/* Footer Classification & Port Status */}
-      <div className="mt-4 xl:mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] xl:text-xs text-slate-500">
+      <div className="mt-2.5 sm:mt-3 pt-2 sm:pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10.5px] text-slate-500">
         <span className="flex items-center gap-1.5 text-emerald-700 font-medium">
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           Official Defense Portal

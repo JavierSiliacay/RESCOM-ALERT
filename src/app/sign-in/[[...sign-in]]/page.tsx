@@ -244,7 +244,7 @@ export default async function SignInPage({
           </div>
 
           {/* Right Column: Google & Email OTP Sign In Card */}
-          <div className="lg:col-span-5 w-full flex flex-col items-center space-y-3">
+          <div className="lg:col-span-5 w-full flex flex-col items-center space-y-2">
             <SignInCard
               onGoogleSignIn={async () => {
                 "use server";
@@ -266,8 +266,8 @@ export default async function SignInPage({
             />
 
             {/* Help & Support Channels */}
-            <div className="flex flex-col items-center gap-2 px-4 text-center">
-              <p className="text-[10px] xl:text-xs text-slate-500">
+            <div className="flex flex-col items-center gap-1 px-4 text-center pt-0.5">
+              <p className="text-[10px] sm:text-[11px] text-slate-500">
                 Need account authorization or technical assistance?
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">

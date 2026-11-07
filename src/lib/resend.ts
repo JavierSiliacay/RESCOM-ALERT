@@ -343,3 +343,106 @@ export async function dispatchEmergencyEmail(payload: EmergencyAlertEmailPayload
   };
 }
 
+/**
+ * Dispatch an official 10RCDG Security Login Code (OTP) via Resend
+ */
+export async function sendOtpEmail({
+  to,
+  code,
+  officerName,
+}: {
+  to: string;
+  code: string;
+  officerName?: string;
+}) {
+  if (!resend) {
+    throw new Error("Resend is not initialized. Please configure RESEND_API_KEY.");
+  }
+
+  const cleanRecipient = to.toLowerCase().trim();
+  const formattedCode = `${code.slice(0, 3)} ${code.slice(3)}`;
+  const subject = `[10RCDG] Security Login Code: ${formattedCode}`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>10RCDG Login Code</title>
+</head>
+<body style="margin: 0; padding: 24px; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a;">
+  <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+    
+    <!-- Header Banner -->
+    <div style="background-color: #064e3b; padding: 24px; text-align: center; border-bottom: 3px solid #f59e0b;">
+      <h1 style="margin: 0; color: #ffffff; font-size: 18px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">
+        10th Regional Community Defense Group
+      </h1>
+      <p style="margin: 4px 0 0 0; color: #a7f3d0; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">
+        Philippine Army Reserve Command
+      </p>
+    </div>
+
+    <!-- Body -->
+    <div style="padding: 32px 24px; text-align: center;">
+      <p style="margin: 0 0 8px 0; font-size: 13px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">
+        Officer Security Verification
+      </p>
+      
+      <p style="margin: 0 0 24px 0; font-size: 15px; color: #1e293b; line-height: 1.5;">
+        ${officerName ? `Hello <strong>${officerName}</strong>,<br>` : ""}Use this official 6-digit code to sign in to the 10RCDG RESCOM Command Portal:
+      </p>
+
+      <!-- 6-Digit Code Display Box -->
+      <div style="display: inline-block; background-color: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 16px 28px; margin: 0 auto 24px auto;">
+        <span style="font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #14532d;">
+          ${code}
+        </span>
+      </div>
+
+      <p style="margin: 0 0 16px 0; font-size: 12px; color: #64748b;">
+        ⏱️ This code will expire in <strong>5 minutes</strong>.
+      </p>
+
+      <!-- Security Guidance Notice -->
+      <div style="background-color: #fefce8; border: 1px solid #fef08a; border-radius: 10px; padding: 12px 16px; text-align: left; margin-bottom: 24px;">
+        <p style="margin: 0; font-size: 11px; color: #854d0e; line-height: 1.5;">
+          <strong>Security Notice:</strong> Never share this code with anyone. 10RCDG Command Staff will never ask for your security code via text message, phone call, or email.
+        </p>
+      </div>
+
+      <p style="margin: 0; font-size: 11px; color: #94a3b8;">
+        If you did not request this login code, you can safely ignore this email. Someone may have entered your email by mistake.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background-color: #f8fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #f1f5f9;">
+      <p style="margin: 0; font-size: 11px; color: #64748b; font-weight: 500;">
+        10RCDG RESCOM ALERT • Official Military Notification System
+      </p>
+      <p style="margin: 4px 0 0 0; font-size: 10px; color: #94a3b8;">
+        Camp Evangelista, Cagayan de Oro City, Misamis Oriental
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const result = await resend.emails.send({
+    from: DEFAULT_FROM_EMAIL,
+    to: cleanRecipient,
+    subject,
+    html,
+  });
+
+  return {
+    success: Boolean(result.data?.id),
+    id: result.data?.id,
+    error: result.error,
+  };
+}
+

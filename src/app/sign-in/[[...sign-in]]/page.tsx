@@ -66,7 +66,7 @@ export default async function SignInPage({
       ? decodeURIComponent(params.until)
       : sessionUser?.suspendedUntil;
   return (
-    <div className="relative min-h-dvh lg:h-screen lg:max-h-screen w-full flex flex-col justify-between bg-[#f8fafc] overflow-y-auto lg:overflow-hidden selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="relative min-h-screen min-h-dvh w-full flex flex-col justify-between bg-[#f8fafc] overflow-y-auto selection:bg-emerald-100 selection:text-emerald-900">
       {/* Official 10RCDG Troop Formation Background with Soft Frosted Overlay */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <Image
@@ -131,8 +131,8 @@ export default async function SignInPage({
         </div>
       </header>
 
-      {/* Main Container — Dynamically centered without overflowing viewport */}
-      <main className="flex-1 min-h-0 z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-2 lg:py-2 flex items-center justify-center">
+      {/* Main Container — Dynamically centered with clean breathing margins */}
+      <main className="flex-1 z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 flex items-center justify-center my-auto">
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 xl:gap-12 items-center">
           
           {/* Left Column: Official Unit Insignia & Branding */}

@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
 
@@ -43,6 +44,80 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           access_type: "offline",
           response_type: "code",
         },
+      },
+    }),
+    Credentials({
+      id: "email-otp",
+      name: "Email Security Code",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        code: { label: "Security Code", type: "text" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.code) {
+          throw new Error("Email and security code are required.");
+        }
+        const email = String(credentials.email).toLowerCase().trim();
+        const code = String(credentials.code).trim();
+
+        const convex = getConvexClient();
+        if (!convex) {
+          throw new Error("Database service is currently unavailable.");
+        }
+
+        // 1. Verify and burn the OTP in Convex (Enforces 3-attempt limit & Burn-on-Read)
+        const verifyResult = await convex.mutation(api.authOtp.verifyAndBurnOtp, {
+          email,
+          code,
+        });
+
+        if (!verifyResult.success) {
+          throw new Error(verifyResult.message || "Invalid or expired security code.");
+        }
+
+        // 2. Resolve authorized officer details
+        const isDeveloper = email === DEVELOPER_EMAIL;
+        const isRootCommander = email === ROOT_COMMANDER_EMAIL;
+
+        if (isDeveloper) {
+          return {
+            id: "master-developer",
+            email,
+            name: "Javier Siliacay",
+            role: "DEVELOPER" as const,
+            status: "ACTIVE" as const,
+            rank: "System Developer",
+            unit: "10RCDG HQ / Technical Dev",
+          };
+        }
+
+        if (isRootCommander) {
+          return {
+            id: "root-commander",
+            email,
+            name: "Group Commander",
+            role: "COMMANDER" as const,
+            status: "ACTIVE" as const,
+            rank: "Group Commander",
+            unit: "10RCDG HQ",
+          };
+        }
+
+        const authCheck = await convex.query(api.access.checkByEmail, { email });
+        if (!authCheck?.isAuthorized || !authCheck?.user) {
+          throw new Error("Account is not authorized on the 10RCDG Command Roster.");
+        }
+
+        const user = authCheck.user as any;
+        return {
+          id: String(user?._id || user?.id || "officer"),
+          email: user.email,
+          name: user.name,
+          role: user.role || "VIEWER",
+          status: user.status || "ACTIVE",
+          rank: user.rank || "Staff Officer",
+          unit: user.unit || "10RCDG HQ",
+        };
       },
     }),
   ],

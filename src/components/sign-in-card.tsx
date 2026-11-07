@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import { signIn } from "next-auth/react";
 import {
   Shield,
   Mail,
@@ -85,7 +86,7 @@ export function SignInCard({
     return `${mins.toString().padStart(2, "0")}:${remainder.toString().padStart(2, "0")}`;
   };
 
-  // Handle requesting 6-digit code
+  // Handle requesting 6-digit code via Resend
   const handleRequestCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
@@ -99,24 +100,68 @@ export function SignInCard({
     setIsSendingCode(true);
 
     try {
-      // Prototype preview / interactive hook
-      // Once backend endpoint is wired, this calls the Convex OTP dispatcher
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      const res = await fetch("/api/auth/otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        if (data.error === "COOLDOWN") {
+          setCooldown(data.remainingSeconds || 60);
+        }
+        setErrorMessage(data.message || "Unable to send login code. Please check your email.");
+        return;
+      }
 
       setStep("OTP_VERIFY");
       setCooldown(60);
       setExpiresIn(300);
       setOtp(["", "", "", "", "", ""]);
     } catch (err: any) {
-      setErrorMessage(err?.message || "Failed to send login code. Please try again.");
+      setErrorMessage(err?.message || "Network error while sending code. Please try again.");
     } finally {
       setIsSendingCode(false);
     }
   };
 
-  // Handle OTP box input with auto-advance
+  // Auto-verify helper when 6 digits are complete
+  const executeVerification = async (fullCode: string) => {
+    if (fullCode.length !== 6 || isVerifying) return;
+
+    if (expiresIn <= 0) {
+      setErrorMessage("This security code has expired. Please request a new code.");
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsVerifying(true);
+
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const res = await signIn("email-otp", {
+        email: cleanEmail,
+        code: fullCode,
+        redirect: false,
+      });
+
+      if (res?.error) {
+        setErrorMessage(res.error || "Incorrect security code. Please check your inbox.");
+        setIsVerifying(false);
+        return;
+      }
+
+      // Successful verification! Handshake complete -> redirect to dashboard
+      window.location.href = "/dashboard";
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Verification failed. Please try again.");
+      setIsVerifying(false);
+    }
+  };
+
+  // Handle OTP box input with auto-advance and instant 6th-digit submission
   const handleOtpChange = (index: number, value: string) => {
-    // Only accept numeric digits
     const cleaned = value.replace(/\D/g, "");
 
     if (cleaned.length === 0) {
@@ -126,14 +171,19 @@ export function SignInCard({
       return;
     }
 
-    // Handle single digit
     const nextOtp = [...otp];
-    nextOtp[index] = cleaned[cleaned.length - 1]; // take the last typed digit
+    nextOtp[index] = cleaned[cleaned.length - 1];
     setOtp(nextOtp);
 
     // Auto-advance to next input
     if (index < 5 && cleaned.length > 0) {
       otpInputRefs.current[index + 1]?.focus();
+    } else if (index === 5 && cleaned.length > 0) {
+      // 6th digit entered: check if all 6 digits are populated
+      const full = nextOtp.join("");
+      if (full.length === 6) {
+        setTimeout(() => executeVerification(full), 50);
+      }
     }
   };
 
@@ -156,12 +206,15 @@ export function SignInCard({
     }
     setOtp(nextOtp);
 
-    // Focus last filled or 6th box
     const focusIndex = Math.min(pasted.length, 5);
     otpInputRefs.current[focusIndex]?.focus();
+
+    if (pasted.length === 6) {
+      setTimeout(() => executeVerification(pasted), 50);
+    }
   };
 
-  // Handle Code Verification
+  // Handle Manual Code Verification Button
   const handleVerifyOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const fullCode = otp.join("");
@@ -171,27 +224,11 @@ export function SignInCard({
       return;
     }
 
-    if (expiresIn <= 0) {
-      setErrorMessage("This code has expired. Please request a new security code.");
-      return;
-    }
-
-    setErrorMessage(null);
-    setIsVerifying(true);
-
-    try {
-      // Visual verification preview
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      // Will connect to NextAuth Credentials verification
-    } catch (err: any) {
-      setErrorMessage(err?.message || "Invalid or incorrect code. Please try again.");
-    } finally {
-      setIsVerifying(false);
-    }
+    await executeVerification(fullCode);
   };
 
   return (
-    <div className="w-full max-w-md relative corner-bracket-light bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 lg:p-6 shadow-xl transition-all">
+    <div className="w-full max-w-md relative corner-bracket-light bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xl transition-all">
       {/* Card Brand Header */}
       <div className="mb-2.5 sm:mb-3 text-center space-y-0.5">
         <div className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 mb-0.5 shadow-2xs">

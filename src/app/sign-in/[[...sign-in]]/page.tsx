@@ -66,7 +66,7 @@ export default async function SignInPage({
       ? decodeURIComponent(params.until)
       : sessionUser?.suspendedUntil;
   return (
-    <div className="relative min-h-screen min-h-dvh w-full flex flex-col justify-between bg-[#f8fafc] overflow-y-auto selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="relative min-h-screen min-h-dvh lg:h-screen lg:max-h-screen overflow-y-auto lg:overflow-hidden w-full flex flex-col justify-between bg-[#f8fafc] selection:bg-emerald-100 selection:text-emerald-900">
       {/* Official 10RCDG Troop Formation Background with Soft Frosted Overlay */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <Image
@@ -265,27 +265,6 @@ export default async function SignInPage({
               }
             />
 
-            {/* Help & Support Channels */}
-            <div className="flex flex-col items-center gap-1 px-4 text-center pt-0.5">
-              <p className="text-[10px] sm:text-[11px] text-slate-500">
-                Need account authorization or technical assistance?
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <a
-                  href="https://www.facebook.com/profile.php?id=61586365277137"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 hover:text-emerald-950 hover:underline transition-colors bg-white/80 hover:bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-xs"
-                >
-                  <svg className="w-3.5 h-3.5 text-[#1877F2] shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                  </svg>
-                  <span>10RCDG Official Page</span>
-                  <ExternalLink className="w-3 h-3 text-slate-400" />
-                </a>
-              </div>
-            </div>
-
             {/* Mobile Only: 3 Feature Highlight Cards (Placed below sign-in card) */}
             <div className="lg:hidden w-full max-w-md grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
               <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white border border-slate-200 shadow-xs">
@@ -331,9 +310,9 @@ export default async function SignInPage({
         </div>
       </main>
 
-      {/* Responsive Bottom Footer — Pinned at the very bottom */}
-      <footer className="w-full z-20 shrink-0 flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-1.5 sm:py-2 border-t border-slate-200/80 bg-white/80 backdrop-blur-md text-[11px] sm:text-xs text-slate-500 gap-1 sm:gap-0 text-center sm:text-left">
-        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-2 gap-y-0.5">
+      {/* Responsive Bottom Footer — Pinned at the very bottom with Assistance Link */}
+      <footer className="w-full z-20 shrink-0 flex flex-col md:flex-row items-center justify-between px-4 sm:px-8 py-1.5 sm:py-2 border-t border-slate-200/80 bg-white/85 backdrop-blur-md text-[11px] sm:text-xs text-slate-500 gap-1.5 md:gap-0 text-center md:text-left">
+        <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-2 gap-y-0.5">
           <span>© {new Date().getFullYear()} 10th RCDG, Reserve Command, Philippine Army.</span>
           <span className="hidden sm:inline text-slate-300">•</span>
           <span>
@@ -348,9 +327,26 @@ export default async function SignInPage({
             </a>
           </span>
         </div>
-        <div className="flex items-center gap-2 font-medium">
-          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span className="text-emerald-700 font-semibold">Official Mass Messaging System</span>
+
+        {/* Support Link & System Status */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <a
+            href="https://www.facebook.com/profile.php?id=61586365277137"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 hover:underline transition-colors bg-white px-2.5 py-1 rounded-full border border-slate-200 shadow-2xs"
+          >
+            <svg className="w-3 h-3 text-[#1877F2] shrink-0" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            <span>Assistance: 10RCDG Official Page</span>
+            <ExternalLink className="w-2.5 h-2.5 text-slate-400" />
+          </a>
+
+          <div className="hidden sm:flex items-center gap-1.5 font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span className="text-emerald-700 font-semibold">Official Mass Messaging System</span>
+          </div>
         </div>
       </footer>
     </div>

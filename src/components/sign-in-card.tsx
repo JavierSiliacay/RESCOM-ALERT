@@ -142,44 +142,52 @@ export function SignInCard({
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const res = await signIn("email-otp", {
-        email: cleanEmail,
-        code: fullCode,
-        redirect: false,
+
+      // Step 1: Direct OTP Verification (Directly hits Convex database - ALWAYS decrements attempts reliably)
+      const verifyRes = await fetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail, code: fullCode }),
       });
 
-      if (res?.error) {
-        let friendlyMessage = "Incorrect security code. Please check your inbox.";
+      const verifyData = await verifyRes.json();
 
-        if (res.code === "already_used_or_expired") {
-          friendlyMessage = "This security code has already been used or has expired. For your security, each code can only be used once. Please request a new code.";
-        } else if (res.code === "code_expired") {
-          friendlyMessage = "Your security code has expired (5-minute limit). Please request a new code.";
-        } else if (res.code === "wrong_code_2_left") {
-          friendlyMessage = "Incorrect security code. You have 2 attempts remaining.";
-          setAttemptsLeft(2);
-        } else if (res.code === "wrong_code_1_left") {
-          friendlyMessage = "Incorrect security code. Final attempt remaining before this code self-destructs.";
-          setAttemptsLeft(1);
-        } else if (res.code === "locked_5_minutes") {
-          friendlyMessage = "Maximum failed attempts reached. For security, this code was destroyed and your account is locked for 5 minutes.";
+      if (!verifyRes.ok || !verifyData.success) {
+        let friendlyMessage = verifyData.message || "Incorrect security code. Please check your inbox.";
+
+        if (verifyData.remainingAttempts !== undefined) {
+          setAttemptsLeft(verifyData.remainingAttempts);
+          if (verifyData.remainingAttempts === 2) {
+            friendlyMessage = "Incorrect security code. You have 2 attempts remaining.";
+          } else if (verifyData.remainingAttempts === 1) {
+            friendlyMessage = "Incorrect security code. Final attempt remaining before this code self-destructs.";
+          }
+        }
+
+        if (verifyData.error === "LOCKED" || verifyData.error === "LOCKED_OUT") {
           setAttemptsLeft(0);
-        } else if (res.code === "throttled_wait") {
-          friendlyMessage = "Security speed bump: Please wait a moment before trying again.";
-        } else if (res.error === "Configuration" || res.error === "UntrustedHost") {
-          friendlyMessage = "Unable to complete verification due to server environment. Please refresh the page and try again.";
-        } else if (res.error === "AccessDenied") {
-          friendlyMessage = "Account not authorized on the 10RCDG Command Roster.";
         }
 
         setErrorMessage(friendlyMessage);
         setIsVerifying(false);
 
-        // Auto-clear boxes if wrong code so the officer can re-type immediately
-        if (res.code?.startsWith("wrong_code") || res.code === "already_used_or_expired") {
-          setOtp(["", "", "", "", "", ""]);
-          setTimeout(() => otpInputRefs.current[0]?.focus(), 50);
-        }
+        // Auto-clear boxes so officer can re-type immediately
+        setOtp(["", "", "", "", "", ""]);
+        setTimeout(() => otpInputRefs.current[0]?.focus(), 50);
+        return;
+      }
+
+      // Step 2: Code is verified! Single-use login ticket issued. Log into NextAuth session
+      const loginToken = verifyData.loginToken;
+      const res = await signIn("email-otp", {
+        email: cleanEmail,
+        token: loginToken,
+        redirect: false,
+      });
+
+      if (res?.error) {
+        setErrorMessage("Authentication session could not be established. Please refresh and try again.");
+        setIsVerifying(false);
         return;
       }
 

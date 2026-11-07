@@ -211,14 +211,28 @@ export const verifyAndBurnOtp = mutation({
     const inputHash = await hashOtp(cleanCode, cleanEmail);
 
     if (inputHash === record.hashedOtp) {
-      // 5. Burn-On-Read: Permanently erase the OTP upon successful login
+      // 5. Burn-On-Read: Permanently erase the OTP upon successful verification
       await ctx.db.delete(record._id);
       if (lockout) {
         await ctx.db.delete(lockout._id);
       }
 
+      // 6. Generate single-use 60-second verified login ticket
+      const tokenArray = new Uint8Array(24);
+      crypto.getRandomValues(tokenArray);
+      const loginToken = Array.from(tokenArray)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      await ctx.db.insert("authVerifiedTokens", {
+        email: cleanEmail,
+        token: loginToken,
+        expiresAt: now + 60 * 1000,
+      });
+
       return {
         success: true,
+        loginToken,
         message: "Security code verified.",
       };
     } else {
@@ -271,6 +285,35 @@ export const clearLockout = mutation({
       return { success: true, message: "Lockout cleared." };
     }
     return { success: false, message: "No lockout found." };
+  },
+});
+
+/**
+ * Verify and single-use burn the verified login token generated upon OTP verification
+ */
+export const consumeLoginToken = mutation({
+  args: {
+    email: v.string(),
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const cleanEmail = args.email.toLowerCase().trim();
+    const cleanToken = args.token.trim();
+
+    const record = await ctx.db
+      .query("authVerifiedTokens")
+      .withIndex("by_token", (q) => q.eq("token", cleanToken))
+      .first();
+
+    const now = Date.now();
+    if (!record || record.email !== cleanEmail || now > record.expiresAt) {
+      if (record) await ctx.db.delete(record._id);
+      return { success: false, message: "Invalid or expired session ticket." };
+    }
+
+    // Burn-on-Read: Single-use ticket consumed
+    await ctx.db.delete(record._id);
+    return { success: true };
   },
 });
 

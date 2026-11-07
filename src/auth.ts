@@ -60,47 +60,60 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       name: "Email Security Code",
       credentials: {
         email: { label: "Email", type: "email" },
+        token: { label: "Login Token", type: "text" },
         code: { label: "Security Code", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.code) {
+        if (!credentials?.email) {
           throw new AuthOtpError("missing_fields");
         }
         const email = String(credentials.email).toLowerCase().trim();
-        const code = String(credentials.code).trim();
 
         const convex = getConvexClient();
         if (!convex) {
           throw new AuthOtpError("database_unavailable");
         }
 
-        // 1. Verify and burn the OTP in Convex (Enforces 3-attempt limit & Burn-on-Read)
-        const verifyResult = await convex.mutation(api.authOtp.verifyAndBurnOtp, {
-          email,
-          code,
-        });
-
-        if (!verifyResult.success) {
-          if (verifyResult.error === "NOT_FOUND") {
+        // 1. If loginToken is provided (preferred direct verification path)
+        if (credentials?.token) {
+          const tokenRes = await convex.mutation(api.authOtp.consumeLoginToken, {
+            email,
+            token: String(credentials.token).trim(),
+          });
+          if (!tokenRes.success) {
             throw new AuthOtpError("already_used_or_expired");
           }
-          if (verifyResult.error === "EXPIRED") {
-            throw new AuthOtpError("code_expired");
+        } else if (credentials?.code) {
+          // Fallback legacy code verification
+          const verifyResult = await convex.mutation(api.authOtp.verifyAndBurnOtp, {
+            email,
+            code: String(credentials.code).trim(),
+          });
+
+          if (!verifyResult.success) {
+            if (verifyResult.error === "NOT_FOUND") {
+              throw new AuthOtpError("already_used_or_expired");
+            }
+            if (verifyResult.error === "EXPIRED") {
+              throw new AuthOtpError("code_expired");
+            }
+            if (verifyResult.error === "THROTTLED") {
+              throw new AuthOtpError("throttled_wait");
+            }
+            if (verifyResult.error === "LOCKED" || verifyResult.error === "LOCKED_OUT") {
+              throw new AuthOtpError("locked_5_minutes");
+            }
+            if (verifyResult.error === "INVALID") {
+              throw new AuthOtpError(
+                verifyResult.remainingAttempts === 1
+                  ? "wrong_code_1_left"
+                  : "wrong_code_2_left"
+              );
+            }
+            throw new AuthOtpError("invalid_code");
           }
-          if (verifyResult.error === "THROTTLED") {
-            throw new AuthOtpError("throttled_wait");
-          }
-          if (verifyResult.error === "LOCKED" || verifyResult.error === "LOCKED_OUT") {
-            throw new AuthOtpError("locked_5_minutes");
-          }
-          if (verifyResult.error === "INVALID") {
-            throw new AuthOtpError(
-              verifyResult.remainingAttempts === 1
-                ? "wrong_code_1_left"
-                : "wrong_code_2_left"
-            );
-          }
-          throw new AuthOtpError("invalid_code");
+        } else {
+          throw new AuthOtpError("missing_fields");
         }
 
         // 2. Resolve authorized officer details

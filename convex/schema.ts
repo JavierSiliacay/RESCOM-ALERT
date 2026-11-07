@@ -292,4 +292,13 @@ export default defineSchema({
   })
     .index("by_email", ["email"])
     .index("by_lockedUntil", ["lockedUntil"]),
+
+  // Short-lived single-use login tokens generated after successful OTP verification (60s TTL)
+  authVerifiedTokens: defineTable({
+    email: v.string(),
+    token: v.string(),
+    expiresAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_email", ["email"]),
 });

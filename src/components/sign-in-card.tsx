@@ -85,14 +85,6 @@ export function SignInCard({
     return `${mins.toString().padStart(2, "0")}:${remainder.toString().padStart(2, "0")}`;
   };
 
-  // Quick domain append chips
-  const handleAppendDomain = (domain: string) => {
-    const cleaned = email.split("@")[0].trim();
-    if (!cleaned) return;
-    setEmail(`${cleaned}@${domain}`);
-    setErrorMessage(null);
-  };
-
   // Handle requesting 6-digit code
   const handleRequestCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -339,26 +331,6 @@ export function SignInCard({
                   autoComplete="email"
                   required
                 />
-              </div>
-
-              {/* Quick Tap Domain Suggestions */}
-              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                <span className="text-[10px] text-slate-400 font-medium">Quick add:</span>
-                {[
-                  { label: "yahoo.com", domain: "yahoo.com" },
-                  { label: "outlook.com", domain: "outlook.com" },
-                  { label: "gmail.com", domain: "gmail.com" },
-                  { label: "afp.mil.ph", domain: "afp.mil.ph" },
-                ].map((item) => (
-                  <button
-                    key={item.domain}
-                    type="button"
-                    onClick={() => handleAppendDomain(item.domain)}
-                    className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
-                  >
-                    @{item.label}
-                  </button>
-                ))}
               </div>
             </div>
 
@@ -710,3 +682,4 @@ export function SignInCard({
     </div>
   );
 }
+

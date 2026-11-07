@@ -85,7 +85,7 @@ export default async function SignInPage({
       <div className="pointer-events-none absolute -bottom-40 -right-40 w-[300px] sm:w-[600px] h-[300px] sm:h-[600px] rounded-full bg-amber-100/40 blur-[100px] sm:blur-[130px] z-0" />
 
       {/* Top Header Bar — Pinned at the very top */}
-      <header className="w-full z-20 shrink-0 flex items-center justify-between px-4 sm:px-8 py-2.5 lg:py-3 border-b border-slate-200/80 bg-white/80 backdrop-blur-md">
+      <header className="w-full z-20 shrink-0 flex items-center justify-between px-4 sm:px-8 py-2 sm:py-2.5 border-b border-slate-200/80 bg-white/80 backdrop-blur-md">
         <div className="flex items-center gap-2.5 sm:gap-3">
           <div className="flex items-center -space-x-2 shrink-0">
             <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border border-amber-500/80 ring-2 ring-emerald-100 shadow-xs bg-white z-10 flex items-center justify-center">
@@ -131,12 +131,12 @@ export default async function SignInPage({
         </div>
       </header>
 
-      {/* Main Container — Dynamically centered with clean breathing margins */}
-      <main className="flex-1 z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 flex items-center justify-center my-auto">
-        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 xl:gap-12 items-center">
+      {/* Main Container — Dynamically centered with zero-scroll desktop fit */}
+      <main className="flex-1 z-10 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-3 lg:py-3.5 flex items-center justify-center my-auto">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 xl:gap-10 items-center">
           
           {/* Left Column: Official Unit Insignia & Branding */}
-          <div className="lg:col-span-7 flex flex-col items-center lg:items-start text-center lg:text-left space-y-3 lg:space-y-3.5 xl:space-y-5">
+          <div className="lg:col-span-7 flex flex-col items-center lg:items-start text-center lg:text-left space-y-2.5 lg:space-y-3 xl:space-y-4">
             
             {/* Classification Badge */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-amber-50 border border-amber-300/80 shadow-xs">
@@ -332,7 +332,7 @@ export default async function SignInPage({
       </main>
 
       {/* Responsive Bottom Footer — Pinned at the very bottom */}
-      <footer className="w-full z-20 shrink-0 flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-2.5 lg:py-3 border-t border-slate-200/80 bg-white/80 backdrop-blur-md text-xs text-slate-500 gap-1 sm:gap-0 text-center sm:text-left">
+      <footer className="w-full z-20 shrink-0 flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 py-1.5 sm:py-2 border-t border-slate-200/80 bg-white/80 backdrop-blur-md text-[11px] sm:text-xs text-slate-500 gap-1 sm:gap-0 text-center sm:text-left">
         <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-2 gap-y-0.5">
           <span>© {new Date().getFullYear()} 10th RCDG, Reserve Command, Philippine Army.</span>
           <span className="hidden sm:inline text-slate-300">•</span>

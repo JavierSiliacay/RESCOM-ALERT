@@ -128,7 +128,7 @@ export const verifyAndBurnOtp = mutation({
       return {
         success: false,
         error: "NOT_FOUND",
-        message: "No active security code found. Please request a new code.",
+        message: "This security code has already been used or has expired. For your security, each code can only be used once. Please request a new code.",
       };
     }
 
@@ -138,7 +138,7 @@ export const verifyAndBurnOtp = mutation({
       return {
         success: false,
         error: "EXPIRED",
-        message: "Your security code has expired. Please request a new code.",
+        message: "Your security code has expired (5-minute limit). Please request a new code.",
       };
     }
 

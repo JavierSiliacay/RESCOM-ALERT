@@ -1,8 +1,16 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
+
+class AuthOtpError extends CredentialsSignin {
+  code: string;
+  constructor(code: string) {
+    super();
+    this.code = code;
+  }
+}
 
 export type UserRole = "DEVELOPER" | "COMMANDER" | "ADMIN" | "OPERATOR" | "VIEWER";
 export type UserStatus = "ACTIVE" | "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
@@ -34,6 +42,7 @@ const getConvexClient = () => {
 };
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
@@ -55,14 +64,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.code) {
-          throw new Error("Email and security code are required.");
+          throw new AuthOtpError("missing_fields");
         }
         const email = String(credentials.email).toLowerCase().trim();
         const code = String(credentials.code).trim();
 
         const convex = getConvexClient();
         if (!convex) {
-          throw new Error("Database service is currently unavailable.");
+          throw new AuthOtpError("database_unavailable");
         }
 
         // 1. Verify and burn the OTP in Convex (Enforces 3-attempt limit & Burn-on-Read)
@@ -72,7 +81,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (!verifyResult.success) {
-          throw new Error(verifyResult.message || "Invalid or expired security code.");
+          if (verifyResult.error === "NOT_FOUND") {
+            throw new AuthOtpError("already_used_or_expired");
+          }
+          if (verifyResult.error === "EXPIRED") {
+            throw new AuthOtpError("code_expired");
+          }
+          if (verifyResult.error === "LOCKED") {
+            throw new AuthOtpError("locked_self_destruct");
+          }
+          if (verifyResult.error === "INVALID") {
+            throw new AuthOtpError(
+              verifyResult.remainingAttempts === 1
+                ? "wrong_code_1_left"
+                : "wrong_code_2_left"
+            );
+          }
+          throw new AuthOtpError("invalid_code");
         }
 
         // 2. Resolve authorized officer details

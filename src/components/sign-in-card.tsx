@@ -147,8 +147,32 @@ export function SignInCard({
       });
 
       if (res?.error) {
-        setErrorMessage(res.error || "Incorrect security code. Please check your inbox.");
+        let friendlyMessage = "Incorrect security code. Please check your inbox.";
+
+        if (res.code === "already_used_or_expired") {
+          friendlyMessage = "This security code has already been used or has expired. For your security, each code can only be used once. Please request a new code.";
+        } else if (res.code === "code_expired") {
+          friendlyMessage = "Your security code has expired (5-minute limit). Please request a new code.";
+        } else if (res.code === "wrong_code_2_left") {
+          friendlyMessage = "Incorrect security code. You have 2 attempts remaining.";
+        } else if (res.code === "wrong_code_1_left") {
+          friendlyMessage = "Incorrect security code. Final attempt remaining before this code self-destructs.";
+        } else if (res.code === "locked_self_destruct") {
+          friendlyMessage = "Maximum failed attempts reached. For security, this code was destroyed. Please request a new code.";
+        } else if (res.error === "Configuration" || res.error === "UntrustedHost") {
+          friendlyMessage = "Unable to complete verification due to server environment. Please refresh the page and try again.";
+        } else if (res.error === "AccessDenied") {
+          friendlyMessage = "Account not authorized on the 10RCDG Command Roster.";
+        }
+
+        setErrorMessage(friendlyMessage);
         setIsVerifying(false);
+
+        // Auto-clear boxes if wrong code so the officer can re-type immediately
+        if (res.code?.startsWith("wrong_code") || res.code === "already_used_or_expired") {
+          setOtp(["", "", "", "", "", ""]);
+          setTimeout(() => otpInputRefs.current[0]?.focus(), 50);
+        }
         return;
       }
 
@@ -292,9 +316,21 @@ export function SignInCard({
 
       {/* Error Callout */}
       {errorMessage && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
+        <div className="mb-3.5 p-3 rounded-xl bg-red-50 border border-red-200 text-left flex items-start gap-2.5 animate-in fade-in duration-200">
           <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-          <p className="text-xs font-medium text-red-800 leading-relaxed">{errorMessage}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-red-900 leading-relaxed">{errorMessage}</p>
+            {step === "OTP_VERIFY" && cooldown <= 0 && (
+              <button
+                type="button"
+                onClick={() => handleRequestCode()}
+                disabled={isSendingCode}
+                className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <span>{isSendingCode ? "Sending new code..." : "Request Fresh Code Now →"}</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 

@@ -54,13 +54,34 @@ export const prepareOtp = mutation({
       };
     }
 
-    // 2. Cooldown & Rate Limiting Check (60 seconds anti-flood)
+    const now = Date.now();
+
+    // 2. Check 5-Minute Temporary Account Lockout (Defense against brute-force attacks)
+    const lockout = await ctx.db
+      .query("authLockouts")
+      .withIndex("by_email", (q) => q.eq("email", cleanEmail))
+      .first();
+
+    if (lockout) {
+      if (now < lockout.lockedUntil) {
+        const remainingMinutes = Math.ceil((lockout.lockedUntil - now) / 60000);
+        return {
+          success: false,
+          error: "LOCKED_OUT",
+          remainingMinutes,
+          message: `This account is temporarily locked due to multiple failed code attempts. Please wait ${remainingMinutes} minute(s) before requesting a new code.`,
+        };
+      } else {
+        await ctx.db.delete(lockout._id);
+      }
+    }
+
+    // 3. Cooldown & Rate Limiting Check (60 seconds anti-flood)
     const existing = await ctx.db
       .query("authOtps")
       .withIndex("by_email", (q) => q.eq("email", cleanEmail))
       .first();
 
-    const now = Date.now();
     if (existing) {
       const elapsed = Math.floor((now - existing.requestedAt) / 1000);
       if (elapsed < 60) {
@@ -116,13 +137,32 @@ export const verifyAndBurnOtp = mutation({
   handler: async (ctx, args) => {
     const cleanEmail = args.email.toLowerCase().trim();
     const cleanCode = args.code.trim();
+    const now = Date.now();
+
+    // 0. Check 5-Minute Account Lockout (Active strike-out lockout)
+    const lockout = await ctx.db
+      .query("authLockouts")
+      .withIndex("by_email", (q) => q.eq("email", cleanEmail))
+      .first();
+
+    if (lockout) {
+      if (now < lockout.lockedUntil) {
+        const remainingMinutes = Math.ceil((lockout.lockedUntil - now) / 60000);
+        return {
+          success: false,
+          error: "LOCKED_OUT",
+          remainingMinutes,
+          message: `This account is locked for ${remainingMinutes} minute(s) due to multiple failed code attempts. Please wait before trying again.`,
+        };
+      } else {
+        await ctx.db.delete(lockout._id);
+      }
+    }
 
     const record = await ctx.db
       .query("authOtps")
       .withIndex("by_email", (q) => q.eq("email", cleanEmail))
       .first();
-
-    const now = Date.now();
 
     if (!record) {
       return {
@@ -132,7 +172,16 @@ export const verifyAndBurnOtp = mutation({
       };
     }
 
-    // 1. Expiration Check (5-minute TTL)
+    // 1. Throttling Speed Bump (Minimum 1.5s between verification attempts to block rapid bot guessing)
+    if (record.lastAttemptAt && now - record.lastAttemptAt < 1500) {
+      return {
+        success: false,
+        error: "THROTTLED",
+        message: "Too fast. Please wait a moment before entering another code.",
+      };
+    }
+
+    // 2. Expiration Check (5-minute TTL)
     if (now >= record.expiresAt) {
       await ctx.db.delete(record._id);
       return {
@@ -142,22 +191,31 @@ export const verifyAndBurnOtp = mutation({
       };
     }
 
-    // 2. 3-Strike Brute-Force Self-Destruct Protection
+    // 3. 3-Strike Brute-Force Self-Destruct Protection
     if (record.attempts >= 3) {
       await ctx.db.delete(record._id);
+      await ctx.db.insert("authLockouts", {
+        email: cleanEmail,
+        lockedUntil: now + 5 * 60 * 1000,
+        reason: "MAX_ATTEMPTS_EXCEEDED",
+        createdAt: now,
+      });
       return {
         success: false,
         error: "LOCKED",
-        message: "Too many failed attempts. For security, this code was destroyed. Please request a new code.",
+        message: "Too many failed attempts. For security, this code was destroyed and the account is locked for 5 minutes.",
       };
     }
 
-    // 3. Hash Comparison
+    // 4. Hash Comparison
     const inputHash = await hashOtp(cleanCode, cleanEmail);
 
     if (inputHash === record.hashedOtp) {
-      // 4. Burn-On-Read: Permanently erase the OTP upon successful login
+      // 5. Burn-On-Read: Permanently erase the OTP upon successful login
       await ctx.db.delete(record._id);
+      if (lockout) {
+        await ctx.db.delete(lockout._id);
+      }
 
       return {
         success: true,
@@ -167,15 +225,24 @@ export const verifyAndBurnOtp = mutation({
       // Incorrect attempt: increment counter
       const newAttempts = record.attempts + 1;
       if (newAttempts >= 3) {
-        // Self-destruct immediately on 3rd failure!
+        // Self-destruct immediately on 3rd failure and enforce 5-minute lockout!
         await ctx.db.delete(record._id);
+        await ctx.db.insert("authLockouts", {
+          email: cleanEmail,
+          lockedUntil: now + 5 * 60 * 1000,
+          reason: "MAX_ATTEMPTS_EXCEEDED",
+          createdAt: now,
+        });
         return {
           success: false,
           error: "LOCKED",
-          message: "Incorrect code. Maximum attempts exceeded. Code destroyed for security.",
+          message: "Maximum failed attempts exceeded. This code has been destroyed and your account is locked for 5 minutes for security.",
         };
       } else {
-        await ctx.db.patch(record._id, { attempts: newAttempts });
+        await ctx.db.patch(record._id, {
+          attempts: newAttempts,
+          lastAttemptAt: now,
+        });
         const remaining = 3 - newAttempts;
         return {
           success: false,

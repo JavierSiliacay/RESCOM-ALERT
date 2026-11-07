@@ -276,8 +276,20 @@ export default defineSchema({
     expiresAt: v.number(), // Epoch timestamp (now + 5 minutes)
     attempts: v.number(), // Failed attempts counter (max 3, auto-destruct on 3)
     requestedAt: v.number(), // Epoch timestamp for 60s cooldown & rate limiting
+    lastAttemptAt: v.optional(v.number()), // Timestamp of last verification attempt for throttling
     ipAddress: v.optional(v.string()), // Optional client IP for security audit
   })
     .index("by_email", ["email"])
     .index("by_expiresAt", ["expiresAt"]),
+
+  // Temporary Security Lockouts for Brute-Force & Spam Prevention (5-minute cooldown)
+  authLockouts: defineTable({
+    email: v.string(), // Normalized lowercase email
+    lockedUntil: v.number(), // Epoch timestamp (now + 5 minutes)
+    reason: v.string(), // e.g. "MAX_ATTEMPTS_EXCEEDED"
+    ipAddress: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_lockedUntil", ["lockedUntil"]),
 });

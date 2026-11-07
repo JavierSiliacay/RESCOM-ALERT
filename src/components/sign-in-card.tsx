@@ -45,6 +45,7 @@ export function SignInCard({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const [expiresIn, setExpiresIn] = useState(300); // 5 minutes (300s)
+  const [attemptsLeft, setAttemptsLeft] = useState(3); // 3-Strike counter
 
   // Legal modal state
   const [legalModal, setLegalModal] = useState<"TERMS" | "PRIVACY" | null>(null);
@@ -118,6 +119,7 @@ export function SignInCard({
       setStep("OTP_VERIFY");
       setCooldown(60);
       setExpiresIn(300);
+      setAttemptsLeft(3);
       setOtp(["", "", "", "", "", ""]);
     } catch (err: any) {
       setErrorMessage(err?.message || "Network error while sending code. Please try again.");
@@ -155,10 +157,15 @@ export function SignInCard({
           friendlyMessage = "Your security code has expired (5-minute limit). Please request a new code.";
         } else if (res.code === "wrong_code_2_left") {
           friendlyMessage = "Incorrect security code. You have 2 attempts remaining.";
+          setAttemptsLeft(2);
         } else if (res.code === "wrong_code_1_left") {
           friendlyMessage = "Incorrect security code. Final attempt remaining before this code self-destructs.";
-        } else if (res.code === "locked_self_destruct") {
-          friendlyMessage = "Maximum failed attempts reached. For security, this code was destroyed. Please request a new code.";
+          setAttemptsLeft(1);
+        } else if (res.code === "locked_5_minutes") {
+          friendlyMessage = "Maximum failed attempts reached. For security, this code was destroyed and your account is locked for 5 minutes.";
+          setAttemptsLeft(0);
+        } else if (res.code === "throttled_wait") {
+          friendlyMessage = "Security speed bump: Please wait a moment before trying again.";
         } else if (res.error === "Configuration" || res.error === "UntrustedHost") {
           friendlyMessage = "Unable to complete verification due to server environment. Please refresh the page and try again.";
         } else if (res.error === "AccessDenied") {
@@ -474,9 +481,28 @@ export function SignInCard({
 
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <div>
-              <label className="block text-center text-xs font-bold text-slate-700 mb-2.5">
-                Enter 6-Digit Security Code
-              </label>
+              <div className="flex items-center justify-between px-1 mb-2">
+                <span className="text-xs font-bold text-slate-700">
+                  Enter 6-Digit Security Code
+                </span>
+                <span
+                  className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full border transition-all ${
+                    attemptsLeft === 3
+                      ? "text-slate-600 bg-slate-100 border-slate-200"
+                      : attemptsLeft === 2
+                      ? "text-amber-800 bg-amber-50 border-amber-300 font-bold"
+                      : attemptsLeft === 1
+                      ? "text-red-800 bg-red-50 border-red-300 animate-pulse font-bold"
+                      : "text-red-900 bg-red-100 border-red-400 font-bold"
+                  }`}
+                >
+                  {attemptsLeft === 1
+                    ? "⚠️ 1 attempt left"
+                    : attemptsLeft === 0
+                    ? "Locked (0 left)"
+                    : `${attemptsLeft} of 3 attempts`}
+                </span>
+              </div>
 
               {/* 6 Individual Segmented Boxes */}
               <div className="flex items-center justify-center gap-1.5 sm:gap-2">
@@ -490,11 +516,12 @@ export function SignInCard({
                       inputMode="numeric"
                       pattern="[0-9]*"
                       maxLength={1}
+                      disabled={isVerifying || attemptsLeft === 0}
                       value={digit}
                       onChange={(e) => handleOtpChange(idx, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                       onPaste={handleOtpPaste}
-                      className="w-8 h-10 sm:w-10 sm:h-12 text-center text-lg sm:text-xl font-mono font-bold text-slate-900 bg-slate-50 border-2 border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/20 rounded-xl transition-all outline-none"
+                      className="w-8 h-10 sm:w-10 sm:h-12 text-center text-lg sm:text-xl font-mono font-bold text-slate-900 bg-slate-50 border-2 border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-600/20 rounded-xl transition-all outline-none disabled:opacity-50 disabled:bg-slate-100"
                     />
                     {/* Middle Dash Separator between digit 3 and 4 */}
                     {idx === 2 && (

@@ -87,8 +87,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (verifyResult.error === "EXPIRED") {
             throw new AuthOtpError("code_expired");
           }
-          if (verifyResult.error === "LOCKED") {
-            throw new AuthOtpError("locked_self_destruct");
+          if (verifyResult.error === "THROTTLED") {
+            throw new AuthOtpError("throttled_wait");
+          }
+          if (verifyResult.error === "LOCKED" || verifyResult.error === "LOCKED_OUT") {
+            throw new AuthOtpError("locked_5_minutes");
           }
           if (verifyResult.error === "INVALID") {
             throw new AuthOtpError(
